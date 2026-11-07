@@ -109,9 +109,15 @@ class CameraController {
 
     /** Pinch: [factor] > 1 means fingers moved apart (zoom in). */
     fun zoom(factor: Float) {
-        cancelFlight()
         if (factor <= 0f) return
         val f = factor.toDouble().pow(ZOOM_POWER)
+        val fl = flight
+        if (fl != null) {
+            // Zooming while flying changes how close you will arrive; it never cancels the trip.
+            val s = surfaceOf(fl.body)
+            fl.d1 = clamp(s + (fl.d1 - s) / f, minDistanceFor(fl.body), maxDistance())
+            return
+        }
         scaleAltitude(f)
         zoomVel = ln(f) * 20
     }
@@ -124,6 +130,8 @@ class CameraController {
 
     /** Sets the distance directly (used by the zoom slider). */
     fun setDistance(d: Double) {
+        val fl = flight
+        if (fl != null) { fl.d1 = clamp(d, minDistanceFor(fl.body), maxDistance()); return }
         distance = clamp(d, minDistance(), maxDistance())
     }
 
@@ -171,12 +179,27 @@ class CameraController {
 
     fun cancelFlight() {
         val f = flight ?: return
-        // Stop where we are, keep looking at the destination.
+        val cam = position()
         flight = null
-        target = null
         surfaceExtra = 0.0
-        focus = position() + forward() * distance
-        if (f.body == null) return
+        val body = f.body
+        if (body == null) {
+            target = null
+            focus = cam + forward() * distance
+            return
+        }
+        // Stop where we are but stay locked on the destination, looking straight at it,
+        // so the next pinch zooms towards it instead of into empty space.
+        val dest = f.lastDest
+        val toDest = dest - cam
+        val d = toDest.length()
+        target = body
+        focus = dest
+        if (d > 1e-6) {
+            orientation = Quatd.lookRotation(toDest / d, up())
+            distance = max(d, minDistanceFor(body))
+            // position() = focus + back * distance = cam (or a little further out if too close)
+        }
     }
 
     /**
@@ -188,6 +211,7 @@ class CameraController {
         if (f != null) {
             val t = clamp((now - f.start) / f.duration, 0.0, 1.0)
             val dest = f.body?.let(targetPosition) ?: f.destination
+            f.lastDest = dest
             // Travel happens mostly while high up.
             val s = smoothstep(0.12, 0.88, t)
             focus = UPos.lerp(f.from, dest, s)
@@ -240,9 +264,20 @@ class CameraController {
     }
 
     private class Flight(
-        val from: UPos, val d0: Double, val body: Body?, val destination: UPos, val d1: Double,
+        val from: UPos, val d0: Double, val body: Body?, val destination: UPos, var d1: Double,
         val peak: Double, val start: Double, val duration: Double, val startQ: Quatd, val endQ: Quatd?,
-    )
+    ) {
+        /** Where the destination was last frame (bodies move). */
+        var lastDest: UPos = destination
+    }
+
+    /** What zooming acts on: the object being flown to, or the one being orbited. */
+    fun zoomTarget(): Body? = flight?.body ?: target
+
+    /** Surface radius of [b] if it has a surface (zoom and slider measure height above it). */
+    fun surfaceOf(b: Body?): Double = if (b != null && solid(b)) b.radius + (if (b == target) surfaceExtra else 0.0) else 0.0
+
+    private fun minDistanceFor(b: Body?): Double = if (b != null && solid(b)) b.radius + 1.7 else 0.05
 
     companion object {
         /** Each pinch is amplified so you can cross the universe in a handful of gestures. */

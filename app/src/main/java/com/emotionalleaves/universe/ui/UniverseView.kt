@@ -63,13 +63,17 @@ class UniverseView(context: Context, private val engine: Engine) : GLSurfaceView
                     val cy = (e.getY(0) + e.getY(1)) / 2
                     val ang = angle(e)
                     synchronized(cam) {
-                        if (lastDist > 10f && d > 10f) cam.zoom(d / lastDist)
+                        if (lastDist > 10f && d > 10f) {
+                            if (kotlin.math.abs(d / lastDist - 1f) > 0.002f) engine.retargetIfAdrift()
+                            cam.zoom(d / lastDist)
+                        }
                         val dx = cx - lastCx
                         val dy = cy - lastCy
                         panAccum += hypot(dx, dy)
                         // Only pan once the fingers have clearly slid together, so pinching
                         // doesn't knock you off the object you are looking at.
-                        if (panAccum > PAN_THRESHOLD_PX || cam.target == null) cam.pan(dx, dy, height)
+                        // Never slide off a trip in progress just because the fingers drifted while pinching.
+                        if (panAccum > PAN_THRESHOLD_PX * (if (cam.isFlying) 3 else 1) || (cam.target == null && !cam.isFlying)) cam.pan(dx, dy, height)
                         var da = ang - lastAngle
                         if (da > Math.PI) da -= (2 * Math.PI).toFloat()
                         if (da < -Math.PI) da += (2 * Math.PI).toFloat()

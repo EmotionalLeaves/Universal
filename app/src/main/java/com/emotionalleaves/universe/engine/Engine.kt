@@ -449,9 +449,23 @@ class Engine(val context: Context) {
     fun setZoomFraction(f: Float) {
         synchronized(camera) {
             val lo = ln(1.7); val hi = ln(camera.maxDistance())
-            camera.cancelFlight()
-            camera.setDistance(camera.surfaceRadius() + exp(lo + (hi - lo) * f.coerceIn(0f, 1f)))
+            retargetIfAdrift()
+            camera.setDistance(camera.surfaceOf(camera.zoomTarget()) + exp(lo + (hi - lo) * f.coerceIn(0f, 1f)))
         }
+    }
+
+    /**
+     * When you have drifted into empty space but something is selected, zooming should act on
+     * that object: turn to face it (a short flight at the current distance), then zoom towards it.
+     * Call while holding the camera lock.
+     */
+    fun retargetIfAdrift() {
+        if (camera.target != null || camera.isFlying) return
+        val sel = selected ?: return
+        val p = sel.position(jd)
+        val d = (camera.position() - p).length()
+        if (d <= 0) return
+        camera.flyTo(sel, p, d, nowSeconds(), null)
     }
 
     /** Returns to the default view. */
