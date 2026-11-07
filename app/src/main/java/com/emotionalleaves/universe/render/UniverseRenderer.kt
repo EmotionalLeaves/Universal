@@ -86,7 +86,7 @@ class UniverseRenderer(private val context: Context, private val engine: Engine)
         val fovY = Math.toRadians(60.0)
         // Near the ground, tilt the view up toward the horizon so you see the landscape.
         var viewOrientation = orientation
-        if (target != null && target.radius > 0) {
+        if (target != null && engine.camera.isSolidTarget()) {
             val alt = (target.position(engine.jd) - camPos).length() - target.radius
             val f = 1.0 - com.emotionalleaves.universe.core.smoothstep(0.0003, 0.03, alt / target.radius)
             if (f > 0) viewOrientation = orientation * Quatd.axisAngle(com.emotionalleaves.universe.core.Vec3d.X, Math.toRadians(76.0) * f)
@@ -183,7 +183,7 @@ class UniverseRenderer(private val context: Context, private val engine: Engine)
         val sel = engine.selected
         val selDist = sel?.let { (it.position(frame.jd) - frame.camPos).length() }
         val selFacts = sel?.facts(frame.jd) ?: emptyList()
-        val altitude = if (target != null && target.radius > 0) {
+        val altitude = if (target != null && engine.camera.isSolidTarget()) {
             val d = (target.position(frame.jd) - frame.camPos).length() - target.radius
             "Altitude ${Units.formatDistance(d)}"
         } else ""

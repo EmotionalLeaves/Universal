@@ -320,6 +320,7 @@ fun SettingsScreen(engine: Engine) {
         ToggleRow("Constellation lines", "Stick figures between real stars", s.showConstellations) { s.showConstellations = it }
         ToggleRow("Generated objects", "Fill gaps in real data with generated stars, planets and galaxies", s.showGenerated) {
             s.showGenerated = it
+            engine.world.clearSystems()
         }
         Text("Star brightness", color = TextMain, fontSize = 15.sp, modifier = Modifier.padding(top = 8.dp))
         var b by androidx.compose.runtime.remember { mutableStateOf(s.starBrightness) }

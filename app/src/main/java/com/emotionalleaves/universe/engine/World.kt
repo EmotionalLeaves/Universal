@@ -310,6 +310,13 @@ class World(private val engine: Engine) {
         return parts.joinToString(" › ")
     }
 
+    /** Forget built systems (after turning generated objects on or off). */
+    fun clearSystems() {
+        synchronized(systemCache) { systemCache.clear() }
+        activeSystem = null
+        genLocal = null
+    }
+
     fun systemFor(star: StarBody): StarSystem = synchronized(systemCache) {
         systemCache.getOrPut(star.id) {
             val rows = exoForStar[star.id]

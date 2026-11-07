@@ -94,13 +94,20 @@ class Engine(val context: Context) {
             val before = camera.snapshot()
             surfaceFollow()
             camera.update(dt, now) { it.position(jd) }
-            // Never let the camera end up inside a planet: undo the move instead.
-            val cam = camera.position()
-            for (b in world.solidBodiesNear(cam, jd)) {
-                val c = b.position(jd)
-                val minR = b.radius + world.surfaceHeight(b, cam - c) + 0.3
-                if ((cam - c).length() < minR && !camera.isFlying) {
-                    camera.restore(before)
+            // Never let the camera end up inside a planet. Over the body you are orbiting, lift the
+            // camera above the ground (so you can walk uphill); for any other body, undo the move.
+            if (!camera.isFlying) {
+                val cam = camera.position()
+                for (b in world.solidBodiesNear(cam, jd)) {
+                    val c = b.position(jd)
+                    val ground = b.radius + world.surfaceHeight(b, cam - c)
+                    if ((cam - c).length() >= ground + 0.3) continue
+                    if (b == camera.target) {
+                        camera.surfaceExtra = ground - b.radius
+                        camera.setDistance(ground + 1.7)
+                    } else {
+                        camera.restore(before)
+                    }
                     break
                 }
             }
@@ -130,7 +137,7 @@ class Engine(val context: Context) {
             lastSpin = null
             lastSpinBody = null
         }
-        if (t != null && t.radius > 0) {
+        if (t != null && camera.isSolidTarget()) {
             val center = t.position(jd)
             val camRel = camera.position() - center
             camera.surfaceExtra = world.surfaceHeight(t, camRel).coerceAtLeast(-t.radius * 0.5)

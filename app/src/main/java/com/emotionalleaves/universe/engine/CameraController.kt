@@ -56,6 +56,8 @@ class CameraController {
     private fun solid(t: Body) = t.kind == Kind.STAR || t.kind == Kind.PLANET || t.kind == Kind.MOON ||
         t.kind == Kind.DWARF_PLANET || (t.kind == Kind.MARKER && t.radius > 0)
 
+    fun isSolidTarget(): Boolean = target?.let { solid(it) } ?: false
+
     fun minDistance(): Double {
         val t = target ?: return 0.05
         if (!solid(t)) return 0.05

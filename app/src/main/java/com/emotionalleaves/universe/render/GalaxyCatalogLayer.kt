@@ -48,7 +48,8 @@ class GalaxyCatalogLayer : Layer {
             data[i * 7] = v.x.toFloat(); data[i * 7 + 1] = v.y.toFloat(); data[i * 7 + 2] = v.z.toFloat()
             val c = tint(g.model.type)
             data[i * 7 + 3] = c[0]; data[i * 7 + 4] = c[1]; data[i * 7 + 5] = c[2]
-            data[i * 7 + 6] = g.absMag.toFloat()
+            // The Milky Way is drawn from inside by GalaxyLayer; as a point it would blaze in Sagittarius.
+            data[i * 7 + 6] = if (g.isMilkyWay) 99f else g.absMag.toFloat()
         }
         batch = PointBatch.upload(UPos.ZERO, Units.PC, data)
     }

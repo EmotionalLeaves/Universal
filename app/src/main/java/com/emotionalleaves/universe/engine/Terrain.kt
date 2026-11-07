@@ -138,7 +138,9 @@ class TerrainModel(
         fun forBody(context: Context, body: Body): TerrainModel? {
             when (body) {
                 is SolarBody -> {
-                    if (body.look.style == 1) return null // gas giants and Venus' clouds: no landing
+                    // No ground on the Sun, the giant planets, or under Venus' and Titan's clouds.
+                    if (body.kind == Kind.STAR || body.look.style == 1) return null
+                    if (body.id in setOf("sol:jupiter", "sol:saturn", "sol:uranus", "sol:neptune", "sol:venus")) return null
                     val map = body.look.heights?.let { HeightMap.load(context, it) }
                     val seed = Rng.hashString(body.id)
                     return when (body.id) {

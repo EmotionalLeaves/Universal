@@ -54,13 +54,14 @@ class StarCatalog(val tiles: List<StarTile>, val label: String) {
     }
 
     val count = tiles.sumOf { it.count }
-    private val index = HashMap<Int, Pair<Int, Int>>()
-
-    init {
-        for ((t, tile) in tiles.withIndex()) for (i in 0 until tile.count) index[tile.ids[i]] = t to i
+    /** id -> (tile << 32 | index), built on first use. */
+    private val index: HashMap<Int, Long> by lazy {
+        val m = HashMap<Int, Long>(count * 2)
+        for ((t, tile) in tiles.withIndex()) for (i in 0 until tile.count) m[tile.ids[i]] = (t.toLong() shl 32) or i.toLong()
+        m
     }
 
-    fun locate(id: Int): Pair<StarTile, Int>? = index[id]?.let { tiles[it.first] to it.second }
+    fun locate(id: Int): Pair<StarTile, Int>? = index[id]?.let { tiles[(it ushr 32).toInt()] to (it and 0xFFFFFFFFL).toInt() }
 }
 
 object StarFiles {

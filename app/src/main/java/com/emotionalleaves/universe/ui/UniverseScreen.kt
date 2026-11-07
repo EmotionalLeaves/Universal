@@ -25,9 +25,16 @@ fun UniverseScreen(engine: Engine, version: String, view: UniverseView) {
         SettingsUi.load(engine)
     }
     Box(Modifier.fillMaxSize().background(Color.Black)) {
-        AndroidView(factory = { view }, modifier = Modifier.fillMaxSize())
+        // The 3D view and the label layer share one Android container, so taps pass through the
+        // (non-clickable) labels to the 3D view underneath.
         AndroidView(
-            factory = { ctx -> LabelOverlay(ctx).also { view.renderer.labelOverlay = it } },
+            factory = { ctx ->
+                android.widget.FrameLayout(ctx).apply {
+                    (view.parent as? android.view.ViewGroup)?.removeView(view)
+                    addView(view)
+                    addView(LabelOverlay(ctx).also { view.renderer.labelOverlay = it })
+                }
+            },
             modifier = Modifier.fillMaxSize(),
         )
 
