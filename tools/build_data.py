@@ -22,7 +22,9 @@ import struct
 import sys
 import time
 import traceback
+import urllib.parse
 import urllib.request
+import re
 import zlib
 
 # ----------------------------------------------------------------------------- sources
@@ -481,10 +483,10 @@ def build_dso(base):
 
 # ----------------------------------------------------------------------------- VizieR helpers
 
-def vizier_tsv(source, extra, timeout=900):
+def vizier_tsv(source, extra, timeout=900, maxrows="unlimited"):
     last = None
     for base in VIZIER:
-        url = f"{base}?-source={source}&-out.max=unlimited&-oc.form=d{extra}"
+        url = f"{base}?-source={source}&-out.max={maxrows}&-oc.form=d{extra}"
         try:
             log(f"  VizieR {url}")
             txt = fetch(url, timeout=timeout, retries=2).decode("utf-8", "replace")
@@ -764,6 +766,396 @@ def build_cmb(base):
     return {"cmb": "Planck SMICA"}
 
 
+# ----------------------------------------------------------------------------- more real objects
+# Round 16: asteroids, comets, every known moon, pulsars, quasars, galaxy clusters, descriptions.
+
+SBDB_API = "https://ssd-api.jpl.nasa.gov/sbdb_query.api"
+SATS_ELEM_URL = "https://ssd.jpl.nasa.gov/sats/elem/"
+SATS_PHYS_URL = "https://ssd.jpl.nasa.gov/sats/phys_par/"
+WIKI_SUMMARY = "https://en.wikipedia.org/api/rest_v1/page/summary/"
+
+
+def sbdb(fields, kind, cdata=None, limit=None):
+    q = {"fields": ",".join(fields), "sb-kind": kind}
+    if cdata:
+        q["sb-cdata"] = json.dumps(cdata, separators=(",", ":"))
+    if limit:
+        q["limit"] = str(limit)
+    url = SBDB_API + "?" + urllib.parse.urlencode(q)
+    log(f"  SBDB {url}")
+    js = json.loads(fetch(url, timeout=900).decode("utf-8"))
+    if "fields" not in js or "data" not in js:
+        raise RuntimeError(f"unexpected SBDB reply: {str(js)[:300]}")
+    idx = {f: i for i, f in enumerate(js["fields"])}
+    return [{f: row[idx[f]] for f in fields if f in idx} for row in js["data"]]
+
+
+def clean_sb_name(full):
+    full = (full or "").strip()
+    # "     4 Vesta (A807 FA)" -> "4 Vesta"; "1P/Halley" stays; "(2010 AB)" -> "2010 AB"
+    if "(" in full and not full.startswith("("):
+        full = full[: full.index("(")].strip()
+    return full.strip("() ")
+
+
+def build_small_bodies(base):
+    d = os.path.join(base, "smallbodies")
+    os.makedirs(d, exist_ok=True)
+    fields = ["full_name", "a", "e", "i", "om", "w", "ma", "epoch", "H", "diameter", "class"]
+    try:
+        rows = sbdb(fields, "a", {"AND": ["H|LT|14.5"]})
+    except Exception as e:
+        log(f"  SBDB with H filter failed ({e}); taking the first 40,000 numbered asteroids")
+        rows = sbdb(fields, "a", None, 40000)
+    n = 0
+    with open(os.path.join(d, "asteroids.tsv"), "w", encoding="utf-8") as f:
+        f.write("name\ta_au\te\ti\tom\tw\tma\tepoch_jd\tH\tdiam_km\tclass\n")
+        for r in rows:
+            a = fnum(r.get("a")); e = fnum(r.get("e"))
+            if a is None or e is None or e >= 1:
+                continue
+            vals = [fnum(r.get(k), 0.0) for k in ("i", "om", "w", "ma", "epoch")]
+            H = fnum(r.get("H"), 99.0); dm = fnum(r.get("diameter"), -1.0)
+            f.write(f"{clean_sb_name(r.get('full_name'))}\t{a:.6f}\t{e:.6f}\t{vals[0]:.4f}\t{vals[1]:.4f}\t{vals[2]:.4f}\t{vals[3]:.4f}\t{vals[4]:.2f}\t{H:.2f}\t{dm:.2f}\t{r.get('class') or ''}\n")
+            n += 1
+    log(f"  asteroids: {n}")
+    cfields = ["full_name", "e", "q", "i", "om", "w", "tp", "epoch", "M1"]
+    crow = sbdb(cfields, "c")
+    m = 0
+    with open(os.path.join(d, "comets.tsv"), "w", encoding="utf-8") as f:
+        f.write("name\tq_au\te\ti\tom\tw\ttp_jd\tM1\n")
+        for r in crow:
+            q = fnum(r.get("q")); e = fnum(r.get("e")); tp = fnum(r.get("tp"))
+            if q is None or e is None or tp is None:
+                continue
+            vals = [fnum(r.get(k), 0.0) for k in ("i", "om", "w")]
+            M1 = fnum(r.get("M1"), 15.0)
+            f.write(f"{(r.get('full_name') or '').strip()}\t{q:.6f}\t{e:.6f}\t{vals[0]:.4f}\t{vals[1]:.4f}\t{vals[2]:.4f}\t{tp:.4f}\t{M1:.1f}\n")
+            m += 1
+    log(f"  comets: {m}")
+    return {"asteroids": n, "comets": m}
+
+
+class _Tables(__import__("html.parser").parser.HTMLParser):
+    """Collects every table as rows of cell text, plus the last heading seen before each table."""
+    def __init__(self):
+        super().__init__()
+        self.tables, self.heading, self._text, self._row, self._cell, self._in = [], "", [], None, None, None
+
+    def handle_starttag(self, tag, attrs):
+        if tag in ("h1", "h2", "h3", "h4", "caption"):
+            self._in = tag; self._text = []
+        elif tag == "table":
+            self.tables.append({"heading": self.heading, "rows": []})
+        elif tag == "tr" and self.tables:
+            self._row = []
+        elif tag in ("td", "th") and self._row is not None:
+            self._cell = []
+
+    def handle_endtag(self, tag):
+        if tag == self._in:
+            t = " ".join("".join(self._text).split())
+            if t:
+                self.heading = t
+                if tag == "caption" and self.tables:
+                    self.tables[-1]["heading"] = t
+            self._in = None
+        elif tag in ("td", "th") and self._cell is not None and self._row is not None:
+            self._row.append(" ".join("".join(self._cell).split()))
+            self._cell = None
+        elif tag == "tr" and self._row is not None and self.tables:
+            if self._row:
+                self.tables[-1]["rows"].append(self._row)
+            self._row = None
+
+    def handle_data(self, data):
+        if self._in:
+            self._text.append(data)
+        if self._cell is not None:
+            self._cell.append(data)
+
+
+PLANET_NAMES = ["Mercury", "Venus", "Earth", "Mars", "Jupiter", "Saturn", "Uranus", "Neptune", "Pluto"]
+
+
+def html_tables(url):
+    p = _Tables()
+    p.feed(fetch(url).decode("utf-8", "replace"))
+    return p.tables
+
+
+def build_moons(base):
+    d = os.path.join(base, "planets")
+    os.makedirs(d, exist_ok=True)
+    tables = html_tables(SATS_ELEM_URL)
+    log(f"  sats/elem: {len(tables)} tables")
+    out = []
+    for t in tables:
+        rows = t["rows"]
+        if len(rows) < 2:
+            continue
+        head = [h.lower() for h in rows[0]]
+        log(f"   table '{t['heading'][:60]}' header {rows[0][:16]}")
+        planet = next((pn for pn in PLANET_NAMES if pn.lower() in t["heading"].lower()), None)
+
+        raw = rows[0]
+        toks = [re.split(r"[\s(]", h.strip())[0] for h in raw]
+
+        def col(*keys):
+            # Exact first word of the header ("a (km)" -> "a"); Greek letters compared case-sensitively.
+            for k in keys:
+                for i, t in enumerate(toks):
+                    if t == k or (k.isascii() and t.lower().rstrip(".") == k.lower().rstrip(".")):
+                        return i
+            return None
+        ci = {k: col(*v) for k, v in {
+            "name": ("Sat", "Satellite", "Name"), "a": ("a",), "e": ("e",), "w": ("ω", "w", "peri"), "M": ("M",),
+            "i": ("i",), "node": ("node", "Ω"), "P": ("P",), "ra": ("R.A", "RA"), "dec": ("Dec",), "epoch": ("Epoch",),
+            "planet": ("Planet",),
+        }.items()}
+        if ci["name"] is None or ci["a"] is None:
+            continue
+        for r in rows[1:]:
+            def g(k):
+                i = ci.get(k)
+                return r[i] if i is not None and i < len(r) else ""
+            pl = planet or next((pn for pn in PLANET_NAMES if pn.lower() == g("planet").lower()), None)
+            a = fnum(g("a").replace(",", ""))
+            if not pl or a is None:
+                continue
+            out.append([pl, g("name"), a, fnum(g("e"), 0), fnum(g("w"), 0), fnum(g("M"), 0), fnum(g("i"), 0),
+                        fnum(g("node"), 0), fnum(g("P"), 0), fnum(g("ra"), -999), fnum(g("dec"), -999), g("epoch")])
+    radii = {}
+    try:
+        for t in html_tables(SATS_PHYS_URL):
+            rows = t["rows"]
+            if len(rows) < 2:
+                continue
+            head = [h.lower() for h in rows[0]]
+            ri = next((i for i, h in enumerate(head) if "radius" in h), None)
+            ni = next((i for i, h in enumerate(head) if h.startswith("sat") or "name" in h), 0)
+            if ri is None:
+                continue
+            for r in rows[1:]:
+                if ri < len(r):
+                    v = fnum(r[ri].split("±")[0].replace(",", "").strip())
+                    if v:
+                        radii[r[ni].lower()] = v
+    except Exception as e:
+        log(f"  sats/phys_par failed: {e}")
+    with open(os.path.join(d, "moons.tsv"), "w", encoding="utf-8") as f:
+        f.write("planet\tname\ta_km\te\tw\tM\ti\tnode\tP_days\tpole_ra\tpole_dec\tepoch\tradius_km\n")
+        for o in out:
+            rad = radii.get(o[1].lower(), 0.0)
+            f.write("\t".join(str(x) for x in o) + f"\t{rad}\n")
+    log(f"  moons: {len(out)} (radii for {sum(1 for o in out if o[1].lower() in radii)})")
+    if len(out) < 50:
+        raise RuntimeError("too few moons parsed")
+    return {"moons": len(out)}
+
+
+def find_col(header, *names):
+    low = [h.strip().lower() for h in header]
+    for n in names:
+        if n.lower() in low:
+            return low.index(n.lower())
+    for n in names:
+        for i, h in enumerate(low):
+            if h.startswith(n.lower()):
+                return i
+    return None
+
+
+def comoving_mpc(z):
+    """Comoving distance for flat LCDM (H0 = 70, Omega_m = 0.3)."""
+    n = 400
+    s = 0.0
+    for k in range(n):
+        zz = (k + 0.5) * z / n
+        s += 1.0 / math.sqrt(0.3 * (1 + zz) ** 3 + 0.7)
+    return 299792.458 / 70.0 * s * z / n
+
+
+def build_pulsars(base):
+    d = os.path.join(base, "exotic")
+    os.makedirs(d, exist_ok=True)
+    header, data = vizier_tsv("B/psr/psr", "&-out.all")
+    log(f"  pulsar columns: {header[:30]}")
+    cn = find_col(header, "PSRJ", "Name", "PSR")
+    cra = find_col(header, "_RAJ2000", "RAJ2000", "RA_ICRS")
+    cde = find_col(header, "_DEJ2000", "DEJ2000", "DE_ICRS")
+    cd = find_col(header, "Dist", "DIST", "Dist_DM")
+    cp = find_col(header, "P0", "P")
+    n = 0
+    with open(os.path.join(d, "pulsars.tsv"), "w", encoding="utf-8") as f:
+        f.write("name\tra\tdec\tdist_kpc\tperiod_s\n")
+        for r in data:
+            g = lambda i: r[i].strip() if i is not None and i < len(r) else ""
+            ra, de = fnum(g(cra)), fnum(g(cde))
+            if ra is None or de is None:
+                continue
+            dist = fnum(g(cd))
+            if not dist or dist <= 0:
+                continue
+            f.write(f"PSR {g(cn)}\t{ra:.5f}\t{de:.5f}\t{dist:.4f}\t{fnum(g(cp), 0.0)}\n")
+            n += 1
+    log(f"  pulsars: {n}")
+    return {"pulsars": n}
+
+
+def build_quasars(base):
+    d = os.path.join(base, "exotic")
+    os.makedirs(d, exist_ok=True)
+    header, data = vizier_tsv("VII/294", "&-out.all&Rmag=%3C18.5&z=%3E0.01", maxrows=120000)
+    log(f"  quasar columns: {header[:20]}")
+    cn = find_col(header, "Name")
+    cra = find_col(header, "_RAJ2000", "RAJ2000")
+    cde = find_col(header, "_DEJ2000", "DEJ2000")
+    cz = find_col(header, "z")
+    cm = find_col(header, "Rmag")
+    ct = find_col(header, "Type", "Cl")
+    rows = []
+    for r in data:
+        g = lambda i: r[i].strip() if i is not None and i < len(r) else ""
+        ra, de, z = fnum(g(cra)), fnum(g(cde)), fnum(g(cz))
+        if ra is None or de is None or not z or z <= 0.01:
+            continue
+        if ct is not None and "Q" not in g(ct) and "A" not in g(ct):
+            continue
+        rows.append((g(cn), ra, de, z, fnum(g(cm), 19.0)))
+    rows.sort(key=lambda x: x[4])
+    rows = rows[:80000]
+    with open(os.path.join(d, "quasars.tsv"), "w", encoding="utf-8") as f:
+        f.write("name\tra\tdec\tz\tdist_mpc\tmag\n")
+        for nm, ra, de, z, m in rows:
+            f.write(f"{nm}\t{ra:.5f}\t{de:.5f}\t{z:.4f}\t{comoving_mpc(z):.1f}\t{m:.2f}\n")
+    log(f"  quasars: {len(rows)}")
+    return {"quasars": len(rows)}
+
+
+def build_clusters(base):
+    d = os.path.join(base, "exotic")
+    os.makedirs(d, exist_ok=True)
+    header, data = vizier_tsv("VII/110A/table3", "&-out.all")
+    log(f"  Abell columns: {header[:20]}")
+    cn = find_col(header, "ACO", "A")
+    cra = find_col(header, "_RAJ2000", "RAJ2000")
+    cde = find_col(header, "_DEJ2000", "DEJ2000")
+    cz = find_col(header, "z", "Redshift")
+    cm = find_col(header, "m10")
+    cr = find_col(header, "Rich", "R")
+    n = 0
+    with open(os.path.join(d, "clusters.tsv"), "w", encoding="utf-8") as f:
+        f.write("name\tra\tdec\tz\tdist_mpc\trichness\tdist_src\n")
+        for r in data:
+            g = lambda i: r[i].strip() if i is not None and i < len(r) else ""
+            ra, de = fnum(g(cra)), fnum(g(cde))
+            if ra is None or de is None:
+                continue
+            z = fnum(g(cz)); src = "R"
+            if not z or z <= 0:
+                m10 = fnum(g(cm))
+                if not m10:
+                    continue
+                z = 10 ** (0.2 * m10 - 4.2)   # rough brightest-galaxy magnitude/redshift relation
+                src = "G"
+            f.write(f"Abell {g(cn).lstrip('0')}\t{ra:.4f}\t{de:.4f}\t{z:.4f}\t{comoving_mpc(z):.1f}\t{g(cr)}\t{src}\n")
+            n += 1
+    log(f"  galaxy clusters: {n}")
+    return {"clusters": n}
+
+
+KEYWORDS = {
+    "star": ("star",), "moon": ("moon", "satellite"), "planet": ("planet",), "dso": ("nebula", "cluster", "remnant", "galaxy"),
+    "galaxy": ("galaxy",), "asteroid": ("asteroid", "minor planet", "dwarf planet", "object"), "comet": ("comet",),
+}
+SUFFIX = {"star": " (star)", "moon": " (moon)", "planet": " (planet)", "dso": "", "galaxy": "", "asteroid": "", "comet": ""}
+
+
+def read_tsv(path):
+    if not os.path.exists(path):
+        return []
+    with open(path, encoding="utf-8") as f:
+        return list(csv.DictReader(f, delimiter="\t"))
+
+
+def wiki_summary(title):
+    url = WIKI_SUMMARY + urllib.parse.quote(title.replace(" ", "_"), safe="")
+    req = urllib.request.Request(url, headers={"User-Agent": "UniverseExplorer-data/1.0 (https://github.com/EmotionalLeaves/Universal)"})
+    try:
+        with urllib.request.urlopen(req, timeout=30) as r:
+            return json.loads(r.read().decode("utf-8"))
+    except Exception:
+        return None
+
+
+def build_wiki(base):
+    """Short Wikipedia summaries (CC BY-SA 4.0) for named objects, shown as "About" in the app."""
+    want = []   # (key shown in app, category)
+    for n in PLANET_NAMES + ["Sun", "Moon", "Ceres", "Eris", "Haumea", "Makemake"]:
+        want.append((n, "planet" if n not in ("Sun", "Moon") else ("star" if n == "Sun" else "moon")))
+    for r in read_tsv(os.path.join(base, "planets", "moons.tsv")):
+        want.append((r["name"], "moon"))
+    for r in read_tsv(os.path.join(base, "stars", "hyg_names.tsv")):
+        if r.get("proper"):
+            want.append((r["proper"], "star"))
+    for r in read_tsv(os.path.join(base, "dso", "dso.tsv")):
+        if r.get("common"):
+            want.append((r["common"], "dso"))
+        if r.get("messier"):
+            want.append(("Messier " + r["messier"].lstrip("0"), "dso"))
+    for r in read_tsv(os.path.join(base, "galaxies", "galaxies.tsv")):
+        nm = r.get("name", "")
+        if nm and not nm.startswith(("PGC", "NGC", "IC", "UGC", "ESO")):
+            want.append((nm, "galaxy"))
+    ex = read_tsv(os.path.join(base, "planets", "exoplanets.tsv"))
+    for r in ex:
+        if fnum(r.get("sy_dist"), 1e9) < 25 or fnum(r.get("disc_year"), 3000) < 2005:
+            want.append((r["pl_name"], "planet"))
+    ast = read_tsv(os.path.join(base, "smallbodies", "asteroids.tsv"))
+    ast.sort(key=lambda r: fnum(r.get("H"), 99))
+    for r in ast[:300]:
+        want.append((r["name"], "asteroid"))
+    for r in read_tsv(os.path.join(base, "smallbodies", "comets.tsv")):
+        nm = r["name"]
+        if "P/" in nm[:6] and nm.split("P/")[0].isdigit() and int(nm.split("P/")[0]) <= 150:
+            want.append((nm, "comet"))
+    seen, todo = set(), []
+    for k, c in want:
+        if k and k.lower() not in seen:
+            seen.add(k.lower()); todo.append((k, c))
+    log(f"  wiki: {len(todo)} names")
+
+    def one(item):
+        key, cat = item
+        tries = [key + SUFFIX[cat], key] if SUFFIX[cat] else [key]
+        for t in tries:
+            js = wiki_summary(t)
+            if not js or js.get("type") != "standard":
+                continue
+            text = " ".join((js.get("extract") or "").split())
+            blob = (text + " " + (js.get("description") or "")).lower()
+            if len(text) < 40 or not any(w in blob for w in KEYWORDS[cat]):
+                continue
+            if len(text) > 900:
+                cut = text[:900].rfind(". ")
+                text = text[: cut + 1] if cut > 200 else text[:900] + "…"
+            return key, js.get("title", t), text
+        return None
+
+    from concurrent.futures import ThreadPoolExecutor
+    with ThreadPoolExecutor(6) as pool:
+        got = [r for r in pool.map(one, todo) if r]
+    d = os.path.join(base, "wiki")
+    os.makedirs(d, exist_ok=True)
+    with open(os.path.join(d, "about.tsv"), "w", encoding="utf-8") as f:
+        f.write("key\ttitle\ttext\n")
+        for k, t, x in got:
+            f.write(f"{k.lower()}\t{t}\t{x.replace(chr(9), ' ')}\n")
+    log(f"  wiki: {len(got)} summaries")
+    return {"wiki": len(got)}
+
+
 # ----------------------------------------------------------------------------- main
 
 def main():
@@ -778,7 +1170,14 @@ def main():
     os.makedirs(packs, exist_ok=True)
     only = set(x for x in args.only.split(",") if x)
     want = lambda k: not only or k in only
-    report = {"built": time.strftime("%Y-%m-%d %H:%M:%S UTC", time.gmtime())}
+    report = {}
+    old_manifest = os.path.join(base, "manifest.json")
+    if only and os.path.exists(old_manifest):
+        try:
+            report = json.load(open(old_manifest))   # incremental run: keep earlier counts
+        except Exception:
+            report = {}
+    report["built"] = time.strftime("%Y-%m-%d %H:%M:%S UTC", time.gmtime())
     steps = []
     if want("stars"):
         steps.append(("stars", lambda: build_hyg(base)))
@@ -800,6 +1199,18 @@ def main():
         steps.append(("heights", lambda: build_heights(base)))
     if want("cmb"):
         steps.append(("cmb", lambda: build_cmb(base)))
+    if want("smallbodies"):
+        steps.append(("smallbodies", lambda: build_small_bodies(base)))
+    if want("moons"):
+        steps.append(("moons", lambda: build_moons(base)))
+    if want("pulsars"):
+        steps.append(("pulsars", lambda: build_pulsars(base)))
+    if want("quasars"):
+        steps.append(("quasars", lambda: build_quasars(base)))
+    if want("clusters"):
+        steps.append(("clusters", lambda: build_clusters(base)))
+    if want("wiki"):
+        steps.append(("wiki", lambda: build_wiki(base)))
     if args.packs and want("packs"):
         steps.append(("athyg", lambda: build_athyg_pack(packs)))
         steps.append(("glade", lambda: build_glade_pack(packs)))

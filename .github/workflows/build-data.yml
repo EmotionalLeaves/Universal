@@ -9,6 +9,10 @@ on:
         description: "Also build the big downloadable packs"
         type: boolean
         default: true
+      only:
+        description: "Only rebuild these steps (comma list, e.g. smallbodies,moons,wiki). Empty = everything."
+        type: string
+        default: ""
   push:
     branches: [data]
 
@@ -29,11 +33,22 @@ jobs:
       - name: Install Python packages
         run: pip install pillow numpy healpy rasterio
 
+      - name: Start from the published data (incremental runs)
+        if: ${{ inputs.only != '' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p build/data/base
+          gh release download data-v1 -p base-data.zip -D /tmp
+          unzip -q -o /tmp/base-data.zip -d build/data/base
+
       - name: Build base data and packs
         run: |
           PACKS="--packs"
           if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ inputs.packs }}" != "true" ]; then PACKS=""; fi
-          python3 tools/build_data.py --out build/data $PACKS 2>&1 | tee data-build.log
+          ONLY=""
+          if [ -n "${{ inputs.only }}" ]; then ONLY="--only ${{ inputs.only }}"; PACKS=""; fi
+          python3 tools/build_data.py --out build/data $PACKS $ONLY 2>&1 | tee data-build.log
 
       - name: Zip outputs
         run: |
