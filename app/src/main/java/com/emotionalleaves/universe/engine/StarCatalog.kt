@@ -205,6 +205,7 @@ class StarBody(
         out.add("Temperature" to String.format(Locale.US, "%,.0f K", teff))
         out.add("Luminosity" to fmtSolar(luminosity) + " × Sun")
         out.add("Radius" to fmtSolar(radius / Units.R_SUN) + " × Sun")
+        out.addAll(Describe.starFacts(this))
         out.addAll(extra)
         return out
     }

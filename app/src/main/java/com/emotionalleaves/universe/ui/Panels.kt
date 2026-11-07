@@ -17,6 +17,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
@@ -273,18 +276,27 @@ fun InfoCard(engine: Engine, modifier: Modifier = Modifier) {
             )
         }
         val facts = Hud.selectedFacts
-        if (facts.isNotEmpty()) {
+        if (facts.isNotEmpty() || Hud.selectedAbout.isNotEmpty()) {
             Text(
-                if (expanded) "Less ▴" else "Facts ▾", color = Accent, fontSize = 12.sp,
+                if (expanded) "Less ▴" else "About & facts ▾", color = Accent, fontSize = 12.sp,
                 modifier = Modifier.clickable { expanded = !expanded }.padding(top = 6.dp, bottom = 2.dp),
             )
         }
-        if (expanded && facts.isNotEmpty()) {
-            Spacer(Modifier.height(6.dp))
-            for ((k, v) in facts.take(8)) {
-                Row(Modifier.fillMaxWidth().padding(vertical = 1.dp)) {
-                    Text(k, color = TextDim, fontSize = 12.sp, modifier = Modifier.weight(0.42f))
-                    Text(v, color = TextMain, fontSize = 12.sp, modifier = Modifier.weight(0.58f))
+        if (expanded) {
+            // Scrolls inside the card so long descriptions never push the buttons off screen.
+            val maxH = (LocalConfiguration.current.screenHeightDp * 0.38f).dp
+            Column(Modifier.heightIn(max = maxH).verticalScroll(rememberScrollState())) {
+                if (Hud.selectedAbout.isNotEmpty()) {
+                    Text(Hud.selectedAbout, color = TextMain, fontSize = 13.sp, modifier = Modifier.padding(top = 4.dp))
+                    if (Hud.selectedAboutCredit.isNotEmpty()) {
+                        Text(Hud.selectedAboutCredit, color = TextDim, fontSize = 10.sp, modifier = Modifier.padding(top = 2.dp, bottom = 6.dp))
+                    }
+                }
+                for ((k, v) in facts) {
+                    Row(Modifier.fillMaxWidth().padding(vertical = 1.dp)) {
+                        Text(k, color = TextDim, fontSize = 12.sp, modifier = Modifier.weight(0.42f))
+                        Text(v, color = TextMain, fontSize = 12.sp, modifier = Modifier.weight(0.58f))
+                    }
                 }
             }
         }

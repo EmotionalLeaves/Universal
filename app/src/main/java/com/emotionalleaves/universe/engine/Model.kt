@@ -12,6 +12,14 @@ enum class Kind(val label: String) {
     NEBULA("Nebula"),
     CLUSTER("Star cluster"),
     MARKER("Marker"),
+    ASTEROID("Asteroid"),
+    COMET("Comet"),
+    PULSAR("Pulsar"),
+    QUASAR("Quasar"),
+    GALAXY_CLUSTER("Galaxy cluster"),
+    BLACK_HOLE("Black hole"),
+    NEUTRON_STAR("Neutron star"),
+    ROGUE_PLANET("Rogue planet"),
     UNIVERSE("Universe"),
 }
 

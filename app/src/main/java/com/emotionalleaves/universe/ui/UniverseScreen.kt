@@ -71,6 +71,7 @@ fun UniverseScreen(engine: Engine, version: String, view: UniverseView) {
         }
         when (Nav.screen) {
             Screen.EXPLORE -> ExploreScreen(engine)
+            Screen.CENSUS -> CensusScreen(engine)
             Screen.MENU -> MenuSheet(engine)
             Screen.DATA -> DataScreen(engine)
             Screen.SEARCH -> SearchScreen(engine)

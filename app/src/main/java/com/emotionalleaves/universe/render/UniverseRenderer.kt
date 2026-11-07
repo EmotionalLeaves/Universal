@@ -41,8 +41,12 @@ class UniverseRenderer(private val context: Context, private val engine: Engine)
     private val galaxyCatalogLayer = GalaxyCatalogLayer()
     private val cosmicLayer = CosmicLayer()
     private val fieldLayer = FieldGalaxyLayer()
+    private val exoticLayer = ExoticLayer()
+    private val smallBodyLayer = SmallBodyLayer()
+    private val remnantLayer = RemnantLayer()
     private val layers: List<Layer> = listOf(
-        cosmicLayer, fieldLayer, galaxyCatalogLayer, galaxyLayer, deepSkyLayer, starLayer, systemLayer, solarLayer, terrainLayer, testLayer,
+        cosmicLayer, exoticLayer, fieldLayer, galaxyCatalogLayer, galaxyLayer, deepSkyLayer, starLayer, remnantLayer, systemLayer,
+        solarLayer, smallBodyLayer, terrainLayer, testLayer,
     )
 
     override fun onSurfaceCreated(gl: GL10?, config: EGLConfig?) {
@@ -109,6 +113,9 @@ class UniverseRenderer(private val context: Context, private val engine: Engine)
         galaxyCatalogLayer.daylight = terrainLayer.daylight
         cosmicLayer.daylight = terrainLayer.daylight
         fieldLayer.daylight = terrainLayer.daylight
+        exoticLayer.daylight = terrainLayer.daylight
+        smallBodyLayer.daylight = terrainLayer.daylight
+        remnantLayer.daylight = terrainLayer.daylight
         galaxyLayer.particles = when (engine.settings.quality) { 0 -> 20_000; 2 -> 70_000; else -> 40_000 }
         terrainLayer.splitFactor = when (engine.settings.quality) { 0 -> 1.5; 2 -> 3.0; else -> 2.2 }
         galaxyLayer.maxBlob = when (engine.settings.quality) { 0 -> 14f; 2 -> 28f; else -> 20f }
@@ -204,8 +211,16 @@ class UniverseRenderer(private val context: Context, private val engine: Engine)
 
     private fun overlaps(a: FloatArray, b: FloatArray) = a[0] < b[2] && b[0] < a[2] && a[1] < b[3] && b[1] < a[3]
 
+    private var aboutFor: String? = null
+    private var aboutCache: com.emotionalleaves.universe.engine.Describe.About? = null
+
     private fun publishHud(frame: Frame, target: Body?, focusDist: Double) {
         val sel = engine.selected
+        if (sel?.id != aboutFor) {
+            aboutFor = sel?.id
+            aboutCache = sel?.let { try { com.emotionalleaves.universe.engine.Describe.about(it) } catch (_: Exception) { null } }
+        }
+        val about = aboutCache
         val selDist = sel?.let { (it.position(frame.jd) - frame.camPos).length() }
         val selFacts = (sel?.facts(frame.jd) ?: emptyList()).let { f ->
             // Every star can be visited: say how many planets wait there (real or generated).
@@ -259,6 +274,8 @@ class UniverseRenderer(private val context: Context, private val engine: Engine)
             Hud.selectedLight = selDist?.let { if (it > 3e8) "light takes ${Units.lightTime(it)}" else "" } ?: ""
             Hud.loading = loading
             Hud.selectedFacts = selFacts
+            Hud.selectedAbout = about?.text ?: ""
+            Hud.selectedAboutCredit = about?.credit ?: ""
             Hud.scaleBarText = Units.formatDistance(barLen)
             Hud.scaleBarFraction = barFraction
             if (!Hud.sliderDragging) Hud.zoomFraction = zoom

@@ -25,6 +25,9 @@ object Hud {
     var selectedFacts by mutableStateOf<List<Pair<String, String>>>(emptyList())
     var selectedCanLand by mutableStateOf(false)
     var selectedLight by mutableStateOf("")
+    /** Short description of the selected object, and where it comes from. */
+    var selectedAbout by mutableStateOf("")
+    var selectedAboutCredit by mutableStateOf("")
     var loading by mutableStateOf("")
 
     var scaleBarText by mutableStateOf("")

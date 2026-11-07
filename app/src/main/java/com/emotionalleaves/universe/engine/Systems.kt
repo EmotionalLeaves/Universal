@@ -117,6 +117,7 @@ class PlanetBody(
         if (moons.isNotEmpty()) out.add("Moons" to "${moons.size} (generated)")
         if (ringOuter > 0) out.add("Rings" to "Yes (generated)")
         if (teq > 0) out.add("Temperature" to String.format(Locale.US, "about %.0f K (%.0f °C)", teq, teq - 273.15))
+        out.addAll(Describe.planetFacts(this))
         out.addAll(extra)
         return out
     }

@@ -52,20 +52,22 @@ class SolarBody(
 ) : Body() {
     override val source = Source.REAL
     val children = ArrayList<SolarBody>()
+    /** Real orbit (JPL mean elements) replacing the built-in approximate one, when the data has it. */
+    @Volatile var relOverride: ((Double) -> Vec3d)? = null
 
     override fun position(jd: Double): UPos {
         val p = parent ?: return UPos.ZERO
-        return p.position(jd) + relPosition(jd)
+        return p.position(jd) + relative(jd)
     }
 
     /** Position relative to the parent (metres). */
-    fun relative(jd: Double): Vec3d = relPosition(jd)
+    fun relative(jd: Double): Vec3d = (relOverride ?: relPosition)(jd)
 
     fun heliocentric(jd: Double): Vec3d = position(jd) - UPos.ZERO
 
     fun orientation(jd: Double): Quatd {
         if (tidallyLocked && parent != null) {
-            val toParent = -relPosition(jd)
+            val toParent = -relative(jd)
             val pole = Vec3d.fromRaDec(poleRa, poleDec)
             var x = toParent - pole * toParent.dot(pole)
             if (x.lengthSq() < 1e-6) x = Vec3d.perpendicular(pole)
@@ -93,13 +95,17 @@ class SolarBody(
             out.add("From the Sun" to "${String.format(Locale.US, "%.3f", d / Units.AU)} AU")
         }
         if (kind == Kind.MOON && parent != null) {
-            out.add("From ${parent.name}" to "${fmt(relPosition(jd).length() / 1000)} km")
+            out.add("From ${parent.name}" to "${fmt(relative(jd).length() / 1000)} km")
         }
         if (orbitPeriodDays != 0.0) out.add("Orbit" to period(abs(orbitPeriodDays)))
         if (wRate != 0.0 && !tidallyLocked) out.add("Day length" to period(abs(360.0 / wRate)))
         if (tidallyLocked) out.add("Rotation" to "Always shows the same face")
-        if (children.isNotEmpty()) out.add("Major moons" to children.joinToString(", ") { it.name })
-        out.addAll(facts0)
+        if (children.isNotEmpty()) {
+            val big = children.sortedByDescending { it.radius }
+            out.add("Moons" to "${children.size} known" + (": " + big.take(6).joinToString(", ") { it.name } + if (big.size > 6) "…" else ""))
+        }
+        if (kind != Kind.STAR) out.addAll(Describe.gravityFacts(massKg, radius))
+        out.addAll(if (relOverride != null) facts0.filter { it.first != "Position" } + ("Position" to "JPL mean orbital elements") else facts0)
         out.add("Data" to "JPL orbital elements, IAU rotation")
         return out
     }

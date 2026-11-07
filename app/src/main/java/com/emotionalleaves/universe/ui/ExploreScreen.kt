@@ -41,6 +41,24 @@ private val CATEGORIES = listOf(
         ),
     ),
     Category(
+        "☄", "Asteroids and comets", "Real orbits from NASA JPL for tens of thousands of them.",
+        listOf(
+            p("Ceres", "Largest asteroid, a dwarf planet", "1 Ceres"), p("Vesta", "Giant asteroid with a huge crater", "4 Vesta"),
+            p("Pallas", "Third-largest asteroid", "2 Pallas"), p("Eros", "First asteroid a spacecraft landed on", "433 Eros"),
+            p("Bennu", "Sampled by OSIRIS-REx", "101955 Bennu"), p("Ryugu", "Sampled by Hayabusa2", "162173 Ryugu"),
+            p("Halley's Comet", "Returns every 76 years", "1P/Halley"), p("Comet 67P", "Visited by Rosetta", "67P/Churyumov-Gerasimenko"),
+            p("Encke's Comet", "Shortest-period big comet", "2P/Encke"),
+        ),
+    ),
+    Category(
+        "◐", "More moons", "Every known moon of the planets, with real orbits.",
+        listOf(
+            p("Triton", "Neptune's moon, orbits backwards"), p("Phoebe", "Saturn's captured outer moon"),
+            p("Enceladus", "Ice geysers over a hidden ocean"), p("Miranda", "Patchwork moon of Uranus"),
+            p("Charon", "Pluto's giant moon"), p("Himalia", "Largest irregular moon of Jupiter"),
+        ),
+    ),
+    Category(
         "✶", "Famous stars", "Bright and well-known stars, all at their real positions.",
         listOf(
             p("Proxima Centauri", "Nearest star, 4.2 ly"), p("Rigil Kentaurus", "Alpha Centauri A"),
@@ -87,6 +105,14 @@ private val CATEGORIES = listOf(
         ),
     ),
     Category(
+        "⚫", "Strange things", "Dead stars, black holes and the brightest objects in the universe.",
+        listOf(
+            p("Crab Pulsar", "Spins 30 times a second", "PSR J0534+2200"), p("Vela Pulsar", "Spins 11 times a second", "PSR J0835-4510"),
+            p("3C 273", "First quasar ever identified"), p("Coma Cluster", "Over 1,000 galaxies", "Abell 1656"),
+            p("Perseus Cluster", "Brightest X-ray cluster", "Abell 426"),
+        ),
+    ),
+    Category(
         "◎", "The biggest scale", "The cosmic web and the edge of what we can see.",
         listOf(p("Observable universe", "Everything, out to the CMB")),
     ),
@@ -119,6 +145,13 @@ fun ExploreScreen(engine: Engine) {
             PillButton("🎲 Galaxy", Modifier.weight(1f)) {
                 engine.surpriseGalaxy(); Nav.screen = Screen.NONE
             }
+        }
+        Row(Modifier.fillMaxWidth().padding(top = 8.dp)) {
+            PillButton("🎲 Black hole", Modifier.weight(1f)) { engine.surpriseRemnant(com.emotionalleaves.universe.engine.Kind.BLACK_HOLE); Nav.screen = Screen.NONE }
+            Spacer(Modifier.width(8.dp))
+            PillButton("🎲 Neutron star", Modifier.weight(1f)) { engine.surpriseRemnant(com.emotionalleaves.universe.engine.Kind.NEUTRON_STAR); Nav.screen = Screen.NONE }
+            Spacer(Modifier.width(8.dp))
+            PillButton("🎲 Rogue planet", Modifier.weight(1f)) { engine.surpriseRemnant(com.emotionalleaves.universe.engine.Kind.ROGUE_PLANET); Nav.screen = Screen.NONE }
         }
         Text(
             "Alien world and Any planet pick a real star and visit one of its generated planets. Galaxy picks one of the millions far away.",
@@ -161,6 +194,65 @@ fun ExploreScreen(engine: Engine) {
                     }
                 }
             }
+        }
+    }
+}
+
+/** How much of the universe is in the app: real catalogues, and what is generated on demand. */
+@Composable
+fun CensusScreen(engine: Engine) {
+    val w = engine.world
+    fun n(v: Number) = String.format(java.util.Locale.US, "%,d", v.toLong())
+    val rs = w.realStars
+    val starCount = (rs?.base?.count ?: 0) + (rs?.packs?.sumOf { it.count } ?: 0) + (rs?.exoHosts?.count ?: 0)
+    val real = listOf(
+        "Stars" to n(starCount),
+        "Planets around other stars" to n(w.exo?.planetCount ?: 0),
+        "Moons of our planets" to n(w.solar.count { it.kind == com.emotionalleaves.universe.engine.Kind.MOON }),
+        "Asteroids" to n(w.smallBodies?.cometFrom ?: 0),
+        "Comets" to n(w.smallBodies?.let { it.count - it.cometFrom } ?: 0),
+        "Nebulae and star clusters" to n(w.dsos.size),
+        "Galaxies (catalogues)" to n(w.galaxies.count { it.source == com.emotionalleaves.universe.engine.Source.REAL }),
+        "Galaxies (GLADE+ pack)" to n(w.glade?.count ?: 0),
+        "Pulsars" to n(w.exotic.pulsars.size),
+        "Quasars" to n(w.exotic.quasars.size),
+        "Galaxy clusters" to n(w.exotic.clusters.size),
+        "Descriptions" to n(com.emotionalleaves.universe.engine.Describe.wikiCount),
+    )
+    val universe = listOf(
+        "Galaxies" to "about 2 trillion",
+        "Stars" to "about 200,000,000,000,000,000,000,000 (2 × 10²³)",
+        "Planets" to "more than stars: about 10²⁴",
+        "Rogue planets" to "maybe as many as stars",
+        "Neutron stars" to "about 10²¹",
+        "Black holes (star-sized)" to "about 10²⁰",
+    )
+    val near = listOf(
+        "Generated stars" to n(w.generated?.count ?: 0),
+        "Black holes, neutron stars, rogue planets" to n(w.remnants?.bodies?.size ?: 0),
+        "Generated galaxies" to n(w.field?.count ?: 0),
+        "Distant galaxies (cosmic web)" to n(w.cosmicWeb?.count ?: 0),
+    )
+    Panel("What's in the universe", { Nav.screen = Screen.NONE }) {
+        Text(
+            "No phone can store the whole universe, so the app keeps every real catalogue it can fit and builds " +
+                "everything else the moment you get close. Generated objects follow real statistics and come out the same every time, " +
+                "so every star, planet and galaxy below exists and can be visited.",
+            color = TextDim, fontSize = 13.sp,
+        )
+        CensusTable("Real objects in the app (green Real badge)", real, RealGreen)
+        CensusTable("In the whole observable universe (all reachable here)", universe, Accent)
+        CensusTable("Generated around you right now (purple badge)", near, GenPurple)
+    }
+}
+
+@Composable
+private fun CensusTable(title: String, rows: List<Pair<String, String>>, color: androidx.compose.ui.graphics.Color) {
+    Text(title, color = color, fontSize = 15.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 16.dp, bottom = 4.dp))
+    for ((k, v) in rows) {
+        Row(Modifier.fillMaxWidth().padding(vertical = 3.dp)) {
+            Text(k, color = TextDim, fontSize = 13.sp, modifier = Modifier.weight(0.5f))
+            Text(v, color = TextMain, fontSize = 13.sp, modifier = Modifier.weight(0.5f))
         }
     }
 }

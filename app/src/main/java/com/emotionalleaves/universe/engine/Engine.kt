@@ -392,6 +392,31 @@ class Engine(val context: Context) {
         }
     }
 
+    /** Flies to a generated black hole, neutron star or rogue planet somewhere in the Milky Way's disc. */
+    fun surpriseRemnant(kind: Kind) {
+        busy = "Searching the galaxy…"
+        bg.execute {
+            try {
+                val mw = world.milkyWay
+                val rng = java.util.Random()
+                repeat(40) {
+                    val r = 5000.0 + rng.nextDouble() * 6000.0
+                    val a = rng.nextDouble() * 2 * Math.PI
+                    val local = Vec3d(r * kotlin.math.cos(a), r * kotlin.math.sin(a), rng.nextGaussian() * 80.0)
+                    val b = Remnants.generate(mw, local).bodies.filter { it.kind == kind }.randomOrNull() ?: return@repeat
+                    selected = b
+                    world.rememberGenerated(b)
+                    flyTo(b)
+                    return@execute
+                }
+            } catch (e: Exception) {
+                ErrorLog.record("surpriseRemnant", e)
+            } finally {
+                busy = ""
+            }
+        }
+    }
+
     /** Zoom presets for the slider labels: height above the ground (or distance) in metres. */
     val zoomPresets = listOf(
         "Ground" to 2.0, "Planet" to 3.0e7, "Solar system" to 1.5e13, "Nearby stars" to 2e17,

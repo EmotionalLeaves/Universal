@@ -35,7 +35,7 @@ import com.emotionalleaves.universe.engine.Engine
 import com.emotionalleaves.universe.engine.PackState
 import java.util.Locale
 
-enum class Screen { NONE, EXPLORE, MENU, DATA, SETTINGS, SEARCH, BOOKMARKS, HELP, CREDITS }
+enum class Screen { NONE, EXPLORE, CENSUS, MENU, DATA, SETTINGS, SEARCH, BOOKMARKS, HELP, CREDITS }
 
 /** Which overlay screen is open. */
 object Nav {
@@ -96,6 +96,7 @@ fun MenuSheet(engine: Engine) {
                 .padding(vertical = 6.dp),
         ) {
             MenuItem("Explore places") { Nav.screen = Screen.EXPLORE }
+            MenuItem("What's in the universe") { Nav.screen = Screen.CENSUS }
             MenuItem("Search") { Nav.screen = Screen.SEARCH }
             MenuItem("Bookmarks") { Nav.screen = Screen.BOOKMARKS }
             MenuItem("Data packs") { PacksUi.refresh(engine); Nav.screen = Screen.DATA }
@@ -367,6 +368,8 @@ fun HelpScreen() {
             "Look around" to "Drag with one finger to orbit whatever you are looking at.",
             "Zoom" to "Pinch, or drag the slider on the right. Bottom of the slider = standing on the ground; top = the whole observable universe.",
             "Pick something" to "Tap a planet, star, nebula or galaxy to see its card. Double-tap (or Fly to) to travel there.",
+            "Know more" to "Open a card's About & facts for a description and figures: gravity, your weight there, star type, lifetime, habitable zone and more.",
+            "How much is here?" to "☰ → What's in the universe counts the real objects in the app and what is generated as you travel.",
             "Everything is there" to "Tap anywhere on the glow of a galaxy (even the Milky Way band) to pick an actual star at that spot. Fly to it: it has planets, and rocky ones can be landed on. Between galaxies, millions of dwarf and distant galaxies appear around you as you travel.",
             "Move sideways" to "Slide two fingers together. Twist two fingers to roll.",
             "On the ground" to "Zoom all the way into a rocky planet or moon. Drag up/down to walk, left/right to turn.",
@@ -396,6 +399,11 @@ fun CreditsScreen(version: String) {
             "Gaia" to "This app uses data from the ESA mission Gaia, processed by the Gaia DPAC (via AT-HYG).",
             "NASA Exoplanet Archive" to "This research has made use of the NASA Exoplanet Archive, operated by Caltech under contract with NASA.",
             "OpenNGC" to "Mattia Verga, CC BY-SA 4.0 (nebulae, clusters, NGC/IC galaxies).",
+            "JPL Small-Body Database and satellite elements" to "NASA/JPL-Caltech Solar System Dynamics: asteroid and comet orbits, orbits of every known moon.",
+            "ATNF Pulsar Catalogue" to "Manchester et al. 2005, AJ 129, 1993 (via VizieR).",
+            "Million Quasars (Milliquas)" to "Flesch 2023 (via VizieR VII/294).",
+            "Abell catalogue of rich clusters" to "Abell, Corwin & Olowin 1989 (via VizieR VII/110A).",
+            "Wikipedia" to "\"About\" texts are summaries of Wikipedia articles, CC BY-SA 4.0; each card names its article.",
             "Cosmicflows-4" to "Tully et al. 2023, ApJ 944, 94 (galaxy distances), via VizieR (CDS).",
             "GLADE+" to "Dálya et al. 2022, MNRAS 514, 1403, via VizieR (CDS).",
             "Planck" to "Based on observations obtained with Planck (ESA), SMICA CMB map, via IRSA.",

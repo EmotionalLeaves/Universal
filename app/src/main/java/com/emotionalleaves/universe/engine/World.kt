@@ -10,7 +10,17 @@ import com.emotionalleaves.universe.core.Vec3d
 class World(private val engine: Engine) {
 
     /** The Sun first, then planets and moons. */
-    val solar: List<SolarBody> = SolarSystem.build()
+    /** Sun, planets, the hand-made major moons and every catalogued moon (planets/moons.tsv). */
+    val solar: List<SolarBody> = SolarSystem.build().toMutableList().also {
+        try { CatalogMoons.addTo(engine.context, it) } catch (e: Throwable) { ErrorLog.record("loading moons", e) }
+    }
+
+    /** Real asteroids and comets; null until loaded or if the data is missing. */
+    @Volatile var smallBodies: SmallBodies? = null
+        private set
+    /** Pulsars, quasars and galaxy clusters. */
+    @Volatile var exotic: ExoticCatalog = ExoticCatalog(emptyList(), emptyList(), emptyList())
+        private set
     val earth: SolarBody = solar.first { it.id == "sol:earth" }
 
     // ---- Scale-test scene (Round 2): a 1 m cube on an Earth-sized sphere, and a marker 10 Gly away.
@@ -31,6 +41,9 @@ class World(private val engine: Engine) {
     /** Galaxies with positions (the Milky Way first; catalogue galaxies once loaded). */
     @Volatile var galaxies: List<GalaxyBody> = listOf(milkyWay)
     private val galaxyIndex = java.util.concurrent.ConcurrentHashMap<String, GalaxyBody>().also { it[milkyWay.id] = milkyWay }
+
+    /** Black holes, neutron stars and rogue planets generated around the camera. */
+    @Volatile var remnants: Remnants.Generated? = null
 
     /** Stars generated around the camera (rule 2: never where real ones are). */
     @Volatile var generated: GeneratedStars? = null
@@ -170,9 +183,9 @@ class World(private val engine: Engine) {
         genTimer += dt
         if (genTimer < 0.3 || genBusy) return
         genTimer = 0.0
-        if (!engine.settings.showGenerated) { generated = null; genGalaxy = null; return }
+        if (!engine.settings.showGenerated) { generated = null; remnants = null; genGalaxy = null; return }
         val g = galaxyContaining(cam)
-        if (g == null) { generated = null; genGalaxy = null; return }
+        if (g == null) { generated = null; remnants = null; genGalaxy = null; return }
         val local = g.toLocal(cam)
         val last = genLocal
         if (genGalaxy == g.id && last != null && (local - last).length() < 4.0) return
@@ -182,6 +195,7 @@ class World(private val engine: Engine) {
         genExec.execute {
             try {
                 generated = StarField.generate(g, local, supergiants = engine.settings.quality > 0)
+                remnants = Remnants.generate(g, local)
             } catch (e: Throwable) {
                 ErrorLog.record("generating stars", e)
             } finally {
@@ -327,6 +341,16 @@ class World(private val engine: Engine) {
                 searchStale = true
             } catch (e: Throwable) {
                 ErrorLog.record("loading nebulae", e)
+            }
+            try {
+                smallBodies = SmallBodies.load(engine.context)
+                exotic = ExoticCatalog.load(engine.context)
+                GalaxyField.clusters = exotic.clusters
+                Describe.load(engine.context)
+                fieldCell = null
+                searchStale = true
+            } catch (e: Throwable) {
+                ErrorLog.record("loading asteroids, quasars and clusters", e)
             }
         }
     }
@@ -492,6 +516,12 @@ class World(private val engine: Engine) {
             if (i !in 0 until web.count) return null
             return web.galaxy(i).also { registerExtraGalaxy(it) }
         }
+        if (id.startsWith("sba:") || id.startsWith("sbc:")) {
+            val sb = smallBodies ?: return null
+            return sb.indexOf(id.substring(4))?.let { sb.body(it) }
+        }
+        if (id.startsWith("psr:") || id.startsWith("qso:") || id.startsWith("gcl:")) return exotic.find(id)
+        if (id.startsWith("rem:")) return Remnants.fromId(id) { galaxyById(it) }
         if (id.startsWith("gal:f")) {
             galaxyIndex[id]?.let { return it }
             return GalaxyField.fromId(id)?.also { registerExtraGalaxy(it) }

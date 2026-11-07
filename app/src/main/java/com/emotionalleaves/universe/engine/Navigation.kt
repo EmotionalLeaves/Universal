@@ -53,6 +53,21 @@ class SearchIndex(private val world: World) {
             if (g.isMilkyWay) continue
             if (!g.name.startsWith("PGC ")) out.add(Entry(g.name.lowercase(Locale.US), g.name, g.subtitle, g.id, if (g.name.startsWith("NGC") || g.name.startsWith("IC")) 30 else 52))
         }
+        world.smallBodies?.let { sb ->
+            for (i in 0 until sb.count) {
+                val n = sb.names[i]
+                // Numbered asteroids: also findable by name alone ("Vesta" as well as "4 Vesta").
+                val bare = n.substringAfter(' ', n)
+                val id = (if (sb.isComet(i)) "sbc:" else "sba:") + n
+                val pri = if (sb.isComet(i)) 40 else 38
+                out.add(Entry(n.lowercase(Locale.US), n, SmallBodies.className(sb.cls[i]), id, pri))
+                if (bare != n && bare.firstOrNull()?.isLetter() == true) out.add(Entry(bare.lowercase(Locale.US), n, SmallBodies.className(sb.cls[i]), id, pri))
+            }
+        }
+        val ex = world.exotic
+        for (b in ex.pulsars) out.add(Entry(b.name.lowercase(Locale.US), b.name, "Pulsar", b.id, 36))
+        for (b in ex.clusters) out.add(Entry(b.name.lowercase(Locale.US), b.name, "Galaxy cluster", b.id, 40))
+        for (b in ex.quasars) if (b.name.isNotBlank()) out.add(Entry(b.name.lowercase(Locale.US), b.name, "Quasar", b.id, 30))
         for ((name, id) in world.visitedGenerated()) out.add(Entry(name.lowercase(Locale.US), name, "Generated · visited", id, 45))
         entries = out
     }

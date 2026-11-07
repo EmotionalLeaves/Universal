@@ -52,6 +52,28 @@ object GalaxyField {
 
     private val noise = Noise3(SEED)
 
+    /** Real galaxy clusters (Abell). Each gets generated member galaxies (tier 2). */
+    @Volatile var clusters: List<ExoticBody> = emptyList()
+
+    /** Member galaxies of real cluster [ci]: concentrated towards the centre, mostly ellipticals. */
+    private fun clusterMembers(ci: Int, emit: (Int, Raw) -> Unit) {
+        val c = clusters.getOrNull(ci) ?: return
+        val center = (c.position(0.0) - UPos.ZERO) / Units.MPC
+        val rng = Rng(Rng.hash(SEED, VERSION.toLong(), 2L, ci.toLong()))
+        val n = (60 + 70 * c.richness + rng.nextInt(40)).coerceAtMost(420)
+        val limit = catalogLimit - 3   // the catalogues hold far fewer cluster galaxies than the field
+        for (i in 0 until n) {
+            val u = rng.nextDouble()
+            val r = if (i == 0) 0.0 else (0.25 * kotlin.math.tan(u * 1.35)).coerceAtMost(2.5)
+            val p = center + rng.unitVector() * r
+            val m = if (i == 0) -23.2 + rng.nextDouble() * 0.6 else max(-22.6, -17.5 + 1.3 * ln(max(rng.nextDouble(), 1e-9)))
+            val seed = rng.nextLong()
+            val app = m + 5 * log10(p.length() * 1e6) - 5
+            if (app < limit) continue
+            emit(i, Raw(p, m, seed))
+        }
+    }
+
     /** Relative galaxy density from the filament field (average about 1). */
     fun webDensity(xMpc: Double, yMpc: Double, zMpc: Double): Double {
         val s = 1.0 / 30.0
@@ -122,11 +144,25 @@ object GalaxyField {
                 }
             }
         }
+        // Members of real clusters within reach.
+        for ((ci, c) in clusters.withIndex()) {
+            val cp = (c.position(0.0) - UPos.ZERO) / Units.MPC
+            if ((cp - camMpc).length() > 30.0) continue
+            clusterMembers(ci) { i, r ->
+                val rel = r.pMpc - anchorMpc
+                val col = if (typeFor(2, r.seed) == GalaxyType.ELLIPTICAL || typeFor(2, r.seed) == GalaxyType.LENTICULAR) floatArrayOf(1f, 0.86f, 0.68f) else floatArrayOf(0.88f, 0.9f, 1f)
+                data.add(rel.x.toFloat()); data.add(rel.y.toFloat()); data.add(rel.z.toFloat())
+                data.add(col[0]); data.add(col[1]); data.add(col[2]); data.add(r.absMag.toFloat())
+                rad.add(radiusKpc(r.absMag, r.seed).toFloat() * 1000f)
+                tiers.add(2.toByte()); cells.add(cellKey(ci, 0, 0)); idx.add(i.toShort())
+            }
+        }
         return FieldGalaxies(anchor, data.toFloatArray(), rad.toFloatArray(), tiers.toByteArray(), cells.toLongArray(), idx.toShortArray())
     }
 
     private fun typeFor(tier: Int, seed: Long): GalaxyType {
         if (tier == 1) return if (Rng(seed).nextInt(3) == 0) GalaxyType.IRREGULAR else GalaxyType.DWARF
+        if (tier == 2) return when (Rng(seed).nextInt(10)) { in 0..4 -> GalaxyType.ELLIPTICAL; in 5..6 -> GalaxyType.LENTICULAR; 7 -> GalaxyType.SPIRAL; 8 -> GalaxyType.BARRED; else -> GalaxyType.DWARF }
         return GalaxyType.fromHubble("", seed)
     }
 
@@ -143,7 +179,7 @@ object GalaxyField {
         val n = rng.unitVector()
         val x = Vec3d.perpendicular(n)
         val frame = Quatd.fromBasis(x, n.cross(x).normalized(), n)
-        val prefix = if (tier == 0) "GF" else "DW"
+        val prefix = when (tier) { 0 -> "GF"; 1 -> "DW"; else -> clusters.getOrNull(cx)?.name?.replace("Abell ", "A") ?: "CL" }
         val name = String.format(Locale.US, "%s-%04X-%d", prefix, (seed ushr 48).toInt() and 0xFFFF, i)
         val stars = 10.0.pow(-0.4 * (raw.absMag + 21.0)) * 1.0e11
         return GalaxyBody(
@@ -151,7 +187,7 @@ object GalaxyField {
             GalaxyModel.forGalaxy(type, radiusKpc, seed), radiusKpc * 1000, raw.pMpc.length() * 3.2616, Source.GENERATED,
             listOf(
                 "Stars" to "about ${Units.bigCount(stars)}",
-                "Data" to "Generated where the catalogues run out (galaxy field v$VERSION)",
+                "Data" to if (tier == 2) "Generated member of the real cluster ${clusters.getOrNull(cx)?.name ?: ""}" else "Generated where the catalogues run out (galaxy field v$VERSION)",
             ),
             seed, raw.absMag,
         )
@@ -161,11 +197,12 @@ object GalaxyField {
     fun fromId(id: String): GalaxyBody? {
         val m = Regex("""gal:f(\d)x(-?\d+)y(-?\d+)z(-?\d+)n(\d+)""").matchEntire(id) ?: return null
         val tier = m.groupValues[1].toInt()
-        if (tier !in 0..1) return null
+        if (tier !in 0..2) return null
         val cx = m.groupValues[2].toInt(); val cy = m.groupValues[3].toInt(); val cz = m.groupValues[4].toInt()
         val want = m.groupValues[5].toInt()
         var out: GalaxyBody? = null
-        cell(tier, cx, cy, cz) { i, r -> if (i == want) out = body(tier, cx, cy, cz, i, r) }
+        if (tier == 2) clusterMembers(cx) { i, r -> if (i == want) out = body(tier, cx, cy, cz, i, r) }
+        else cell(tier, cx, cy, cz) { i, r -> if (i == want) out = body(tier, cx, cy, cz, i, r) }
         return out
     }
 }

@@ -295,3 +295,15 @@ Phone checklist:
 - [x] Updated first-run tour (shown once again to everyone) with "tap the glow" and Explore tips.
 - [x] Field galaxies join the galaxy list at most every 1.5 s (no stutter from repeated rebuilds).
 - [x] Galaxy distances over 1,000 Mly shown in billions of light years.
+
+## Round 16: Know more
+- [x] Star cards: type (red dwarf … supergiant, white dwarf), colour, mass, lifetime, habitable zone, when its light left.
+- [x] Planet and moon cards: gravity, your weight there, escape speed, density, habitable-zone verdict, starlight, "could you stand there?".
+- [x] About texts: Wikipedia summaries (CC BY-SA, credited per card) for named objects; plain explanations for every generated type.
+- [x] Info card scrolls; census screen (☰ → What's in the universe).
+
+## Round 17: More stuff
+- [x] Real: asteroids (H < 14.5) and comets (JPL SBDB) on Kepler orbits; every known moon (JPL mean elements; major moons get real orbits); pulsars (ATNF); quasars (Milliquas, R < 18.5); Abell galaxy clusters.
+- [x] Generated: member galaxies for every real cluster; black holes (1 per 2,000 stars), neutron stars (1 per 200), rogue planets (~1 per star) around the camera in any galaxy (none near the Sun, where surveys would have found them).
+- [x] Explore: asteroids & comets, more moons, strange things, 🎲 black hole / neutron star / rogue planet.
+- [x] Data factory: incremental runs (`only` input) that start from the published base data.
