@@ -307,3 +307,9 @@ Phone checklist:
 - [x] Generated: member galaxies for every real cluster; black holes (1 per 2,000 stars), neutron stars (1 per 200), rogue planets (~1 per star) around the camera in any galaxy (none near the Sun, where surveys would have found them).
 - [x] Explore: asteroids & comets, more moons, strange things, 🎲 black hole / neutron star / rogue planet.
 - [x] Data factory: incremental runs (`only` input) that start from the published base data.
+
+## Round 18: Stories and a professional UI
+- [x] Story.kt: a vivid description for every object from its own numbers (how its sun looks from a planet, jump height, temperature in everyday terms, sizes compared with cities and countries, when its light set off in human history).
+- [x] Info card: kind and source chips, three headline numbers, story, Read more (Wikipedia summary + every fact), icon actions.
+- [x] Design system (ui/Design.kt): palette, type scale, a drawn line-icon set replacing all emoji, glass panels, buttons, chips, list rows.
+- [x] Restyled top bar, time bar, menu, Explore (Surprise me tiles, category list), search results with type icons, settings sections, census, welcome tour.
