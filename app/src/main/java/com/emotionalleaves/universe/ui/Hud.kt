@@ -21,6 +21,7 @@ object Hud {
     var selectedSource by mutableStateOf("")
     var selectedDistance by mutableStateOf("")
     var selectedFacts by mutableStateOf<List<Pair<String, String>>>(emptyList())
+    var selectedCanLand by mutableStateOf(false)
 
     var scaleBarText by mutableStateOf("")
     var scaleBarFraction by mutableStateOf(0.25f)

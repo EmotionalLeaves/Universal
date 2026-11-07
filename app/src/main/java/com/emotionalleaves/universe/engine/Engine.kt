@@ -259,6 +259,45 @@ class Engine(val context: Context) {
         selected?.let { flyTo(it) }
     }
 
+    /** True if [b] has ground you can stand on. */
+    fun canLand(b: Body?): Boolean = when (b) {
+        is SolarBody -> b.kind != Kind.STAR && b.id !in setOf("sol:jupiter", "sol:saturn", "sol:uranus", "sol:neptune", "sol:venus") && b.look.style != 1
+        is PlanetBody -> b.solid
+        else -> false
+    }
+
+    /** Flies down to stand on the selected world, below where the camera is now. */
+    fun landOnSelected() {
+        val b = selected ?: return
+        if (!canLand(b)) return
+        synchronized(camera) {
+            val c = b.position(jd)
+            val dir = (camera.position() - c).normalized()
+            camera.flyTo(b, c, b.radius + 2.0, nowSeconds())
+            camera.lookFrom(dir, Vec3d.perpendicular(dir))
+        }
+    }
+
+    /** The thing that contains [b]: moon → planet → star → galaxy → universe. */
+    fun parentOf(b: Body?): Body? = when (b) {
+        null -> null
+        is SolarBody -> b.parent ?: world.milkyWay
+        is PlanetBody -> b.star
+        is StarBody -> if (b.galaxyName == "Milky Way") world.milkyWay else world.galaxyContaining(b.pos) ?: world.universe
+        is DsoBody -> world.milkyWay
+        is GalaxyBody -> if (b.isMilkyWay) world.universe else world.universe
+        is UniverseBody -> null
+        else -> world.milkyWay
+    }
+
+    /** Zooms out to whatever contains the current focus. */
+    fun goUp() {
+        val cur = selected ?: camera.target
+        val p = parentOf(cur) ?: return
+        selected = p
+        flyTo(p)
+    }
+
     fun clearSelection() {
         selected = null
     }

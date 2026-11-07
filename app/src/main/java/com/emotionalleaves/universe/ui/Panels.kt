@@ -54,8 +54,7 @@ fun TopStatus(modifier: Modifier = Modifier) {
         modifier
             .background(PanelBg, RoundedCornerShape(14.dp))
             .border(1.dp, PanelBorder, RoundedCornerShape(14.dp))
-            .padding(horizontal = 14.dp, vertical = 6.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
+            .padding(horizontal = 12.dp, vertical = 6.dp),
     ) {
         if (Hud.breadcrumb.isNotEmpty()) {
             Text(Hud.breadcrumb, color = TextDim, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -159,6 +158,11 @@ fun HomeButton(engine: Engine, modifier: Modifier = Modifier) {
 }
 
 @Composable
+fun SearchButton(modifier: Modifier = Modifier) {
+    PillButton("🔍", modifier) { Nav.screen = Screen.SEARCH }
+}
+
+@Composable
 fun PillButton(text: String, modifier: Modifier = Modifier, primary: Boolean = false, onClick: () -> Unit) {
     Text(
         text,
@@ -189,6 +193,7 @@ fun SourceBadge(source: String) {
 @Composable
 fun InfoCard(engine: Engine, modifier: Modifier = Modifier) {
     if (Hud.selectedName.isEmpty()) return
+    var expanded by remember { mutableStateOf(false) }
     Column(
         modifier
             .widthIn(max = 520.dp)
@@ -217,6 +222,12 @@ fun InfoCard(engine: Engine, modifier: Modifier = Modifier) {
         }
         val facts = Hud.selectedFacts
         if (facts.isNotEmpty()) {
+            Text(
+                if (expanded) "Less ▴" else "Facts ▾", color = Accent, fontSize = 12.sp,
+                modifier = Modifier.clickable { expanded = !expanded }.padding(top = 6.dp, bottom = 2.dp),
+            )
+        }
+        if (expanded && facts.isNotEmpty()) {
             Spacer(Modifier.height(6.dp))
             for ((k, v) in facts.take(8)) {
                 Row(Modifier.fillMaxWidth().padding(vertical = 1.dp)) {
@@ -228,7 +239,9 @@ fun InfoCard(engine: Engine, modifier: Modifier = Modifier) {
         Spacer(Modifier.height(10.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             PillButton("Fly to", primary = true) { engine.flyToSelected() }
-            PillButton("★ Bookmark") {
+            if (Hud.selectedCanLand) PillButton("Land") { engine.landOnSelected() }
+            PillButton("Out ↑") { engine.goUp() }
+            PillButton("★") {
                 val n = engine.addBookmark()
                 BookmarksUi.toast = "Bookmarked $n"
             }

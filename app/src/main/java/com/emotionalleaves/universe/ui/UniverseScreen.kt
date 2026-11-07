@@ -39,13 +39,17 @@ fun UniverseScreen(engine: Engine, version: String, view: UniverseView) {
         )
 
         Box(Modifier.fillMaxSize().safeDrawingPadding()) {
-            TopStatus(Modifier.align(Alignment.TopCenter).padding(top = 8.dp))
-            if (SettingsUi.showStats) StatsBadge(Modifier.align(Alignment.TopStart).padding(8.dp))
+            Column(Modifier.align(Alignment.TopStart).padding(8.dp).fillMaxWidth(0.58f)) {
+                TopStatus()
+                if (SettingsUi.showStats) StatsBadge(Modifier.padding(top = 4.dp))
+            }
             ZoomSlider(
                 engine,
                 Modifier.align(Alignment.CenterEnd).padding(end = 6.dp),
             )
             Row(Modifier.align(Alignment.TopEnd).padding(8.dp)) {
+                SearchButton()
+                Spacer(Modifier.width(6.dp))
                 HomeButton(engine)
                 Spacer(Modifier.width(6.dp))
                 MenuButton()

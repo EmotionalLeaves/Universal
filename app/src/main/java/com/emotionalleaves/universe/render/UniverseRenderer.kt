@@ -198,7 +198,9 @@ class UniverseRenderer(private val context: Context, private val engine: Engine)
             .format(java.util.Date(com.emotionalleaves.universe.core.Astro.epochMillis(frame.jd)))
         val rate = engine.rateLabel()
         val crumb = engine.world.breadcrumb(frame.camPos, target)
+        val canLand = engine.canLand(sel)
         Hud.post {
+            Hud.selectedCanLand = canLand
             Hud.breadcrumb = crumb
             Hud.dateText = date
             Hud.rateText = rate
