@@ -21,6 +21,15 @@ object Units {
     /** Comoving radius of the observable universe (to the CMB), about 45.7 billion light years. */
     const val UNIVERSE_RADIUS = 45.7 * GLY
 
+    /** "1.2 billion", "350 million", "4,500" — for counts of stars, planets, galaxies. */
+    fun bigCount(n: Double): String = when {
+        n >= 1e15 -> String.format(Locale.US, "%.1f quadrillion", n / 1e15)
+        n >= 1e12 -> String.format(Locale.US, "%.1f trillion", n / 1e12)
+        n >= 1e9 -> String.format(Locale.US, "%.1f billion", n / 1e9)
+        n >= 1e6 -> String.format(Locale.US, "%.0f million", n / 1e6)
+        else -> String.format(Locale.US, "%,.0f", n)
+    }
+
     /** Human-readable distance that switches units with scale: m, km, AU, ly, Mly, Gly. */
     fun formatDistance(m: Double): String {
         val a = abs(m)

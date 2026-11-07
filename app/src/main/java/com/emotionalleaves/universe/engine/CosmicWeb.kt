@@ -138,6 +138,7 @@ class UniverseBody : Body() {
         "Radius" to "about 46 billion light years (comoving)",
         "Age" to "13.8 billion years",
         "Galaxies" to "around 2 trillion (estimate)",
+        "Stars" to "roughly 10²² to 10²⁴ — every one can be visited here",
         "Edge" to "Cosmic microwave background, Planck satellite map",
         "Data" to "Nearby galaxies real; distant structure generated",
     )

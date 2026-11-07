@@ -275,3 +275,9 @@ Phone checklist:
 - [x] "↩ Back to …" chip when drifting into empty space.
 - [x] Top bar: 🔍 🏠 ☰ icons plus Explore; tips and How to use updated.
 - [x] Readable pack-download errors (private repo / no internet).
+
+## Round 15: Everything visible, tappable, enterable
+- [x] Tier C star field: supergiants (M < -4.5) in 500 pc cells out to ~1.25 kpc, so the brightest stars stay individually tappable far away (any galaxy).
+- [x] Tap anywhere on a galaxy's glow: the app walks the tap ray, finds where the light comes from, and generates the actual star there (deterministic id, bookmarkable).
+- [x] Galaxy field: ordinary galaxies (4 Mpc cells) and dwarfs (1 Mpc cells) generated around the camera anywhere in the universe, along a filament field; real catalogues win (apparent mag limit 14, 17 with GLADE+); none inside the Local Group. Enterable like any galaxy (ids gal:f…).
+- [x] Galaxy cards show star counts and an Explore hint; universe card shows total stars.

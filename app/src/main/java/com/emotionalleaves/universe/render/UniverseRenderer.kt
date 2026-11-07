@@ -40,8 +40,9 @@ class UniverseRenderer(private val context: Context, private val engine: Engine)
     private val deepSkyLayer = DeepSkyLayer()
     private val galaxyCatalogLayer = GalaxyCatalogLayer()
     private val cosmicLayer = CosmicLayer()
+    private val fieldLayer = FieldGalaxyLayer()
     private val layers: List<Layer> = listOf(
-        cosmicLayer, galaxyCatalogLayer, galaxyLayer, deepSkyLayer, starLayer, systemLayer, solarLayer, terrainLayer, testLayer,
+        cosmicLayer, fieldLayer, galaxyCatalogLayer, galaxyLayer, deepSkyLayer, starLayer, systemLayer, solarLayer, terrainLayer, testLayer,
     )
 
     override fun onSurfaceCreated(gl: GL10?, config: EGLConfig?) {
@@ -107,6 +108,7 @@ class UniverseRenderer(private val context: Context, private val engine: Engine)
         deepSkyLayer.daylight = terrainLayer.daylight
         galaxyCatalogLayer.daylight = terrainLayer.daylight
         cosmicLayer.daylight = terrainLayer.daylight
+        fieldLayer.daylight = terrainLayer.daylight
         galaxyLayer.particles = when (engine.settings.quality) { 0 -> 20_000; 2 -> 70_000; else -> 40_000 }
         terrainLayer.splitFactor = when (engine.settings.quality) { 0 -> 1.5; 2 -> 3.0; else -> 2.2 }
         galaxyLayer.maxBlob = when (engine.settings.quality) { 0 -> 14f; 2 -> 28f; else -> 20f }
@@ -129,6 +131,11 @@ class UniverseRenderer(private val context: Context, private val engine: Engine)
                         com.emotionalleaves.universe.engine.ErrorLog.record("${l.javaClass.simpleName}.pickAt", e); null
                     }
                     if (body != null) break
+                }
+            }
+            if (body == null) {
+                body = try { engine.world.starAlongRay(frame.camPos, frame.rayThrough(tap.x, tap.y)) } catch (e: Exception) {
+                    com.emotionalleaves.universe.engine.ErrorLog.record("starAlongRay", e); null
                 }
             }
             engine.applyTap(body, tap.double)

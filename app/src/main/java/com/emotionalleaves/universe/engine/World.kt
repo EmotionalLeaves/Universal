@@ -1,5 +1,7 @@
 package com.emotionalleaves.universe.engine
 
+import kotlin.math.pow
+import kotlin.math.max
 import com.emotionalleaves.universe.core.UPos
 import com.emotionalleaves.universe.core.Units
 import com.emotionalleaves.universe.core.Vec3d
@@ -39,7 +41,45 @@ class World(private val engine: Engine) {
     private var genGalaxy: String? = null
     private var genTimer = 0.0
 
-    fun galaxyById(id: String): GalaxyBody? = galaxyIndex[id] ?: (if (id.startsWith("gal:web")) find(id) as? GalaxyBody else null)
+    fun galaxyById(id: String): GalaxyBody? = galaxyIndex[id] ?: (if (id.startsWith("gal:")) find(id) as? GalaxyBody else null)
+
+    fun isRegistered(id: String) = galaxyIndex.containsKey(id)
+
+    /** Galaxies generated around the camera beyond the catalogues (see [GalaxyField]). */
+    @Volatile var field: FieldGalaxies? = null
+        private set
+    private var fieldCell: Triple<Int, Int, Int>? = null
+    @Volatile private var fieldBusy = false
+
+    private fun updateField(cam: UPos) {
+        if (!engine.settings.showGenerated) { field = null; fieldCell = null; return }
+        if (fieldBusy) return
+        val c = (cam - UPos.ZERO) / Units.MPC
+        val key = Triple(kotlin.math.floor(c.x).toInt(), kotlin.math.floor(c.y).toInt(), kotlin.math.floor(c.z).toInt())
+        if (key == fieldCell) return
+        fieldCell = key
+        fieldBusy = true
+        loader.execute {
+            try { field = GalaxyField.generate(cam) } catch (e: Throwable) { ErrorLog.record("generating galaxies", e) } finally { fieldBusy = false }
+        }
+    }
+
+    /** Field galaxies close enough to show a shape are added to the galaxy list (drawn and enterable). */
+    private fun registerNearField(cam: UPos) {
+        val f = field ?: return
+        val add = ArrayList<GalaxyBody>()
+        for (i in 0 until f.count) {
+            val d = (f.position(i) - cam).length()
+            if (d > f.radiusPc[i] * Units.PC * 300) continue
+            val id = f.id(i)
+            if (galaxyIndex.containsKey(id)) continue
+            GalaxyField.fromId(id)?.let { add.add(it) }
+            if (add.size >= 16) break
+        }
+        if (add.isEmpty()) return
+        for (g in add) galaxyIndex[g.id] = g
+        galaxies = galaxies + add
+    }
 
     val universe = UniverseBody()
 
@@ -79,6 +119,9 @@ class World(private val engine: Engine) {
         loader.execute {
             val maxPts = when (engine.settings.quality) { 0 -> 400_000; 2 -> 3_000_000; else -> 1_200_000 }
             glade = GladePack.load(engine.context, maxPts)
+            // With millions of real galaxies installed, generated ones must be fainter (rule 2).
+            GalaxyField.catalogLimit = if (glade != null) 17.0 else 14.0
+            fieldCell = null
             val inner = glade?.let { maxOf(it.maxMpc, 300.0) } ?: 300.0
             if (cosmicWeb?.innerMpc != inner) cosmicWeb = CosmicWeb.generate(inner)
         }
@@ -109,6 +152,8 @@ class World(private val engine: Engine) {
         nearTimer += dt
         if (nearTimer < 0.3) return
         nearTimer = 0.0
+        updateField(cam)
+        registerNearField(cam)
         val list = galaxies
         val cand = ArrayList<Pair<GalaxyBody, Double>>()
         for (g in list) {
@@ -141,6 +186,67 @@ class World(private val engine: Engine) {
                 genBusy = false
             }
         }
+    }
+
+    /**
+     * The star you are pointing at when you tap the glow of a galaxy: walks along the tap ray,
+     * finds where the galaxy's light comes from, and generates the stars there. Null when the ray
+     * only crosses faint sky (so tapping dark sky still clears the selection).
+     */
+    fun starAlongRay(cam: UPos, dir: Vec3d): StarBody? {
+        if (!engine.settings.showGenerated) return null
+        for (g in nearGalaxies.sortedBy { (it.center - cam).length() }) {
+            val o = g.toLocal(cam)
+            val d = g.frame.conjugate().rotate(dir).normalized()
+            val r = g.radiusPc * 1.3
+            val b = o.dot(d)
+            val disc = b * b - (o.dot(o) - r * r)
+            if (disc <= 0) continue
+            val tEnd = -b + kotlin.math.sqrt(disc)
+            val tStart = max(-b - kotlin.math.sqrt(disc), 40.0)
+            if (tEnd <= tStart) continue
+            val n = 120
+            val ratio = tEnd / tStart
+            var column = 0.0
+            val scores = ArrayList<Pair<Double, Double>>(n)
+            var prevT = tStart
+            for (k in 0 until n) {
+                val t = tStart * ratio.pow((k + 1.0) / n)
+                val mid = 0.5 * (t + prevT)
+                val p = o + d * mid
+                val rho = g.model.density(p.x, p.y, p.z)
+                column += rho * (t - prevT)
+                scores.add(mid to rho * (t - prevT))
+                prevT = t
+            }
+            // Only where the galaxy glows visibly (stars per square parsec along the line).
+            // Inside a galaxy: the visible band (~200). From outside the whole disc counts.
+            val inside = o.length() < g.radiusPc
+            if (column < (if (inside) 200.0 else 15.0)) continue
+            val sunLocal = if (g.isMilkyWay) g.toLocal(UPos.ZERO) else null
+            for ((t, _) in scores.sortedByDescending { it.second }.take(6)) {
+                val p = o + d * t
+                val tier = StarField.tierFor(0, g.model.density(p.x, p.y, p.z))
+                val size = StarField.cellSize(tier)
+                val cx = kotlin.math.floor(p.x / size).toInt()
+                val cy = kotlin.math.floor(p.y / size).toInt()
+                val cz = kotlin.math.floor(p.z / size).toInt()
+                var best: StarBody? = null
+                var bestOff = Double.MAX_VALUE
+                StarField.generateCell(g, tier, cx, cy, cz, sunLocal) { local, m, temp, i ->
+                    val rel = local - o
+                    val along = rel.dot(d)
+                    if (along <= 0) return@generateCell
+                    val off = (rel - d * along).length() / along   // angle from the tap ray
+                    if (off < bestOff) {
+                        bestOff = off
+                        best = StarField.makeBody(g, g.toWorld(local), m, temp, StarField.cellKey(cx, cy, cz), tier, i)
+                    }
+                }
+                if (best != null) return best
+            }
+        }
+        return null
     }
 
     /** Nearest generated star to [cam] within [maxPc]. */
@@ -384,8 +490,12 @@ class World(private val engine: Engine) {
             if (i !in 0 until web.count) return null
             return web.galaxy(i).also { registerExtraGalaxy(it) }
         }
+        if (id.startsWith("gal:f")) {
+            galaxyIndex[id]?.let { return it }
+            return GalaxyField.fromId(id)?.also { registerExtraGalaxy(it) }
+        }
         if (id.startsWith("gal:")) return galaxyIndex[id]
-        if (id.startsWith("gs:") && !id.contains("/")) return StarField.fromId(id) { galaxyIndex[it] }
+        if (id.startsWith("gs:") && !id.contains("/")) return StarField.fromId(id) { galaxyById(it) }
         if (id.startsWith("hyg:") && !id.contains("/")) return id.removePrefix("hyg:").toIntOrNull()?.let { realStars?.body(it) }
         if (id.contains("/")) {
             return when (val parent = find(id.substringBeforeLast("/"))) {

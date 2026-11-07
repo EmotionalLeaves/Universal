@@ -363,6 +363,7 @@ fun HelpScreen() {
             "Look around" to "Drag with one finger to orbit whatever you are looking at.",
             "Zoom" to "Pinch, or drag the slider on the right. Bottom of the slider = standing on the ground; top = the whole observable universe.",
             "Pick something" to "Tap a planet, star, nebula or galaxy to see its card. Double-tap (or Fly to) to travel there.",
+            "Everything is there" to "Tap anywhere on the glow of a galaxy (even the Milky Way band) to pick an actual star at that spot. Fly to it: it has planets, and rocky ones can be landed on. Between galaxies, millions of dwarf and distant galaxies appear around you as you travel.",
             "Move sideways" to "Slide two fingers together. Twist two fingers to roll.",
             "On the ground" to "Zoom all the way into a rocky planet or moon. Drag up/down to walk, left/right to turn.",
             "Time" to "Use ⏪ ⏸ ⏩ at the bottom to change how fast time runs. Now goes back to the present.",

@@ -222,9 +222,17 @@ class GalaxyBody(
 
     override fun facts(jd: Double): List<Pair<String, String>> {
         val out = ArrayList<Pair<String, String>>()
-        if (!isMilkyWay) out.add("Distance" to String.format(Locale.US, "%,.2f million ly", distanceMly))
+        if (!isMilkyWay) out.add(
+            "Distance" to if (distanceMly >= 1000) String.format(Locale.US, "%,.2f billion ly", distanceMly / 1000)
+            else String.format(Locale.US, "%,.2f million ly", distanceMly),
+        )
         out.add("Size" to String.format(Locale.US, "about %,.0f ly across", radiusPc * 2 * 3.2616))
         out.add("Brightness" to String.format(Locale.US, "absolute magnitude %.1f", absMag))
+        if (extra.none { it.first == "Stars" }) {
+            // Rough mass-to-light: a Milky Way-like galaxy (M ≈ -21) has ~100 billion stars.
+            out.add("Stars" to "about " + com.emotionalleaves.universe.core.Units.bigCount(Math.pow(10.0, -0.4 * (absMag + 21.0)) * 1.0e11))
+        }
+        out.add("Explore" to "Fly in: every star here can be visited, with its planets and moons")
         out.addAll(extra)
         return out
     }
@@ -284,23 +292,34 @@ object StarField {
     const val TIER_B_CELL = 100.0    // pc: only luminous stars (halved in dense regions)
     const val TIER_A_RADIUS = 3
     const val TIER_B_RADIUS = 2
+    /** Tier C: only supergiants, so the brightest stars stay tappable kilo-parsecs away. */
+    const val TIER_C_CELL = 500.0
+    const val TIER_C_RADIUS = 2
+    const val SUPER_LIMIT = -4.5    // absolute magnitude
+    private const val TIER_C = 100   // tier codes 100.. are tier C (code - 100 = halvings)
+
+    /** 0 = all stars, 1 = luminous, 2 = supergiants. */
+    fun baseOf(tier: Int) = if (tier >= TIER_C) 2 else tier % 2
+    private fun halvings(tier: Int) = if (tier >= TIER_C) tier - TIER_C else tier / 2
+    private fun baseCell(base: Int) = when (base) { 0 -> TIER_A_CELL; 1 -> TIER_B_CELL; else -> TIER_C_CELL }
 
     /**
      * Tier code: even = tier A (all stars), odd = tier B (luminous); code / 2 = how many times the
      * cell size was halved because the region is dense (keeps the star count on screen bounded).
      */
-    fun cellSize(tier: Int): Double = (if (tier % 2 == 0) TIER_A_CELL else TIER_B_CELL) / (1 shl (tier / 2))
+    fun cellSize(tier: Int): Double = baseCell(baseOf(tier)) / (1 shl halvings(tier))
 
-    private fun tierFor(base: Int, rho: Double): Int {
+    fun tierFor(base: Int, rho: Double): Int {
         val perCellMax = if (base == 0) 150.0 else 700.0
+        val frac = when (base) { 0 -> 1.0; 1 -> luminousFraction; else -> superFraction }
         var k = 0
         while (k < 4) {
-            val s = (if (base == 0) TIER_A_CELL else TIER_B_CELL) / (1 shl k)
-            val n = rho * s * s * s * (if (base == 0) 1.0 else luminousFraction)
+            val s = baseCell(base) / (1 shl k)
+            val n = rho * s * s * s * frac
             if (n <= perCellMax) break
             k++
         }
-        return k * 2 + base
+        return if (base == 2) TIER_C + k else k * 2 + base
     }
     const val LUMINOUS_LIMIT = 1.5   // absolute magnitude
     /** Brightest apparent magnitude (seen from the Sun) the real catalogue is complete to. */
@@ -323,10 +342,30 @@ object StarField {
     private val LUMINOUS = KINDS.filter { it.mBright < LUMINOUS_LIMIT }
     private val LUM_TOTAL = LUMINOUS.sumOf { k -> k.p * fractionBrighter(k) }
 
-    private fun fractionBrighter(k: Kind) = ((LUMINOUS_LIMIT - k.mBright) / (k.mFaint - k.mBright)).coerceIn(0.0, 1.0)
+    private fun fractionBrighter(k: Kind, limit: Double = LUMINOUS_LIMIT) = ((limit - k.mBright) / (k.mFaint - k.mBright)).coerceIn(0.0, 1.0)
 
     /** Fraction of all stars that are luminous enough for tier B. */
     val luminousFraction = LUM_TOTAL / TOTAL
+
+    private val SUPERS = KINDS.filter { it.mBright < SUPER_LIMIT }
+    private val SUPER_TOTAL = SUPERS.sumOf { k -> k.p * fractionBrighter(k, SUPER_LIMIT) }
+    /** Fraction of all stars that are supergiants (tier C). */
+    val superFraction = SUPER_TOTAL / TOTAL
+
+    /** Draws one supergiant for tier C. */
+    private fun drawSuper(rng: Rng): Pair<Double, Double> {
+        var u = rng.nextDouble() * SUPER_TOTAL
+        for (k in SUPERS) {
+            val w = k.p * fractionBrighter(k, SUPER_LIMIT)
+            if (u < w || k === SUPERS.last()) {
+                val f = rng.nextDouble()
+                val m = k.mBright + (SUPER_LIMIT - k.mBright) * f
+                return m to (k.tMin + (k.tMax - k.tMin) * (1 - f))
+            }
+            u -= w
+        }
+        return -5.0 to 35000.0
+    }
 
     /** Draws one star: (absMag, teff, spectral letter). */
     private fun draw(rng: Rng, luminousOnly: Boolean): Triple<Double, Double, String> {
@@ -368,10 +407,10 @@ object StarField {
         val anchor = g.toWorld(anchorLocal)
         val sunLocal = if (g.isMilkyWay) g.toLocal(UPos.ZERO) else null
         val rho = g.model.density(camLocalPc.x, camLocalPc.y, camLocalPc.z)
-        for (base in 0..1) {
+        for (base in 0..2) {
             val tier = tierFor(base, rho)
             val size = cellSize(tier)
-            val rad = if (base == 0) TIER_A_RADIUS else TIER_B_RADIUS
+            val rad = when (base) { 0 -> TIER_A_RADIUS; 1 -> TIER_B_RADIUS; else -> TIER_C_RADIUS }
             val ccx = floor(camLocalPc.x / size).toInt()
             val ccy = floor(camLocalPc.y / size).toInt()
             val ccz = floor(camLocalPc.z / size).toInt()
@@ -399,16 +438,19 @@ object StarField {
         emit: (local: Vec3d, absMag: Double, teff: Double, index: Int) -> Unit,
     ) {
         val size = cellSize(tier)
-        val luminous = tier % 2 == 1
+        val base = baseOf(tier)
+        val luminous = base == 1
         val center = Vec3d((cx + 0.5) * size, (cy + 0.5) * size, (cz + 0.5) * size)
         var mean = g.model.density(center.x, center.y, center.z) * size * size * size
         if (luminous) mean *= luminousFraction
+        if (base == 2) mean *= superFraction
         val rng = Rng(Rng.hash(g.seed, tier.toLong(), cx.toLong(), cy.toLong(), cz.toLong(), SystemFactory.GENERATOR_VERSION.toLong()))
         val n = rng.poisson(mean).coerceAtMost(6000)
         for (i in 0 until n) {
             val local = Vec3d((cx + rng.nextDouble()) * size, (cy + rng.nextDouble()) * size, (cz + rng.nextDouble()) * size)
-            val (m, t, _) = draw(rng, luminous)
-            if (!luminous && m < LUMINOUS_LIMIT) continue // luminous stars belong to tier B
+            val (m, t) = if (base == 2) drawSuper(rng) else draw(rng, luminous).let { it.first to it.second }
+            if (base == 0 && m < LUMINOUS_LIMIT) continue // luminous stars belong to tier B
+            if (base == 1 && m < SUPER_LIMIT) continue    // supergiants belong to tier C
             if (sunLocal != null) {
                 // Real stars win: no generated stars where the real catalogue is complete.
                 val d = (local - sunLocal).length()
@@ -424,7 +466,7 @@ object StarField {
         val (cx, cy, cz) = unpackCell(cell)
         val hash = (Rng.hash(cx.toLong(), cy.toLong(), cz.toLong(), tier.toLong()) ushr 48).toInt() and 0xFFFF
         val prefix = if (g.isMilkyWay) "MW" else shortName(g.name)
-        val name = String.format(Locale.US, "%s %04X-%d%s", prefix, hash, i, if (tier % 2 == 1) "L" else "")
+        val name = String.format(Locale.US, "%s %04X-%d%s", prefix, hash, i, when (baseOf(tier)) { 1 -> "L"; 2 -> "S"; else -> "" })
         val spect = when {
             teff > 30000 -> "O"
             teff > 10000 -> if (absMag > 9) "DA" else "B"
