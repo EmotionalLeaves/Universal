@@ -292,10 +292,12 @@ object CatalogMoons {
             val node = Math.toRadians(p[7].toDoubleOrNull() ?: 0.0)
             val pd = abs(p[8].toDoubleOrNull() ?: 0.0).takeIf { it > 0 } ?: continue
             val retro = (p[6].toDoubleOrNull() ?: 0.0) > 90
-            val poleRa = p[9].toDoubleOrNull()?.takeIf { it > -900 } ?: planet.poleRa
-            val poleDec = p[10].toDoubleOrNull()?.takeIf { it > -900 } ?: planet.poleDec
+            // Orbits without a Laplace pole in the table are referred to the ecliptic.
+            val poleRa = p[9].toDoubleOrNull()?.takeIf { it > -900 } ?: 270.0
+            val poleDec = p[10].toDoubleOrNull()?.takeIf { it > -900 } ?: 66.560708
             val epoch = parseEpoch(p[11])
-            val rKm = (p[12].toDoubleOrNull() ?: 0.0).takeIf { it > 0 } ?: 2.0
+            val irregular = e > 0.12 || Math.toDegrees(inc) in 25.0..155.0 || aKm * 1000 > planet.radius * 80
+            val rKm = (p[12].toDoubleOrNull() ?: 0.0).takeIf { it > 1.0 } ?: if (irregular) 3.0 else 8.0
             // Laplace-plane frame: Z = plane pole, X = its ascending node on the equator.
             val z = Vec3d.fromRaDec(poleRa, poleDec)
             var x = Vec3d.Z.cross(z)
@@ -321,6 +323,7 @@ object CatalogMoons {
                 listOf(
                     "Orbit shape" to String.format(Locale.US, "eccentricity %.3f, tilt %.1f°%s", e, Math.toDegrees(inc), if (retro) " (goes backwards)" else ""),
                     "Position" to "JPL mean orbital elements",
+                    "Size" to if ((p[12].toDoubleOrNull() ?: 0.0) > 1.0) String.format(Locale.US, "%,.0f km across", rKm * 2) else "unknown (shown as a typical ${if (irregular) "small captured" else "small"} moon)",
                 ),
                 grey,
             )

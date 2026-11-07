@@ -936,15 +936,18 @@ def build_moons(base):
             if len(rows) < 2:
                 continue
             head = [h.lower() for h in rows[0]]
-            ri = next((i for i, h in enumerate(head) if "radius" in h), None)
-            ni = next((i for i, h in enumerate(head) if h.startswith("sat") or "name" in h), 0)
+            log(f"   phys table header {rows[0][:14]}; first row {rows[1][:14]}")
+            ri = next((i for i, h in enumerate(head) if "radius" in h and not h.startswith(("r_", "ref"))), None)
+            ni = next((i for i, h in enumerate(head) if h.startswith("satellite") or h == "name"), None)
+            if ni is None:
+                ni = next((i for i, h in enumerate(head) if h.startswith("sat")), 0)
             if ri is None:
                 continue
             for r in rows[1:]:
-                if ri < len(r):
-                    v = fnum(r[ri].split("±")[0].replace(",", "").strip())
-                    if v:
-                        radii[r[ni].lower()] = v
+                if ri < len(r) and ni < len(r):
+                    v = fnum(r[ri].split("±")[0].split("+/-")[0].replace(",", "").strip())
+                    if v and v > 0:
+                        radii[r[ni].strip().lower()] = v
     except Exception as e:
         log(f"  sats/phys_par failed: {e}")
     with open(os.path.join(d, "moons.tsv"), "w", encoding="utf-8") as f:
