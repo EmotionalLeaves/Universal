@@ -281,3 +281,11 @@ Phone checklist:
 - [x] Tap anywhere on a galaxy's glow: the app walks the tap ray, finds where the light comes from, and generates the actual star there (deterministic id, bookmarkable).
 - [x] Galaxy field: ordinary galaxies (4 Mpc cells) and dwarfs (1 Mpc cells) generated around the camera anywhere in the universe, along a filament field; real catalogues win (apparent mag limit 14, 17 with GLADE+); none inside the Local Group. Enterable like any galaxy (ids gal:f…).
 - [x] Galaxy cards show star counts and an Explore hint; universe card shows total stars.
+
+## Pass 11 (polish)
+- [x] "Finding Mars…" / "Picking a world…" shown while Explore and Surprise me work.
+- [x] ↩ Back to … always returns to the object it names.
+- [x] Zoom slider shrinks on short and landscape screens.
+- [x] Star cards say how many planets the star has (real or generated).
+- [x] Empty search offers ✦ Browse famous places; Explore remembers open sections.
+- [x] Low quality skips the supergiant tier (faster phones stay smooth).

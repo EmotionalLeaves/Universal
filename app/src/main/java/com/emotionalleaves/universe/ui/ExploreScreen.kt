@@ -14,7 +14,6 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -93,10 +92,15 @@ private val CATEGORIES = listOf(
     ),
 )
 
+/** Which Explore sections are open (kept while the app runs). */
+object ExploreUi {
+    var open by mutableStateOf(setOf("Solar system"))
+}
+
 /** Browsable list of famous places, so you don't need to know names to search for. */
 @Composable
 fun ExploreScreen(engine: Engine) {
-    var open by remember { mutableStateOf(setOf("Solar system")) }
+    var open by ExploreUi::open
     Panel("Explore", { Nav.screen = Screen.NONE }) {
         Text(
             "Tap a place to fly there. Tap a heading to open or close it.",

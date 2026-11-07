@@ -121,7 +121,8 @@ fun ScaleBar() {
 fun ZoomSlider(engine: Engine, modifier: Modifier = Modifier) {
     var trackH by remember { mutableStateOf(1) }
     val density = LocalDensity.current
-    val trackDp = 300.dp
+    // Shorter on small or landscape screens so it never runs into the top bar or the info card.
+    val trackDp = (LocalConfiguration.current.screenHeightDp * 0.42f).coerceIn(160f, 300f).dp
     val presets = remember { engine.zoomPresets.map { (n, alt) -> n to engine.zoomFractionFor(alt) } }
     Row(modifier.height(trackDp)) {
         // Scale labels, each placed at its height on the track.

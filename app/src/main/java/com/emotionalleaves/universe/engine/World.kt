@@ -179,7 +179,7 @@ class World(private val engine: Engine) {
         genLocal = local
         genExec.execute {
             try {
-                generated = StarField.generate(g, local)
+                generated = StarField.generate(g, local, supergiants = engine.settings.quality > 0)
             } catch (e: Throwable) {
                 ErrorLog.record("generating stars", e)
             } finally {

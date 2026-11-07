@@ -396,7 +396,7 @@ object StarField {
     }
 
     /** Generates tier A and B stars around [camLocalPc] (galaxy frame, pc). */
-    fun generate(g: GalaxyBody, camLocalPc: Vec3d): GeneratedStars {
+    fun generate(g: GalaxyBody, camLocalPc: Vec3d, supergiants: Boolean = true): GeneratedStars {
         val outData = ArrayList<Float>(64_000)
         val outLocal = ArrayList<Double>(27_000)
         val outT = ArrayList<Float>(9_000)
@@ -407,7 +407,7 @@ object StarField {
         val anchor = g.toWorld(anchorLocal)
         val sunLocal = if (g.isMilkyWay) g.toLocal(UPos.ZERO) else null
         val rho = g.model.density(camLocalPc.x, camLocalPc.y, camLocalPc.z)
-        for (base in 0..2) {
+        for (base in 0..(if (supergiants) 2 else 1)) {
             val tier = tierFor(base, rho)
             val size = cellSize(tier)
             val rad = when (base) { 0 -> TIER_A_RADIUS; 1 -> TIER_B_RADIUS; else -> TIER_C_RADIUS }

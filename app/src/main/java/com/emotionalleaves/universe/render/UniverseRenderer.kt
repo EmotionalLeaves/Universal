@@ -207,7 +207,17 @@ class UniverseRenderer(private val context: Context, private val engine: Engine)
     private fun publishHud(frame: Frame, target: Body?, focusDist: Double) {
         val sel = engine.selected
         val selDist = sel?.let { (it.position(frame.jd) - frame.camPos).length() }
-        val selFacts = sel?.facts(frame.jd) ?: emptyList()
+        val selFacts = (sel?.facts(frame.jd) ?: emptyList()).let { f ->
+            // Every star can be visited: say how many planets wait there (real or generated).
+            if (sel is com.emotionalleaves.universe.engine.StarBody && sel.id != "sol:sun" && f.none { it.first == "Planets" }) {
+                val sys = try { engine.world.systemFor(sel) } catch (_: Exception) { null }
+                if (sys != null) {
+                    val n = sys.planets.size
+                    val what = if (n == 0) "none found" else "$n " + (if (sys.planets.all { it.source == com.emotionalleaves.universe.engine.Source.REAL }) "(real)" else "(fly there to see them)")
+                    f + ("Planets" to what)
+                } else f
+            } else f
+        }
         val altitude = if (target != null && engine.camera.isSolidTarget()) {
             val d = (target.position(frame.jd) - frame.camPos).length() - target.radius
             "Altitude ${Units.formatDistance(d)}"
@@ -227,6 +237,7 @@ class UniverseRenderer(private val context: Context, private val engine: Engine)
         val canLand = engine.canLand(sel)
         val w = engine.world
         val loading = when {
+            engine.busy.isNotEmpty() -> engine.busy
             w.realStars == null && !w.starsFailed -> "Loading stars…"
             w.galaxies.size <= 1 -> "Loading galaxies…"
             w.cosmicWeb == null -> "Building the cosmic web…"

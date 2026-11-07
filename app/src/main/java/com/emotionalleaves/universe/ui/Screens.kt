@@ -216,6 +216,10 @@ fun SearchScreen(engine: Engine) {
         )
         Spacer(Modifier.height(8.dp))
         if (!SearchUi.ready) Text("Building the index…", color = TextDim, fontSize = 13.sp)
+        if (SearchUi.query.isBlank()) {
+            Text("Don't know what to look for?", color = TextDim, fontSize = 13.sp, modifier = Modifier.padding(top = 4.dp))
+            PillButton("✦ Browse famous places", Modifier.padding(top = 6.dp), primary = true) { Nav.screen = Screen.EXPLORE }
+        }
         if (SearchUi.ready && SearchUi.query.isNotBlank() && SearchUi.results.isEmpty()) {
             Text("Nothing found. Try a planet, star, nebula, galaxy or catalogue number.", color = TextDim, fontSize = 13.sp)
         }

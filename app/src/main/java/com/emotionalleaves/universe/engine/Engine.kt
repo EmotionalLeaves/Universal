@@ -320,13 +320,17 @@ class Engine(val context: Context) {
 
     /** Re-centre on the selected object, or the last thing you were orbiting. */
     fun recenter() {
-        val b = selected ?: lastTarget ?: world.homeBody()
+        val b = lastTarget ?: selected ?: world.homeBody()
         selected = b
         flyTo(b)
     }
 
+    /** Short message while a background lookup runs ("Finding Mars…"); shown in the loading chip. */
+    @Volatile var busy = ""
+
     /** Flies to an object by name (Explore lists). Builds the search index if needed. */
     fun goToName(name: String) {
+        busy = "Finding $name…"
         bg.execute {
             try {
                 if (!search.ready() || world.searchStale) { world.searchStale = false; search.build() }
@@ -337,12 +341,15 @@ class Engine(val context: Context) {
                 flyTo(b)
             } catch (e: Exception) {
                 ErrorLog.record("goToName($name)", e)
+            } finally {
+                busy = ""
             }
         }
     }
 
     /** Picks a random generated rocky planet around a real star and flies there. */
     fun surprise(land: Boolean) {
+        busy = "Picking a world…"
         bg.execute {
             try {
                 val rs = world.realStars ?: return@execute
@@ -361,6 +368,8 @@ class Engine(val context: Context) {
                 }
             } catch (e: Exception) {
                 ErrorLog.record("surprise", e)
+            } finally {
+                busy = ""
             }
         }
     }
