@@ -31,6 +31,19 @@ jobs:
         with:
           gradle-version: "8.11.1"
 
+      - name: Add app data (stars, planets, textures...) from the data-v1 release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p app/src/main/assets
+          if gh release download data-v1 -p base-data.zip -D /tmp/data 2>/dev/null; then
+            unzip -qo /tmp/data/base-data.zip -d app/src/main/assets
+            echo "Bundled data:"; cat app/src/main/assets/manifest.json || true
+            du -sh app/src/main/assets
+          else
+            echo "No data release yet - the app will use generated fallbacks."
+          fi
+
       - name: Build the signed APK
         run: gradle assembleRelease --stacktrace --no-daemon
 

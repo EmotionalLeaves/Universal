@@ -1,0 +1,59 @@
+name: Build data
+
+# Downloads real catalogs and turns them into app data (see tools/build_data.py).
+# Run it from the Actions tab ("Run workflow") or by pushing to the "data" branch.
+on:
+  workflow_dispatch:
+    inputs:
+      packs:
+        description: "Also build the big downloadable packs"
+        type: boolean
+        default: true
+  push:
+    branches: [data]
+
+permissions:
+  contents: write
+
+jobs:
+  data:
+    runs-on: ubuntu-latest
+    timeout-minutes: 300
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Python packages
+        run: pip install pillow numpy healpy rasterio
+
+      - name: Build base data and packs
+        run: |
+          PACKS="--packs"
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ inputs.packs }}" != "true" ]; then PACKS=""; fi
+          python3 tools/build_data.py --out build/data $PACKS 2>&1 | tee data-build.log
+
+      - name: Zip outputs
+        run: |
+          cd build/data/base && zip -qr ../../../base-data.zip . && cd ../../..
+          ls -la base-data.zip
+          mkdir -p packs-out
+          if [ -d build/data/packs ]; then
+            for d in build/data/packs/*/; do
+              [ -d "$d" ] || continue
+              n=$(basename "$d")
+              (cd "$d" && zip -qr "../../../../packs-out/pack-$n.zip" .)
+            done
+          fi
+          ls -la packs-out || true
+
+      - name: Publish to the data-v1 release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view data-v1 >/dev/null 2>&1 || gh release create data-v1 --title "Data v1" --notes "App data built by tools/build_data.py. base-data.zip is bundled into every APK; pack-*.zip files are optional downloads inside the app." --latest=false
+          gh release upload data-v1 base-data.zip data-build.log --clobber
+          for f in packs-out/*.zip; do [ -f "$f" ] && gh release upload data-v1 "$f" --clobber; done
+          gh release view data-v1
