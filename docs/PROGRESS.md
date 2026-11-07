@@ -313,3 +313,20 @@ Phone checklist:
 - [x] Info card: kind and source chips, three headline numbers, story, Read more (Wikipedia summary + every fact), icon actions.
 - [x] Design system (ui/Design.kt): palette, type scale, a drawn line-icon set replacing all emoji, glass panels, buttons, chips, list rows.
 - [x] Restyled top bar, time bar, menu, Explore (Surprise me tiles, category list), search results with type icons, settings sections, census, welcome tour.
+
+## Bug sweep (pass 13)
+- [x] Pinching during a flight cancelled it and dropped the target; dragging mid-flight now stops but stays locked on.
+- [x] Pinch drift was treated as a two-finger slide (detached you from the object); pan now needs the fingers to move together more than they spread.
+- [x] One finger could not orbit after lifting the other from a pinch.
+- [x] Status said "Empty space" and offered "Back to…" during every flight; now "Flying to X".
+- [x] Search scanned ~300,000 names on the UI thread per keystroke; now off-thread with top-N selection.
+- [x] Lost updates to the galaxy list from several threads; now locked.
+- [x] Asteroids, pulsars and generated remnants showed as fake stars and labels in the sky from planets; now only at the right zoom.
+- [x] Hundreds of small-moon labels and orbit rings from far away; now only close in.
+- [x] Each newly met galaxy rebuilt the whole 62,000-galaxy batch (stutter); now incremental.
+- [x] Galaxy labels scanned 62,000 entries per frame; now a cached list of named ones.
+- [x] Duplicate labels for the selected object; card stayed expanded between selections.
+- [x] "Out" from asteroids, pulsars, quasars, remnants went to the wrong parent.
+- [x] Terrain on tiny moons had hills a sixth of their radius.
+- [x] Pulsars had no close-up look and could be flown through.
+- [x] Wikipedia rate limits: retried gently (1,257 summaries).

@@ -107,6 +107,7 @@ private val CATEGORIES = listOf(
             p("Whirlpool Galaxy", "Classic spiral with a companion"), p("Pinwheel Galaxy", "Face-on spiral"),
             p("Sombrero Galaxy", "Edge-on with a dust lane"), p("Cigar Galaxy", "Starburst galaxy"),
             p("Centaurus A", "Giant galaxy with a black-hole jet"),
+            p("M87", "Its black hole was the first ever photographed", "Messier 87"),
         ),
     ),
     Category(

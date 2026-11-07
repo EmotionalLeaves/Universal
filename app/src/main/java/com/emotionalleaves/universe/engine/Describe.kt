@@ -154,7 +154,7 @@ object Describe {
         }
         if (s.galaxyName == "Milky Way") {
             val d = (s.pos - com.emotionalleaves.universe.core.UPos.ZERO).length()
-            if (d > Units.LY) out.add("Its light" to "left it ${Units.lightTime(d)} before reaching Earth")
+            if (d > Units.LY) out.add("Light from it" to "takes ${Units.lightTime(d)} to reach Earth")
         } else out.add("Galaxy" to s.galaxyName)
         return out
     }
