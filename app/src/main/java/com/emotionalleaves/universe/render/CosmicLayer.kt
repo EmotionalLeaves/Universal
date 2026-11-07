@@ -76,6 +76,9 @@ class CosmicLayer : Layer {
         val day = 1f - daylight
         if (day < 0.03f) return
         val exp = exposure(frame)
+        // Nothing beyond ~300 Mpc is visible until you zoom out past a few Mpc: skip the work.
+        val fromEarth = (frame.camPos - UPos.ZERO).length()
+        if (frame.focusDistance < 2 * Units.MPC && fromEarth < 20 * Units.MPC) return
         rc.drawer.beginAdditive()
         gladeBatch?.let { rc.drawer.points(frame, it, exp, 2.0f, 0.8f * day, minSize = 1.0f, maxSize = 4f) }
         webBatch?.let { rc.drawer.points(frame, it, exp, 2.0f, 0.9f * day, minSize = 1.0f, maxSize = 4f) }

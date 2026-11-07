@@ -60,9 +60,13 @@ class StarLayer : Layer {
         val lim = magLimit + rc.engine.settings.starBrightness - daylight * 7f
         if (daylight > 0.97f) return
         rc.drawer.beginAdditive()
-        fallback?.let { rc.drawer.points(frame, it, lim, 3f, 1f, minSize = 1.5f, maxSize = 9f) }
-        for (u in uploaded) for (b in u.batches) {
-            rc.drawer.points(frame, b, lim, 3.2f, 1f, minSize = 1.3f, maxSize = 13f)
+        fallback?.let { rc.drawer.points(frame, it, lim, 3f, 1f, minSize = 1.3f, maxSize = 9f) }
+        // From far outside the galaxy individual stars are invisible: skip ~110,000+ vertices.
+        val fromSun = (frame.camPos - UPos.ZERO).length()
+        if (fromSun < 300_000 * Units.LY) {
+            for (u in uploaded) for (b in u.batches) {
+                rc.drawer.points(frame, b, lim, 3.2f, 1f, minSize = 1.3f, maxSize = 13f)
+            }
         }
         val cm = constellationMesh
         if (cm != null && rc.engine.settings.showConstellations) {

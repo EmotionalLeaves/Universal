@@ -22,6 +22,8 @@ class GalaxyLayer : Layer {
     var magLimit = 7.2f
     var daylight = 0f
     var particles = 40_000
+    /** Largest glow blob in pixels; big blobs cost a lot of GPU fill (Low 14, Medium 20, High 28). */
+    var maxBlob = 20f
 
     override fun init(rc: RenderContext) {
         glows.clear()
@@ -86,7 +88,7 @@ class GalaxyLayer : Layer {
             val boost = ((dist / (0.5 * g.radius)) * (dist / (0.5 * g.radius))).coerceIn(1.0, 40.0)
             rc.drawer.points(
                 frame, glow.batch, magLimit, 3f, fade * day, fadeNear = 700 * Units.PC,
-                minSize = 1.5f, maxSize = 64f, worldSize = g.radius * 0.012, glowGain = (2.2 * boost).toFloat(),
+                minSize = 1.5f, maxSize = maxBlob, worldSize = g.radius * 0.012, glowGain = (2.2 * boost).toFloat(),
             )
         }
         genBatch?.let {

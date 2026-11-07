@@ -109,6 +109,7 @@ class UniverseRenderer(private val context: Context, private val engine: Engine)
         cosmicLayer.daylight = terrainLayer.daylight
         galaxyLayer.particles = when (engine.settings.quality) { 0 -> 20_000; 2 -> 70_000; else -> 40_000 }
         terrainLayer.splitFactor = when (engine.settings.quality) { 0 -> 1.5; 2 -> 3.0; else -> 2.2 }
+        galaxyLayer.maxBlob = when (engine.settings.quality) { 0 -> 14f; 2 -> 28f; else -> 20f }
         solarLayer.showOrbits = engine.settings.showOrbits
         systemLayer.showOrbits = engine.settings.showOrbits
         for (l in layers) l.update(frame, ctx)
