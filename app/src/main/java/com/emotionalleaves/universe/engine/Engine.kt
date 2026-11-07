@@ -251,8 +251,27 @@ class Engine(val context: Context) {
 
     fun flyTo(body: Body) {
         synchronized(camera) {
-            camera.flyTo(body, body.position(jd), body.viewDistance(), nowSeconds())
+            camera.flyTo(body, body.position(jd), body.viewDistance(), nowSeconds(), arrivalView(body))
         }
+    }
+
+    /** For planets and moons: arrive looking at the sunlit side, a little off the sun line. */
+    private fun arrivalView(body: Body): com.emotionalleaves.universe.core.Quatd? {
+        val light: UPos = when (body) {
+            is SolarBody -> if (body.kind == Kind.STAR) return null else UPos.ZERO
+            is PlanetBody -> body.star.pos
+            else -> return null
+        }
+        val p = body.position(jd)
+        val toLight = (light - p).normalized()
+        val side = Vec3d.perpendicular(toLight)
+        val camDir = (toLight * kotlin.math.cos(0.6) + side * kotlin.math.sin(0.6)).normalized()
+        val up = when (body) {
+            is SolarBody -> Vec3d.fromRaDec(body.poleRa, body.poleDec)
+            else -> Vec3d.Z
+        }
+        val q = com.emotionalleaves.universe.core.Quatd.lookRotation(-camDir, up)
+        return q
     }
 
     fun flyToSelected() {

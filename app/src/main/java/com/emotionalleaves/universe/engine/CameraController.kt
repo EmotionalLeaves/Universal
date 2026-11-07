@@ -155,7 +155,7 @@ class CameraController {
     }
 
     /** Smooth flight to [body]. The camera rises out, travels and comes back down. */
-    fun flyTo(body: Body?, destination: UPos, endDistance: Double, now: Double) {
+    fun flyTo(body: Body?, destination: UPos, endDistance: Double, now: Double, endOrientation: Quatd? = null) {
         val startPos = focus
         val sep = (destination - startPos).length()
         val d0 = distance
@@ -163,7 +163,7 @@ class CameraController {
         val peak = max(max(d0, d1), sep * 0.8)
         val logSpan = ln(peak / min(d0, d1)).coerceAtLeast(1.0)
         val duration = clamp(1.4 + logSpan * 0.09, 1.6, 5.5)
-        flight = Flight(startPos, d0, body, destination, d1, peak, now, duration)
+        flight = Flight(startPos, d0, body, destination, d1, peak, now, duration, orientation, endOrientation)
         yawVel = 0.0; pitchVel = 0.0; zoomVel = 0.0
     }
 
@@ -193,10 +193,13 @@ class CameraController {
             val base = l0 + (l1 - l0) * smoothstep(0.0, 1.0, t)
             val bump = (lp - max(l0, l1)).coerceAtLeast(0.0) * sin(Math.PI * t)
             distance = exp(base + bump)
+            // Swing round to the arrival view during the second half of the flight.
+            f.endQ?.let { orientation = Quatd.slerp(f.startQ, it, smoothstep(0.45, 1.0, t)) }
             if (t >= 1.0) {
                 flight = null
                 target = f.body
                 focus = dest
+                f.endQ?.let { orientation = it }
                 distance = clamp(f.d1, minDistance(), maxDistance())
             }
             return
@@ -236,7 +239,7 @@ class CameraController {
 
     private class Flight(
         val from: UPos, val d0: Double, val body: Body?, val destination: UPos, val d1: Double,
-        val peak: Double, val start: Double, val duration: Double,
+        val peak: Double, val start: Double, val duration: Double, val startQ: Quatd, val endQ: Quatd?,
     )
 
     companion object {

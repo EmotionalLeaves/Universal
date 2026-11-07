@@ -44,8 +44,8 @@ class PackManager(private val context: Context, private val world: World, privat
         ),
         PackInfo(
             "galaxies-glade", "Millions of real galaxies",
-            "GLADE+ galaxy catalogue out to about 6.5 billion light years. Replaces generated cosmic web inside that range.",
-            "pack-galaxies-glade.zip", 60,
+            "4.4 million galaxies from GLADE+, out to about 6.5 billion light years. Replaces the generated cosmic web inside that range.",
+            "pack-galaxies-glade.zip", 64,
         ),
     )
 

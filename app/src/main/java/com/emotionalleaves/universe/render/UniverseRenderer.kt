@@ -115,6 +115,7 @@ class UniverseRenderer(private val context: Context, private val engine: Engine)
         for (l in layers) l.drawOpaque(frame, ctx)
         for (l in layers) l.drawTransparent(frame, ctx)
 
+        lastFrame = frame
         // Tap targets and labels
         val picks = ArrayList<Pickable>(256)
         for (l in layers) l.collect(frame, ctx, picks)
@@ -173,9 +174,23 @@ class UniverseRenderer(private val context: Context, private val engine: Engine)
             taken.add(box)
             out.add(Label(p.x, p.y, text, if (sel) 0xFFFFD27A.toInt() else p.labelColor, sel, p.pixelRadius.coerceAtMost(200f)))
         }
+        // Selected object off screen (or behind you): an arrow at the edge shows where it is.
+        if (selected != null) {
+            val f = lastFrame
+            if (f != null) {
+                val rel = f.rel(selected.position(f.jd))
+                val c = f.orientation.conjugate().rotate(rel)
+                val onScreen = f.project(rel)?.let { it.first in 0f..f.width.toFloat() && it.second in 0f..f.height.toFloat() } ?: false
+                if (!onScreen && c.lengthSq() > 0) {
+                    out.add(Label(c.x.toFloat(), (-c.y).toFloat(), selected.name, 0xFFFFD27A.toInt(), true, edge = true))
+                }
+            }
+        }
         overlay.labels = out
         overlay.refresh()
     }
+
+    private var lastFrame: Frame? = null
 
     private fun overlaps(a: FloatArray, b: FloatArray) = a[0] < b[2] && b[0] < a[2] && a[1] < b[3] && b[1] < a[3]
 

@@ -16,6 +16,8 @@ class Label(
     val selected: Boolean = false,
     val offset: Float = 0f,
     val small: Boolean = false,
+    /** Off-screen marker: draw an arrow at the screen edge pointing at [x], [y] direction. */
+    val edge: Boolean = false,
 )
 
 /**
@@ -44,12 +46,36 @@ class LabelOverlay(context: Context) : View(context) {
         setWillNotDraw(false)
     }
 
+    private val arrow = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xEEFFD27A.toInt() }
+
+    /** Arrow at the edge of the screen pointing toward an off-screen selection; x/y = direction. */
+    private fun drawEdgeArrow(canvas: Canvas, l: Label) {
+        val w = width.toFloat(); val h = height.toFloat()
+        val cx = w / 2; val cy = h / 2
+        val len = kotlin.math.hypot(l.x, l.y).coerceAtLeast(1e-3f)
+        val dx = l.x / len; val dy = l.y / len
+        val margin = 36f * density
+        val sx = if (dx != 0f) (cx - margin) / kotlin.math.abs(dx) else Float.MAX_VALUE
+        val sy = if (dy != 0f) (cy - margin) / kotlin.math.abs(dy) else Float.MAX_VALUE
+        val s = minOf(sx, sy)
+        val px = cx + dx * s; val py = cy + dy * s
+        canvas.drawCircle(px, py, 7f * density, arrow)
+        canvas.drawLine(px, py, px - dx * 18f * density, py - dy * 18f * density, ring.apply { color = 0xEEFFD27A.toInt() })
+        paint.color = 0xFFFFD27A.toInt()
+        val tx = if (dx > 0) px - paint.measureText(l.text) - 14f * density else px + 14f * density
+        canvas.drawText(l.text, tx, py + 5f * density, paint)
+    }
+
     /** Call from any thread after updating [labels]. */
     fun refresh() = postInvalidateOnAnimation()
 
     override fun onDraw(canvas: Canvas) {
         val list = labels
         for (l in list) {
+            if (l.edge) {
+                drawEdgeArrow(canvas, l)
+                continue
+            }
             val p = if (l.small) smallPaint else paint
             p.color = l.color
             p.typeface = if (l.selected) Typeface.DEFAULT_BOLD else Typeface.DEFAULT
