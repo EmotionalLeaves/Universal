@@ -37,8 +37,14 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.emotionalleaves.universe.engine.Engine
+import com.emotionalleaves.universe.ui.UniverseScreen
+import com.emotionalleaves.universe.ui.UniverseView
 
 class MainActivity : ComponentActivity() {
+    private var universeView: UniverseView? = null
+    private val engine by lazy { Engine(applicationContext) }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val version = AppInfo.version(this)
@@ -54,46 +60,23 @@ class MainActivity : ComponentActivity() {
                     },
                 )
             } else {
-                HomeScreen(version = version)
+                UniverseScreen(
+                    engine = engine,
+                    version = version,
+                    viewFactory = { ctx -> UniverseView(ctx, engine).also { universeView = it } },
+                )
             }
         }
     }
-}
 
-@Composable
-private fun HomeScreen(version: String) {
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Color.Black)
-            .safeDrawingPadding(),
-    ) {
-        Column(
-            modifier = Modifier.align(Alignment.Center),
-            horizontalAlignment = Alignment.CenterHorizontally,
-        ) {
-            Text(
-                text = "Universe Explorer",
-                color = Color.White,
-                fontSize = 30.sp,
-                fontWeight = FontWeight.SemiBold,
-            )
-            Spacer(Modifier.height(8.dp))
-            Text(
-                text = "Version $version",
-                color = Color(0xFF8A8FA3),
-                fontSize = 14.sp,
-            )
-        }
-        // Lets you confirm the crash screen works. Remove in Round 14.
-        TextButton(
-            onClick = { throw RuntimeException("Test crash from the Round 0 button") },
-            modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .padding(bottom = 16.dp),
-        ) {
-            Text("Test crash screen", color = Color(0xFF5A5F73), fontSize = 13.sp)
-        }
+    override fun onPause() {
+        super.onPause()
+        universeView?.onPause()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        universeView?.onResume()
     }
 }
 
