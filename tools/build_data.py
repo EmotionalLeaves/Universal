@@ -22,6 +22,7 @@ import struct
 import sys
 import time
 import traceback
+import urllib.error
 import urllib.parse
 import urllib.request
 import re
@@ -38,7 +39,8 @@ OPENNGC_URLS = [
     "https://raw.githubusercontent.com/mattiaverga/OpenNGC/master/database_files/NGC.csv",
     "https://raw.githubusercontent.com/mattiaverga/OpenNGC/master/database_files/addendum.csv",
 ]
-VIZIER = ["https://vizier.cfa.harvard.edu/viz-bin/asu-tsv", "https://vizier.cds.unistra.fr/viz-bin/asu-tsv"]
+VIZIER = ["https://vizier.cfa.harvard.edu/viz-bin/asu-tsv", "https://vizier.cds.unistra.fr/viz-bin/asu-tsv",
+          "https://vizier.iucaa.in/viz-bin/asu-tsv", "https://vizier.nao.ac.jp/viz-bin/asu-tsv"]
 CF4_SOURCE = "J/ApJ/944/94/table2"
 GLADE_SOURCE = "VII/291/gladep"
 PLANCK_URL = ("https://irsa.ipac.caltech.edu/data/Planck/release_2/all-sky-maps/maps/component-maps/cmb/"
@@ -492,11 +494,13 @@ def vizier_tsv(source, extra, timeout=900, maxrows="unlimited"):
             txt = fetch(url, timeout=timeout, retries=2).decode("utf-8", "replace")
             lines = [l for l in txt.split("\n") if l and not l.startswith("#")]
             if len(lines) < 4:
-                raise RuntimeError("empty VizieR response")
+                errs = [l for l in txt.split("\n") if "rror" in l or "not found" in l.lower()][:5]
+                raise RuntimeError(f"empty VizieR response: {errs or txt[:400]!r}")
             header = lines[0].split("\t")
             data = [l.split("\t") for l in lines[3:]]  # skip units + dashes rows
             return header, data
         except Exception as e:
+            log(f"  VizieR mirror failed: {e}")
             last = e
     raise last
 
@@ -1006,7 +1010,7 @@ def build_pulsars(base):
 def build_quasars(base):
     d = os.path.join(base, "exotic")
     os.makedirs(d, exist_ok=True)
-    header, data = vizier_tsv("VII/294", "&-out.all&Rmag=%3C18.5&z=%3E0.01", maxrows=120000)
+    header, data = vizier_tsv("VII/294/catalog", "&-out.all&Rmag=%3C18.5&z=%3E0.01", maxrows=120000)
     log(f"  quasar columns: {header[:20]}")
     cn = find_col(header, "Name")
     cra = find_col(header, "_RAJ2000", "RAJ2000")
@@ -1036,7 +1040,11 @@ def build_quasars(base):
 def build_clusters(base):
     d = os.path.join(base, "exotic")
     os.makedirs(d, exist_ok=True)
-    header, data = vizier_tsv("VII/110A/table3", "&-out.all")
+    try:
+        header, data = vizier_tsv("VII/110A/table3", "&-out.all")
+    except Exception as e:
+        log(f"  Abell table3 failed ({e}); trying the whole catalogue")
+        header, data = vizier_tsv("VII/110A", "&-out.all")
     log(f"  Abell columns: {header[:20]}")
     cn = find_col(header, "ACO", "A")
     cra = find_col(header, "_RAJ2000", "RAJ2000")
@@ -1079,14 +1087,30 @@ def read_tsv(path):
         return list(csv.DictReader(f, delimiter="\t"))
 
 
+WIKI_STATS = {}
+
+
 def wiki_summary(title):
     url = WIKI_SUMMARY + urllib.parse.quote(title.replace(" ", "_"), safe="")
-    req = urllib.request.Request(url, headers={"User-Agent": "UniverseExplorer-data/1.0 (https://github.com/EmotionalLeaves/Universal)"})
-    try:
-        with urllib.request.urlopen(req, timeout=30) as r:
-            return json.loads(r.read().decode("utf-8"))
-    except Exception:
-        return None
+    req = urllib.request.Request(url, headers={
+        "User-Agent": "UniverseExplorerDataBuilder/1.1 (https://github.com/EmotionalLeaves/Universal; data build bot)",
+        "Accept": "application/json",
+    })
+    for attempt in range(5):
+        try:
+            with urllib.request.urlopen(req, timeout=30) as r:
+                WIKI_STATS["200"] = WIKI_STATS.get("200", 0) + 1
+                return json.loads(r.read().decode("utf-8"))
+        except urllib.error.HTTPError as e:
+            WIKI_STATS[str(e.code)] = WIKI_STATS.get(str(e.code), 0) + 1
+            if e.code in (429, 503):
+                time.sleep(2.0 * (attempt + 1))
+                continue
+            return None
+        except Exception as e:
+            WIKI_STATS[type(e).__name__] = WIKI_STATS.get(type(e).__name__, 0) + 1
+            time.sleep(1.0)
+    return None
 
 
 def build_wiki(base):
@@ -1144,8 +1168,9 @@ def build_wiki(base):
         return None
 
     from concurrent.futures import ThreadPoolExecutor
-    with ThreadPoolExecutor(6) as pool:
+    with ThreadPoolExecutor(3) as pool:
         got = [r for r in pool.map(one, todo) if r]
+    log(f"  wiki HTTP results: {WIKI_STATS}")
     d = os.path.join(base, "wiki")
     os.makedirs(d, exist_ok=True)
     with open(os.path.join(d, "about.tsv"), "w", encoding="utf-8") as f:

@@ -278,11 +278,12 @@ object CatalogMoons {
         }
         val planets = all.filter { it.parent?.id == "sol:sun" }.associateBy { it.name.lowercase(Locale.US) }
         val existing = all.associateBy { it.name.lowercase(Locale.US) }
+        val added = HashSet<String>()
         for (p in rows) {
             if (p.size < 13) continue
             val planet = planets[p[0].lowercase(Locale.US)] ?: continue
             val name = p[1].trim()
-            if (name.isEmpty()) continue
+            if (name.isEmpty() || !added.add(name.lowercase(Locale.US))) continue
             val aKm = p[2].toDoubleOrNull() ?: continue
             val e = (p[3].toDoubleOrNull() ?: 0.0).coerceIn(0.0, 0.95)
             val w = Math.toRadians(p[4].toDoubleOrNull() ?: 0.0)
@@ -306,8 +307,9 @@ object CatalogMoons {
                 frame.rotate(Astro.orbitToPlane(a, e, inc, w, node, m))
             }
             val known = existing[name.lowercase(Locale.US)]
-            if (known != null && known.parent == planet) {
-                known.relOverride = fn
+            if (known != null) {
+                // Our Moon keeps its own, more accurate lunar theory.
+                if (known.parent == planet && known.id != "sol:moon") known.relOverride = fn
                 continue
             }
             val id = "sol:moon:" + name.lowercase(Locale.US).replace(' ', '_')
@@ -330,13 +332,18 @@ object CatalogMoons {
     /** JPL epochs look like "2000 Jan. 1.50 TT" or a Julian date; unknown formats use J2000. */
     private fun parseEpoch(s: String): Double {
         s.trim().toDoubleOrNull()?.let { if (it > 2_000_000) return it }
+        Regex("""(\d{4})-(\d{2})-(\d{2}(?:\.\d+)?)""").find(s)?.let { iso ->
+            return julian(iso.groupValues[1].toInt(), iso.groupValues[2].toInt(), iso.groupValues[3].toDouble())
+        }
         val m = Regex("""(\d{4})\s+([A-Za-z]{3})[a-z.]*\s+([\d.]+)""").find(s) ?: return Astro.J2000
         val months = listOf("jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec")
         val mon = months.indexOf(m.groupValues[2].lowercase(Locale.US)) + 1
         if (mon == 0) return Astro.J2000
-        val y = m.groupValues[1].toInt()
-        val day = m.groupValues[3].toDouble()
-        // Julian date from a calendar date (Meeus).
+        return julian(m.groupValues[1].toInt(), mon, m.groupValues[3].toDouble())
+    }
+
+    /** Julian date from a calendar date (Meeus). */
+    private fun julian(y: Int, mon: Int, day: Double): Double {
         var yy = y; var mm = mon
         if (mm <= 2) { yy -= 1; mm += 12 }
         val a = yy / 100
