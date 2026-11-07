@@ -212,9 +212,17 @@ class UniverseRenderer(private val context: Context, private val engine: Engine)
         val flying = engine.camera.isFlying
         val date = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm", java.util.Locale.US)
             .format(java.util.Date(com.emotionalleaves.universe.core.Astro.epochMillis(frame.jd)))
-        val rate = engine.rateLabel()
+        val rate = engine.rateLabel() + if (!engine.paused && engine.timeRate == 1.0 &&
+            kotlin.math.abs(frame.jd - com.emotionalleaves.universe.core.Astro.julianDate(System.currentTimeMillis())) > 0.01) " · not now" else ""
         val crumb = engine.world.breadcrumb(frame.camPos, target)
         val canLand = engine.canLand(sel)
+        val w = engine.world
+        val loading = when {
+            w.realStars == null && !w.starsFailed -> "Loading stars…"
+            w.galaxies.size <= 1 -> "Loading galaxies…"
+            w.cosmicWeb == null -> "Building the cosmic web…"
+            else -> ""
+        }
         Hud.post {
             Hud.selectedCanLand = canLand
             Hud.breadcrumb = crumb
@@ -227,6 +235,8 @@ class UniverseRenderer(private val context: Context, private val engine: Engine)
             Hud.selectedSubtitle = sel?.subtitle ?: ""
             Hud.selectedSource = sel?.source?.label ?: ""
             Hud.selectedDistance = selDist?.let { Units.formatDistance(it) } ?: ""
+            Hud.selectedLight = selDist?.let { if (it > 3e8) "light takes ${Units.lightTime(it)}" else "" } ?: ""
+            Hud.loading = loading
             Hud.selectedFacts = selFacts
             Hud.scaleBarText = Units.formatDistance(barLen)
             Hud.scaleBarFraction = barFraction

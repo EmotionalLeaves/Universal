@@ -68,6 +68,18 @@ fun TopStatus(modifier: Modifier = Modifier) {
 }
 
 @Composable
+fun LoadingChip(modifier: Modifier = Modifier) {
+    if (Hud.loading.isEmpty()) return
+    Text(
+        Hud.loading,
+        modifier = modifier
+            .background(Color(0x99000000), RoundedCornerShape(10.dp))
+            .padding(horizontal = 10.dp, vertical = 4.dp),
+        color = Accent, fontSize = 11.sp,
+    )
+}
+
+@Composable
 fun StatsBadge(modifier: Modifier = Modifier) {
     Text(
         "${Hud.fps} fps",
@@ -218,7 +230,10 @@ fun InfoCard(engine: Engine, modifier: Modifier = Modifier) {
             )
         }
         if (Hud.selectedDistance.isNotEmpty()) {
-            Text("${Hud.selectedDistance} from you", color = TextDim, fontSize = 12.sp, modifier = Modifier.padding(top = 4.dp))
+            Text(
+                "${Hud.selectedDistance} from you" + if (Hud.selectedLight.isNotEmpty()) " · ${Hud.selectedLight}" else "",
+                color = TextDim, fontSize = 12.sp, modifier = Modifier.padding(top = 4.dp),
+            )
         }
         val facts = Hud.selectedFacts
         if (facts.isNotEmpty()) {

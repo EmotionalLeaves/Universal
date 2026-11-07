@@ -41,6 +41,7 @@ fun UniverseScreen(engine: Engine, version: String, view: UniverseView) {
         Box(Modifier.fillMaxSize().safeDrawingPadding()) {
             Column(Modifier.align(Alignment.TopStart).padding(8.dp).fillMaxWidth(0.58f)) {
                 TopStatus()
+                LoadingChip(Modifier.padding(top = 4.dp))
                 if (SettingsUi.showStats) StatsBadge(Modifier.padding(top = 4.dp))
             }
             ZoomSlider(

@@ -45,6 +45,22 @@ object Units {
         return "$s $unit"
     }
 
+    /** How long light takes to cross [m] metres, in words ("8.3 minutes", "2.5 million years"). */
+    fun lightTime(m: Double): String {
+        val s = m / 299_792_458.0
+        val years = s / 31_557_600.0
+        return when {
+            s < 1 -> String.format(Locale.US, "%.2f seconds", s)
+            s < 120 -> String.format(Locale.US, "%.0f seconds", s)
+            s < 7200 -> String.format(Locale.US, "%.1f minutes", s / 60)
+            s < 172_800 -> String.format(Locale.US, "%.1f hours", s / 3600)
+            years < 2 -> String.format(Locale.US, "%.0f days", s / 86400)
+            years < 1e6 -> String.format(Locale.US, "%,.0f years", years)
+            years < 1e9 -> String.format(Locale.US, "%.1f million years", years / 1e6)
+            else -> String.format(Locale.US, "%.1f billion years", years / 1e9)
+        }
+    }
+
     /** A "nice" scale-bar length (1, 2 or 5 x 10^n) not longer than [maxM]. */
     fun niceLength(maxM: Double): Double {
         if (maxM <= 0) return 1.0
