@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="space_black">#FF000000</color>
+    <color name="icon_background">#FF05060F</color>
+
+    <style name="Theme.Universe" parent="@android:style/Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/space_black</item>
+        <item name="android:statusBarColor">@color/space_black</item>
+        <item name="android:navigationBarColor">@color/space_black</item>
+    </style>
+</resources>
