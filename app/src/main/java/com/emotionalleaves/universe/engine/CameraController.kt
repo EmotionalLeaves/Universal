@@ -52,13 +52,18 @@ class CameraController {
     fun up(): Vec3d = orientation.rotate(Vec3d.Y)
     fun right(): Vec3d = orientation.rotate(Vec3d.X)
 
+    /** Stars, planets and moons have a surface; galaxies, nebulae and the universe can be entered. */
+    private fun solid(t: Body) = t.kind == Kind.STAR || t.kind == Kind.PLANET || t.kind == Kind.MOON ||
+        t.kind == Kind.DWARF_PLANET || (t.kind == Kind.MARKER && t.radius > 0)
+
     fun minDistance(): Double {
         val t = target ?: return 0.05
+        if (!solid(t)) return 0.05
         return max(t.radius + surfaceExtra + 1.7, 0.05)
     }
 
     /** Radius of the ground under the camera (0 when orbiting empty space or a point). */
-    fun surfaceRadius(): Double = target?.let { it.radius + surfaceExtra } ?: 0.0
+    fun surfaceRadius(): Double = target?.let { if (solid(it)) it.radius + surfaceExtra else 0.0 } ?: 0.0
 
     /** Height above the ground (or distance to the focus point). */
     fun altitude(): Double = distance - surfaceRadius()

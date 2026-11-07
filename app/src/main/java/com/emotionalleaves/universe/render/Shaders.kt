@@ -144,6 +144,7 @@ uniform float uSeed;
 uniform vec3 uLightDir;    // direction from surface toward the light
 uniform float uAmbient;
 uniform int uAlphaMode;    // 0 opaque, 1 clouds (alpha from texture alpha or brightness)
+uniform float uOpacity;    // style 7 (sky maps): overall opacity
 out vec4 oColor;
 
 vec3 procedural(vec3 p) {
@@ -187,6 +188,12 @@ void main() {
         float a = t.a < 0.999 ? t.a : lum;
         float d = max(dot(n, normalize(uLightDir)), 0.0);
         oColor = vec4(vec3(uAmbient + (1.0 - uAmbient) * d), a * 0.95);
+        writeDepth();
+        return;
+    }
+    if (uStyle == 7) {
+        vec3 sky = uHasTex == 1 ? texture(uTex, vUv).rgb : mix(uColorA, uColorB, fbm(normalize(vLocal) * 8.0));
+        oColor = vec4(sky, uOpacity);
         writeDepth();
         return;
     }

@@ -25,6 +25,7 @@ class Material(
         const val OCEAN = 4
         const val STAR = 5
         const val PLAIN = 6
+        const val SKY = 7
 
         fun rgb(c: Int) = floatArrayOf(((c shr 16) and 255) / 255f, ((c shr 8) and 255) / 255f, (c and 255) / 255f)
     }
@@ -92,6 +93,7 @@ class BodyDrawer(private val programs: Programs) {
         frame: Frame, rel: Vec3d, radius: Double, rotation: Quatd, m: Material, lightDir: Vec3d,
         mesh: Mesh = programs.sphereMesh,
         alphaMode: Int = 0,
+        opacity: Float = 1f,
     ) {
         val p = programs.sphere
         p.use()
@@ -123,6 +125,7 @@ class BodyDrawer(private val programs: Programs) {
         p.set3f("uLightDir", l.x.toFloat(), l.y.toFloat(), l.z.toFloat())
         p.set1f("uAmbient", m.ambient)
         p.set1i("uAlphaMode", alphaMode)
+        p.set1f("uOpacity", opacity)
         mesh.draw()
         GLES30.glActiveTexture(GLES30.GL_TEXTURE0)
     }

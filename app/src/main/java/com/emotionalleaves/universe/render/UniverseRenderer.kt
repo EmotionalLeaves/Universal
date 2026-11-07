@@ -39,8 +39,9 @@ class UniverseRenderer(private val context: Context, private val engine: Engine)
     private val galaxyLayer = GalaxyLayer()
     private val deepSkyLayer = DeepSkyLayer()
     private val galaxyCatalogLayer = GalaxyCatalogLayer()
+    private val cosmicLayer = CosmicLayer()
     private val layers: List<Layer> = listOf(
-        galaxyCatalogLayer, galaxyLayer, deepSkyLayer, starLayer, systemLayer, solarLayer, terrainLayer, testLayer,
+        cosmicLayer, galaxyCatalogLayer, galaxyLayer, deepSkyLayer, starLayer, systemLayer, solarLayer, terrainLayer, testLayer,
     )
 
     override fun onSurfaceCreated(gl: GL10?, config: EGLConfig?) {
@@ -100,6 +101,7 @@ class UniverseRenderer(private val context: Context, private val engine: Engine)
         galaxyLayer.daylight = terrainLayer.daylight
         deepSkyLayer.daylight = terrainLayer.daylight
         galaxyCatalogLayer.daylight = terrainLayer.daylight
+        cosmicLayer.daylight = terrainLayer.daylight
         galaxyLayer.particles = when (engine.settings.quality) { 0 -> 20_000; 2 -> 70_000; else -> 40_000 }
         solarLayer.showOrbits = engine.settings.showOrbits
         systemLayer.showOrbits = engine.settings.showOrbits

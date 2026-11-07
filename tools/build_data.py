@@ -582,17 +582,22 @@ def make_galaxy(ra, de, d_mpc, g, name, pgc, src):
 
 
 def build_glade_pack(packs):
-    """Large galaxy catalogue pack from GLADE+ via VizieR, in declination strips."""
+    """
+    Large galaxy pack from GLADE+ (VizieR VII/291), in declination strips.
+    Kept: every galaxy within 250 Mpc, then a thinning sample out to 2,000 Mpc so the pack stays phone-sized.
+    Format: 'UXGL', int32 version=2, then per galaxy float32 x, y, z (Mpc, equatorial), float32 absolute B mag.
+    """
     log("Galaxies pack: GLADE+ (VizieR VII/291)")
     os.makedirs(os.path.join(packs, "galaxies-glade"), exist_ok=True)
     out_path = os.path.join(packs, "galaxies-glade", "glade.bin")
     count = 0
+    seen = 0
     cols_logged = False
     with open(out_path, "wb") as f:
         f.write(b"UXGL")
-        f.write(struct.pack("<i", 1))
+        f.write(struct.pack("<i", 2))
         for dlo in range(-90, 90, 10):
-            extra = f"&-out=_RA,_DE,dL,Bmag,Kmag&DEJ2000={dlo}..{dlo + 10}&dL=0..3000"
+            extra = f"&-out=_RA,_DE,dL,Bmag,Kmag&DEJ2000={dlo}..{dlo + 10}&dL=0..2000"
             try:
                 header, data = vizier_tsv(GLADE_SOURCE, extra, timeout=1800)
             except Exception as e:
@@ -602,22 +607,30 @@ def build_glade_pack(packs):
                 log(f"  GLADE+ columns: {header}")
                 cols_logged = True
             idx = {h.strip(): i for i, h in enumerate(header)}
+            ira = idx.get("_RAJ2000", idx.get("_RA"))
+            ide = idx.get("_DEJ2000", idx.get("_DE"))
             for r in data:
                 try:
-                    ra = float(r[idx.get("_RAJ2000", idx.get("_RA"))]); de = float(r[idx.get("_DEJ2000", idx.get("_DE"))]); d = float(r[idx["dL"]])
+                    ra = float(r[ira]); de = float(r[ide]); d = float(r[idx["dL"]])
                 except Exception:
                     continue
                 if d <= 0:
                     continue
+                seen += 1
+                if d > 250:
+                    keep = (250.0 / d) ** 1.6
+                    h = zlib.crc32(f"{ra:.5f}{de:.5f}".encode()) / 4294967295.0
+                    if h > keep:
+                        continue
                 bm = fnum(r[idx["Bmag"]]) if "Bmag" in idx else None
-                absm = bm - 5 * math.log10(d * 1e6) + 5 if bm is not None else -20.0
+                absm = bm - 5 * math.log10(d * 1e6) + 5 if bm is not None else -20.5
                 cra, sra = math.cos(math.radians(ra)), math.sin(math.radians(ra))
                 cde, sde = math.cos(math.radians(de)), math.sin(math.radians(de))
                 f.write(struct.pack("<ffff", d * cde * cra, d * cde * sra, d * sde, absm))
                 count += 1
-            log(f"  strip {dlo}..{dlo + 10}: total {count}")
-    log(f"Galaxies pack: {count} GLADE+ galaxies ({os.path.getsize(out_path) / 1e6:.1f} MB)")
-    return {"glade_galaxies": count}
+            log(f"  strip {dlo}..{dlo + 10}: kept {count} of {seen}")
+    log(f"Galaxies pack: {count} GLADE+ galaxies kept of {seen} ({os.path.getsize(out_path) / 1e6:.1f} MB)")
+    return {"glade_galaxies": count, "glade_seen": seen}
 
 
 # ----------------------------------------------------------------------------- textures, heights, CMB

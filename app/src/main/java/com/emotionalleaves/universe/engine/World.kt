@@ -39,7 +39,33 @@ class World(private val engine: Engine) {
     private var genGalaxy: String? = null
     private var genTimer = 0.0
 
-    fun galaxyById(id: String): GalaxyBody? = galaxyIndex[id]
+    fun galaxyById(id: String): GalaxyBody? = galaxyIndex[id] ?: (if (id.startsWith("gal:web")) find(id) as? GalaxyBody else null)
+
+    val universe = UniverseBody()
+
+    /** Generated large-scale structure beyond the catalogues. */
+    @Volatile var cosmicWeb: CosmicWebData? = null
+        private set
+    /** Optional GLADE+ pack (millions of real galaxies). */
+    @Volatile var glade: GladePack? = null
+        private set
+
+    /** Adds a generated galaxy (from the cosmic web) so it can be entered like a real one. */
+    fun registerExtraGalaxy(g: GalaxyBody) {
+        if (galaxyIndex.containsKey(g.id)) return
+        galaxyIndex[g.id] = g
+        galaxies = galaxies + g
+    }
+
+    /** (Re)loads the GLADE+ pack and regenerates the cosmic web beyond whatever real data we have. */
+    fun reloadLargeScale() {
+        loader.execute {
+            val maxPts = when (engine.settings.quality) { 0 -> 400_000; 2 -> 3_000_000; else -> 1_200_000 }
+            glade = GladePack.load(engine.context, maxPts)
+            val inner = glade?.let { maxOf(it.maxMpc, 300.0) } ?: 300.0
+            if (cosmicWeb?.innerMpc != inner) cosmicWeb = CosmicWeb.generate(inner)
+        }
+    }
 
     fun registerGalaxies(list: List<GalaxyBody>) {
         for (g in list) galaxyIndex[g.id] = g
@@ -143,6 +169,8 @@ class World(private val engine: Engine) {
         extraStarNear = { cam -> nearestGenerated(cam, 0.1) }
         for (b in solar) byId[b.id] = b
         for (b in testBodies()) byId[b.id] = b
+        byId[universe.id] = universe
+        byId[milkyWay.id] = milkyWay
         loader.execute {
             try {
                 realStars = RealStars.load(engine.context)
@@ -160,6 +188,7 @@ class World(private val engine: Engine) {
             } catch (e: Throwable) {
                 android.util.Log.w("World", "Galaxies failed: $e")
             }
+            reloadLargeScale()
             try {
                 val list = DsoBody.load(engine.context)
                 for (d in list) byIdConcurrent[d.id] = d
@@ -262,6 +291,13 @@ class World(private val engine: Engine) {
     fun find(id: String): Body? {
         byId[id]?.let { return it }
         byIdConcurrent[id]?.let { return it }
+        if (id.startsWith("gal:web")) {
+            galaxyIndex[id]?.let { return it }
+            val i = id.removePrefix("gal:web").toIntOrNull() ?: return null
+            val web = cosmicWeb ?: return null
+            if (i !in 0 until web.count) return null
+            return web.galaxy(i).also { registerExtraGalaxy(it) }
+        }
         if (id.startsWith("gal:")) return galaxyIndex[id]
         if (id.startsWith("gs:") && !id.contains("/")) return StarField.fromId(id) { galaxyIndex[it] }
         if (id.startsWith("hyg:") && !id.contains("/")) return id.removePrefix("hyg:").toIntOrNull()?.let { realStars?.body(it) }

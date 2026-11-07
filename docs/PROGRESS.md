@@ -143,7 +143,7 @@ Phone checklist:
 
 ## Round 8 — The Milky Way
 
-**Status:** pushed.
+**Status:** build 7 green.
 
 Finished:
 - `engine/Galaxy.kt`: a density model of the Milky Way in stars/pc³: exponential thin + thick disk (scale length 2.6 kpc, height 300 pc), four logarithmic arms (12° pitch), a central bar at 27°, bulge and halo. Integrates to about 1.9 × 10¹¹ stars. Oriented with the real galactic pole and centre (RA 266.4°, Dec −29.0°, 26,700 ly away).
@@ -158,7 +158,7 @@ Phone checklist:
 
 ## Round 9 — Nebulae and clusters
 
-**Status:** pushed.
+**Status:** build 8 green.
 
 Finished:
 - 1,365 nebulae and clusters from OpenNGC at their real sky positions and angular sizes (dark nebulae skipped: an additive renderer can't darken).
@@ -185,3 +185,18 @@ Finished:
 Phone checklist:
 - [ ] You can fly into Andromeda and land on a generated planet there
 - [ ] Leaving and coming back shows the same planet
+
+## Round 11 — The whole universe
+
+**Status:** pushed.
+
+Finished:
+- Generated cosmic web (`engine/CosmicWeb.kt`): 220,000 galaxies placed along a seeded ridged-noise filament field (~160 Mpc structure), from where the real catalogues end out to the edge of the observable universe (14 Gpc ≈ 46 billion ly). Fixed count and seed, so ids are stable. Any of them can be tapped and entered (generated names such as "GX-ED98-0123").
+- GLADE+ pack support: up to millions of real galaxies as points (Low 0.4 M, Medium 1.2 M, High 3 M drawn). When the pack is installed, generated structure starts beyond its 2,000 Mpc reach (real wins).
+- The Planck CMB map (SMICA) as the outer shell at 46 billion ly, fading in once you zoom out to cosmic scales; seen from outside, the observable universe is a ball wrapped in it.
+- Galaxy points use a zoom-dependent exposure, so the large-scale structure stays visible as clouds and filaments when zoomed out.
+- "Observable universe" is a searchable object you can fly out to.
+
+Phone checklist:
+- [ ] Zoomed all the way out, the observable universe is a ball with the glowing shell
+- [ ] Frame rate stays above 30 the whole way
