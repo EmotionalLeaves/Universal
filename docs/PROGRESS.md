@@ -218,7 +218,7 @@ Phone checklist:
 
 ## Round 13 — Finding your way
 
-**Status:** pushed.
+**Status:** green (in build 13).
 
 Finished:
 - Search (menu → Search): planets and moons, named stars and Bayer designations, HIP/HD numbers ("HIP 32349"), 6,400+ exoplanets and their host stars ("Kepler-22 b"), Messier/NGC objects and common names ("Orion Nebula", "M31"), 10,000+ named galaxies, PGC numbers, and any generated object you have visited or bookmarked (rule 6). Ranked exact → prefix → word → substring.
@@ -232,7 +232,7 @@ Phone checklist:
 
 ## Round 14 — Polish and performance
 
-**Status:** pushed.
+**Status:** build 13 green.
 
 Finished:
 - Performance: catalogue tiles merged into 1,600 pc super-tiles (HYG: ~600 draw calls → a few dozen; AT-HYG pack: ~10,600 → ~100). Galaxy shape selection computed once per frame.
@@ -246,3 +246,24 @@ Phone checklist:
 - [ ] 30 minutes of exploring with no crash
 - [ ] The phone doesn't get hot on Medium
 - [ ] Someone else can use the app without you explaining it
+
+## Improvement passes (after Round 14)
+
+| Pass | Focus | What changed |
+| --- | --- | --- |
+| 1 | Bugs | Walking uphill no longer gets stuck (camera lifts over terrain instead of undoing the move); no ground on the Sun, gas/ice giants or under Venus' clouds; rotation speed inside galaxies fixed; the Milky Way no longer shows as a blazing point in Sagittarius; labels no longer block taps; lower memory for big packs (`largeHeap`, lazy id index). |
+| 2 | Visuals | Galaxies drawn with surface brightness relative to the current exposure (Andromeda is a faint glow from Earth, a bright spiral up close); nebulae dimmed by their real catalogue magnitude, brightening as you approach; the Milky Way stays visible as a whole from outside. |
+| 3 | UX | Info card: Land (stand on any rocky world), Out ↑ (zoom out to what contains it: moon → planet → star → galaxy → universe), ★ bookmark, collapsible facts. Quick 🔍 search button. Status panel moved left so it never collides with the buttons. |
+| 4 | Navigation | Flights to planets and moons swing round to arrive on the sunlit side. An arrow at the screen edge points to the selected object when it is off screen or behind you. |
+| 5 | Content | Generated moons (1–5 around giants, Roman numerals, real orbital periods from the planet's mass, kept inside the Hill sphere), rings on ~30 % of generated giants, moon orbits and labels, breadcrumb includes the planet. |
+| 6 | Performance | Galaxy glow blob size capped by quality (the biggest GPU cost from inside the Milky Way); stars and the cosmic web skip drawing when they can't be visible. |
+| 7 | Information | "Light takes 8.6 years" next to distances; "Loading stars / galaxies / cosmic web" chip; "not now" hint when simulated time differs from the clock. |
+| 8 | Robustness | A layer that throws is logged and skipped instead of crashing; Settings shows the last problem with Copy; Back closes panels, then clears the selection; search index refreshes as catalogues finish loading. |
+| 9 | Visuals + safety | Diffraction spikes on the brightest stars; sun glints on Earth's oceans; removed GLSL undefined behaviour (reversed `smoothstep` edges, `pow` of negatives) that can break on some GPUs. |
+| 10 | Review | Docs (README, this file) and a full re-read of the build. |
+
+## How to test the whole thing
+
+1. Install the newest APK from Releases (it installs over older builds).
+2. First launch: 5 tips, then Earth from space at the current date and time.
+3. Work through the phone checklists above, round by round. If something fails, open Settings → Last problem → Copy report, or after a crash reopen the app and tap Copy, and paste it into a new AI session with `docs/PLAN.md`.
