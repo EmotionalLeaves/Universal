@@ -63,6 +63,9 @@ uniform float uFadeNear;   // metres: fade out points closer than this (0 = off)
 uniform float uFadeFar;    // metres: fade out points farther than this (0 = off)
 uniform float uAlpha;
 uniform float uHide;       // index of a point to hide (system star), -1 = none
+uniform float uWorldSize;  // > 0: glow mode, each point is a soft blob this many metres across
+uniform float uPxPerRad;   // pixels per radian (glow mode)
+uniform float uGlowGain;
 out vec4 vColor;
 void main() {
     vec3 p = aPos * uScale + uOffset;
@@ -71,8 +74,15 @@ void main() {
     float m = aMag + 5.0 * 0.30103 * log2(max(dpc, 1e-12)) - 5.0;
     float e = clamp(-0.4 * (m - uMagLimit), -20.0, 12.0);
     float b = exp2(e * 3.3219281);
-    float size = clamp(uSizeScale * pow(b, 0.35), uMinSize, uMaxSize);
-    float a = clamp(b, 0.0, 1.0);
+    float size;
+    float a;
+    if (uWorldSize > 0.0) {
+        size = clamp(uWorldSize / d * uPxPerRad, uMinSize, uMaxSize);
+        a = clamp(b * uGlowGain / (size * size), 0.0, 0.85);
+    } else {
+        size = clamp(uSizeScale * pow(b, 0.35), uMinSize, uMaxSize);
+        a = clamp(b, 0.0, 1.0);
+    }
     float fade = 1.0;
     if (uFadeNear > 0.0) fade *= smoothstep(uFadeNear * 0.4, uFadeNear, d);
     if (uFadeFar > 0.0) fade *= 1.0 - smoothstep(uFadeFar * 0.5, uFadeFar, d);

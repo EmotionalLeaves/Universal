@@ -25,6 +25,77 @@ class World(private val engine: Engine) {
     )
     val cubeOrientationUp: Vec3d get() = cubeDir
 
+    val milkyWay = GalaxyBody.milkyWay()
+    /** Galaxies with positions (the Milky Way first; catalogue galaxies once loaded). */
+    @Volatile var galaxies: List<GalaxyBody> = listOf(milkyWay)
+    private val galaxyIndex = java.util.concurrent.ConcurrentHashMap<String, GalaxyBody>().also { it[milkyWay.id] = milkyWay }
+
+    /** Stars generated around the camera (rule 2: never where real ones are). */
+    @Volatile var generated: GeneratedStars? = null
+        private set
+    private val genExec = java.util.concurrent.Executors.newSingleThreadExecutor()
+    @Volatile private var genBusy = false
+    private var genLocal: Vec3d? = null
+    private var genGalaxy: String? = null
+    private var genTimer = 0.0
+
+    fun galaxyById(id: String): GalaxyBody? = galaxyIndex[id]
+
+    fun registerGalaxies(list: List<GalaxyBody>) {
+        for (g in list) galaxyIndex[g.id] = g
+        galaxies = listOf(milkyWay) + list
+    }
+
+    /** The galaxy the camera is inside, if any. */
+    fun galaxyContaining(cam: UPos): GalaxyBody? {
+        var best: GalaxyBody? = null
+        var bestF = 1.5
+        for (g in galaxies) {
+            val f = (g.center - cam).length() / g.radius
+            if (f < bestF) { bestF = f; best = g }
+        }
+        return best
+    }
+
+    private fun updateGenerated(cam: UPos, dt: Double) {
+        genTimer += dt
+        if (genTimer < 0.3 || genBusy) return
+        genTimer = 0.0
+        if (!engine.settings.showGenerated) { generated = null; genGalaxy = null; return }
+        val g = galaxyContaining(cam)
+        if (g == null) { generated = null; genGalaxy = null; return }
+        val local = g.toLocal(cam)
+        val last = genLocal
+        if (genGalaxy == g.id && last != null && (local - last).length() < 4.0) return
+        genBusy = true
+        genGalaxy = g.id
+        genLocal = local
+        genExec.execute {
+            try {
+                generated = StarField.generate(g, local)
+            } catch (e: Throwable) {
+                android.util.Log.w("World", "Star generation failed: $e")
+            } finally {
+                genBusy = false
+            }
+        }
+    }
+
+    /** Nearest generated star to [cam] within [maxPc]. */
+    fun nearestGenerated(cam: UPos, maxPc: Double): StarBody? {
+        val gs = generated ?: return null
+        val rel = (cam - gs.anchor) / Units.PC
+        var best = -1
+        var bestD = maxPc * maxPc
+        val d = gs.data
+        for (i in 0 until gs.count) {
+            val dx = d[i * 7] - rel.x; val dy = d[i * 7 + 1] - rel.y; val dz = d[i * 7 + 2] - rel.z
+            val q = dx * dx + dy * dy + dz * dz
+            if (q < bestD) { bestD = q; best = i }
+        }
+        return if (best >= 0) gs.body(best) else null
+    }
+
     private val byId = HashMap<String, Body>()
     private val loader = java.util.concurrent.Executors.newSingleThreadExecutor()
 
@@ -46,6 +117,7 @@ class World(private val engine: Engine) {
     private var systemTimer = 0.0
 
     fun start() {
+        extraStarNear = { cam -> nearestGenerated(cam, 0.1) }
         for (b in solar) byId[b.id] = b
         for (b in testBodies()) byId[b.id] = b
         loader.execute {
@@ -142,6 +214,8 @@ class World(private val engine: Engine) {
     fun homeBody(): Body = earth
 
     fun update(engine: Engine, dt: Double) {
+        val cam = synchronized(engine.camera) { engine.camera.position() }
+        updateGenerated(cam, dt)
         systemTimer += dt
         if (systemTimer > 0.25) {
             systemTimer = 0.0
@@ -151,6 +225,8 @@ class World(private val engine: Engine) {
 
     fun find(id: String): Body? {
         byId[id]?.let { return it }
+        if (id.startsWith("gal:")) return galaxyIndex[id]
+        if (id.startsWith("gs:") && !id.contains("/")) return StarField.fromId(id) { galaxyIndex[it] }
         if (id.startsWith("hyg:") && !id.contains("/")) return id.removePrefix("hyg:").toIntOrNull()?.let { realStars?.body(it) }
         if (id.contains("/")) {
             val star = find(id.substringBeforeLast("/")) as? StarBody ?: return null

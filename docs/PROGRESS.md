@@ -140,3 +140,18 @@ Finished:
 Phone checklist:
 - [ ] One continuous zoom takes you from Mars orbit to the slopes of Olympus Mons
 - [ ] A generated exoplanet has terrain you can land on
+
+## Round 8 — The Milky Way
+
+**Status:** pushed.
+
+Finished:
+- `engine/Galaxy.kt`: a density model of the Milky Way in stars/pc³: exponential thin + thick disk (scale length 2.6 kpc, height 300 pc), four logarithmic arms (12° pitch), a central bar at 27°, bulge and halo. Integrates to about 1.9 × 10¹¹ stars. Oriented with the real galactic pole and centre (RA 266.4°, Dec −29.0°, 26,700 ly away).
+- Generated stars around the camera, deterministic per cell (rule 1): tier A (all stars, 10 pc cells) and tier B (luminous stars, 100 pc cells), with cells halved in dense regions so there are never more than ~40k extra points. Real stars win (rule 2): nothing generated within 25 pc of the Sun or brighter than magnitude 8 as seen from the Sun (where HYG is complete). Star mix follows the real initial mass function (rule 3): ~70 % red dwarfs, ~6 % white dwarfs, very few O/B stars.
+- Generated stars have catalogue-style names (e.g. "MW D652-11"), can be tapped, bookmarked and visited (their planets are generated too).
+- From far away the galaxy is a glow of 40,000 light samples (blue arms, yellow bulge) that fades out near you, where individual stars take over.
+- A "You are here (Sun)" label when you are far from home.
+
+Phone checklist:
+- [ ] Zooming out from the Sun shows the whole galaxy and a "You are here" marker
+- [ ] Zooming back in returns you to the same real stars

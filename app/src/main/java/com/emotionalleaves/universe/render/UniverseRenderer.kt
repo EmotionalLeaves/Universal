@@ -36,7 +36,8 @@ class UniverseRenderer(private val context: Context, private val engine: Engine)
     private val starLayer = StarLayer()
     private val systemLayer = SystemLayer()
     private val terrainLayer = TerrainLayer()
-    private val layers: List<Layer> = listOf(starLayer, systemLayer, solarLayer, terrainLayer, testLayer)
+    private val galaxyLayer = GalaxyLayer()
+    private val layers: List<Layer> = listOf(galaxyLayer, starLayer, systemLayer, solarLayer, terrainLayer, testLayer)
 
     override fun onSurfaceCreated(gl: GL10?, config: EGLConfig?) {
         textures.contextLost()
@@ -92,6 +93,8 @@ class UniverseRenderer(private val context: Context, private val engine: Engine)
 
         testLayer.enabled = engine.settings.showTestObjects
         starLayer.daylight = terrainLayer.daylight
+        galaxyLayer.daylight = terrainLayer.daylight
+        galaxyLayer.particles = when (engine.settings.quality) { 0 -> 20_000; 2 -> 70_000; else -> 40_000 }
         solarLayer.showOrbits = engine.settings.showOrbits
         systemLayer.showOrbits = engine.settings.showOrbits
         for (l in layers) l.update(frame, ctx)
@@ -150,10 +153,11 @@ class UniverseRenderer(private val context: Context, private val engine: Engine)
             if (out.size >= 40) break
             val sel = p.body == selected
             // Skip labels that would overlap a more important one.
-            val box = floatArrayOf(p.x, p.y - 16 * density, p.x + p.body.name.length * 7.5f * density, p.y)
+            val text = p.labelText ?: p.body.name
+            val box = floatArrayOf(p.x, p.y - 16 * density, p.x + text.length * 7.5f * density, p.y)
             if (!sel && taken.any { overlaps(it, box) }) continue
             taken.add(box)
-            out.add(Label(p.x, p.y, p.body.name, if (sel) 0xFFFFD27A.toInt() else p.labelColor, sel, p.pixelRadius.coerceAtMost(200f)))
+            out.add(Label(p.x, p.y, text, if (sel) 0xFFFFD27A.toInt() else p.labelColor, sel, p.pixelRadius.coerceAtMost(200f)))
         }
         overlay.labels = out
         overlay.refresh()

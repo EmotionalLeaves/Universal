@@ -14,6 +14,8 @@ class Pickable(
     val priority: Float,
     val showLabel: Boolean,
     val labelColor: Int = 0xFFE6ECFF.toInt(),
+    /** Label text if different from the body's name. */
+    val labelText: String? = null,
 )
 
 /** Shared GL resources handed to every layer. */

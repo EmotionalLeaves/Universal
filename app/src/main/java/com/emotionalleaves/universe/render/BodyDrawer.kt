@@ -190,6 +190,7 @@ class BodyDrawer(private val programs: Programs) {
     fun points(
         frame: Frame, batch: PointBatch, magLimit: Float, sizeScale: Float, alpha: Float,
         fadeNear: Double = 0.0, fadeFar: Double = 0.0, minSize: Float = 1.2f, maxSize: Float = 14f, hide: Int = -1,
+        worldSize: Double = 0.0, glowGain: Float = 1f,
     ) {
         val p = programs.points
         p.use()
@@ -206,6 +207,9 @@ class BodyDrawer(private val programs: Programs) {
         p.set1f("uFadeFar", fadeFar.toFloat())
         p.set1f("uAlpha", alpha)
         p.set1f("uHide", hide.toFloat())
+        p.set1f("uWorldSize", worldSize.toFloat())
+        p.set1f("uPxPerRad", (frame.height / frame.fovY).toFloat())
+        p.set1f("uGlowGain", glowGain)
         batch.draw()
     }
 }

@@ -189,6 +189,10 @@ class SolarSystemLayer : Layer {
             val rel = frame.rel(b.position(frame.jd))
             val s = frame.project(rel) ?: continue
             val px = frame.pixelSize(b.radius, rel.length()).toFloat()
+            if (b.kind == Kind.STAR && camFromSun > 3000 * Units.LY) {
+                out.add(Pickable(b, s.first, s.second, 8f, 10f, true, 0xFFFFD27A.toInt(), "You are here (Sun)"))
+                continue
+            }
             val label = when (b.kind) {
                 Kind.STAR -> camFromSun < 2 * Units.LY
                 Kind.PLANET -> camFromSun < 400 * Units.AU
