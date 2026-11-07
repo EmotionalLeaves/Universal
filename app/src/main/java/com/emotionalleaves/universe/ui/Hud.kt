@@ -14,6 +14,19 @@ object Hud {
     var frameMs by mutableStateOf(0f)
     var distanceText by mutableStateOf("")
     var focusName by mutableStateOf("")
+    var altitudeText by mutableStateOf("")
+
+    var selectedName by mutableStateOf("")
+    var selectedSubtitle by mutableStateOf("")
+    var selectedSource by mutableStateOf("")
+    var selectedDistance by mutableStateOf("")
+    var selectedFacts by mutableStateOf<List<Pair<String, String>>>(emptyList())
+
+    var scaleBarText by mutableStateOf("")
+    var scaleBarFraction by mutableStateOf(0.25f)
+    var zoomFraction by mutableStateOf(0.5f)
+    var sliderDragging by mutableStateOf(false)
+    var flying by mutableStateOf(false)
 
     fun post(block: () -> Unit) {
         main.post(block)

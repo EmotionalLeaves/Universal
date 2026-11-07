@@ -1,36 +1,130 @@
 package com.emotionalleaves.universe.engine
 
 import android.content.Context
+import android.os.SystemClock
 import com.emotionalleaves.universe.core.Astro
 import com.emotionalleaves.universe.core.UPos
 import com.emotionalleaves.universe.core.Units
+import com.emotionalleaves.universe.core.Vec3d
+import com.emotionalleaves.universe.render.Pickable
+import kotlin.math.hypot
+import kotlin.math.ln
+import kotlin.math.exp
 
-/** Owns the simulation state: camera, time and what is selected. Rendering lives in UniverseRenderer. */
+/** Owns the simulation state: camera, time, world and selection. Rendering lives in UniverseRenderer. */
 class Engine(val context: Context) {
     val camera = CameraController()
+    val world = World(this)
 
     /** Simulation time as a Julian date. */
     @Volatile var jd: Double = Astro.julianDate(System.currentTimeMillis())
+    /** Simulated seconds per real second. */
     @Volatile var timeRate: Double = 1.0
     @Volatile var paused: Boolean = false
 
-    /** Demo body for Round 1: one lit planet at the origin. */
-    val demoPlanet = MarkerBody("demo:planet", "Test planet", UPos.ZERO, Units.R_EARTH, "Round 1 test sphere")
+    @Volatile var selected: Body? = null
+    /** Tap targets from the last frame (written by the renderer). */
+    @Volatile var pickables: List<Pickable> = emptyList()
+
+    private val density = context.resources.displayMetrics.density
 
     init {
-        camera.jumpTo(demoPlanet, UPos.ZERO, Units.R_EARTH * 3.5)
+        world.start()
+        val home = world.homeBody()
+        camera.jumpTo(home, home.position(jd), home.viewDistance())
     }
+
+    fun nowSeconds() = SystemClock.elapsedRealtimeNanos() / 1e9
 
     fun update(dt: Double, now: Double) {
         if (!paused) jd += dt * timeRate / 86400.0
         synchronized(camera) {
+            val before = camera.snapshot()
             camera.update(dt, now) { it.position(jd) }
+            // Never let the camera end up inside a planet: undo the move instead.
+            val cam = camera.position()
+            for (b in world.solidBodiesNear(cam, jd)) {
+                val c = b.position(jd)
+                val minR = b.radius + world.surfaceHeight(b, cam - c) + 0.3
+                if ((cam - c).length() < minR && !camera.isFlying) {
+                    camera.restore(before)
+                    break
+                }
+            }
         }
+        world.update(this)
     }
 
     fun onUserInteraction() {}
 
-    fun onTap(x: Float, y: Float) {}
+    /** Single tap: select what is under the finger (or clear the selection). */
+    fun onTap(x: Float, y: Float) {
+        selected = pick(x, y)?.body
+    }
 
-    fun onDoubleTap(x: Float, y: Float) {}
+    /** Double tap: fly to what is under the finger. */
+    fun onDoubleTap(x: Float, y: Float) {
+        val p = pick(x, y) ?: return
+        selected = p.body
+        flyTo(p.body)
+    }
+
+    fun pick(x: Float, y: Float): Pickable? {
+        val reach = 36f * density
+        var best: Pickable? = null
+        var bestScore = Double.MAX_VALUE
+        for (p in pickables) {
+            val d = hypot((p.x - x).toDouble(), (p.y - y).toDouble())
+            val edge = (d - p.pixelRadius).coerceAtLeast(0.0)
+            if (edge > reach) continue
+            val score = edge - p.priority * 4.0
+            if (score < bestScore) { bestScore = score; best = p }
+        }
+        return best
+    }
+
+    fun flyTo(body: Body) {
+        synchronized(camera) {
+            camera.flyTo(body, body.position(jd), body.viewDistance(), nowSeconds())
+        }
+    }
+
+    fun flyToSelected() {
+        selected?.let { flyTo(it) }
+    }
+
+    fun clearSelection() {
+        selected = null
+    }
+
+    /** Zoom slider: 0 = closest possible, 1 = whole universe. */
+    fun zoomFraction(): Float = synchronized(camera) {
+        val lo = ln(camera.minDistance()); val hi = ln(camera.maxDistance())
+        ((ln(camera.distance) - lo) / (hi - lo)).toFloat().coerceIn(0f, 1f)
+    }
+
+    fun setZoomFraction(f: Float) {
+        synchronized(camera) {
+            val lo = ln(camera.minDistance()); val hi = ln(camera.maxDistance())
+            camera.cancelFlight()
+            camera.setDistance(exp(lo + (hi - lo) * f.coerceIn(0f, 1f)))
+        }
+    }
+
+    /** Returns to the default view. */
+    fun goHome() {
+        val home = world.homeBody()
+        selected = home
+        flyTo(home)
+    }
+
+    fun distanceFromCamera(body: Body): Double = synchronized(camera) {
+        (body.position(jd) - camera.position()).length()
+    }
+
+    companion object {
+        val TEN_GLY = 1e10 * Units.LY
+        fun direction(raDeg: Double, decDeg: Double): Vec3d = Vec3d.fromRaDec(raDeg, decDeg)
+        val ORIGIN = UPos.ZERO
+    }
 }

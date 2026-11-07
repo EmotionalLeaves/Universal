@@ -6,29 +6,42 @@ import android.opengl.GLSurfaceView
 import android.os.SystemClock
 import com.emotionalleaves.universe.core.Mat4
 import com.emotionalleaves.universe.core.Quatd
-import com.emotionalleaves.universe.core.Rng
 import com.emotionalleaves.universe.core.UPos
 import com.emotionalleaves.universe.core.Units
-import com.emotionalleaves.universe.core.Vec3d
+import com.emotionalleaves.universe.engine.Body
 import com.emotionalleaves.universe.engine.Engine
 import com.emotionalleaves.universe.ui.Hud
+import com.emotionalleaves.universe.ui.Label
+import com.emotionalleaves.universe.ui.LabelOverlay
 import javax.microedition.khronos.egl.EGLConfig
 import javax.microedition.khronos.opengles.GL10
+import kotlin.math.tan
 
 class UniverseRenderer(private val context: Context, private val engine: Engine) : GLSurfaceView.Renderer {
-    private lateinit var programs: Programs
+    private var rc: RenderContext? = null
+    private val textures = Textures(context)
     private var width = 1
     private var height = 1
     private var lastTime = 0.0
     private var frames = 0
     private var fpsTimer = 0.0
     private var frameTimeSum = 0.0
+    private var hudTimer = 0.0
 
-    private var backgroundStars: PointBatch? = null
+    /** Where labels are drawn (set by the UI). */
+    @Volatile var labelOverlay: LabelOverlay? = null
+
+    private val testLayer = TestLayer()
+    private var background: PointBatch? = null
+    private val layers: List<Layer> = listOf(testLayer)
 
     override fun onSurfaceCreated(gl: GL10?, config: EGLConfig?) {
-        programs = Programs()
-        backgroundStars = buildBackgroundStars()
+        textures.contextLost()
+        val programs = Programs()
+        val ctx = RenderContext(context, engine, programs, BodyDrawer(programs), textures)
+        rc = ctx
+        background = TestLayer.backgroundStars()
+        for (l in layers) l.init(ctx)
         lastTime = now()
     }
 
@@ -39,19 +52,23 @@ class UniverseRenderer(private val context: Context, private val engine: Engine)
     }
 
     override fun onDrawFrame(gl: GL10?) {
+        val ctx = rc ?: return
         val t0 = now()
         val dt = (t0 - lastTime).coerceIn(0.0, 0.1)
         lastTime = t0
         engine.update(dt, t0)
+        textures.pump()
 
         val cam = engine.camera
         val camPos: UPos
         val orientation: Quatd
         val focusDist: Double
+        val target: Body?
         synchronized(cam) {
             camPos = cam.position()
             orientation = cam.orientation
             focusDist = cam.distance
+            target = cam.target
         }
         val fovY = Math.toRadians(60.0)
         val proj = Mat4.perspectiveInfinite(fovY, width.toDouble() / height, 0.01)
@@ -63,94 +80,87 @@ class UniverseRenderer(private val context: Context, private val engine: Engine)
         GLES30.glDepthMask(true)
         GLES30.glClear(GLES30.GL_COLOR_BUFFER_BIT or GLES30.GL_DEPTH_BUFFER_BIT)
 
-        drawPoints(frame)
-        drawDemoPlanet(frame)
+        for (l in layers) l.update(frame, ctx)
+        for (l in layers) l.drawOpaque(frame, ctx)
+        ctx.drawer.beginAdditive()
+        background?.let { ctx.drawer.points(frame, it, 6.5f, 3f, 1f, minSize = 1.5f, maxSize = 9f) }
+        ctx.drawer.end()
+        for (l in layers) l.drawTransparent(frame, ctx)
 
-        // Stats
+        // Tap targets and labels
+        val picks = ArrayList<Pickable>(256)
+        for (l in layers) l.collect(frame, ctx, picks)
+        engine.pickables = picks
+        publishLabels(picks)
+
+        // Stats and HUD (a few times a second)
         frames++
         frameTimeSum += now() - t0
         fpsTimer += dt
+        hudTimer += dt
         if (fpsTimer >= 0.5) {
             val fps = (frames / fpsTimer).toInt()
             val ms = (frameTimeSum / frames * 1000).toFloat()
-            val distText = Units.formatDistance(focusDist)
-            Hud.post {
-                Hud.fps = fps
-                Hud.frameMs = ms
-                Hud.distanceText = distText
-            }
+            Hud.post { Hud.fps = fps; Hud.frameMs = ms }
             frames = 0; fpsTimer = 0.0; frameTimeSum = 0.0
         }
-    }
-
-    private fun drawPoints(frame: Frame) {
-        val batch = backgroundStars ?: return
-        GLES30.glEnable(GLES30.GL_DEPTH_TEST)
-        GLES30.glDepthMask(false)
-        GLES30.glEnable(GLES30.GL_BLEND)
-        GLES30.glBlendFunc(GLES30.GL_ONE, GLES30.GL_ONE)
-        val p = programs.points
-        p.use()
-        p.setMat4("uViewProj", frame.viewProj)
-        p.set1f("uLogF", frame.logF)
-        val off = frame.rel(batch.anchor)
-        p.set3f("uOffset", off.x.toFloat(), off.y.toFloat(), off.z.toFloat())
-        p.set1f("uScale", batch.unit.toFloat())
-        p.set1f("uMagLimit", 6.5f)
-        p.set1f("uSizeScale", 3.0f)
-        p.set1f("uMinSize", 1.5f)
-        p.set1f("uMaxSize", 9f)
-        p.set1f("uFadeNear", 0f)
-        p.set1f("uFadeFar", 0f)
-        p.set1f("uAlpha", 1f)
-        p.set1f("uHide", -1f)
-        batch.draw()
-        GLES30.glDepthMask(true)
-        GLES30.glDisable(GLES30.GL_BLEND)
-    }
-
-    private fun drawDemoPlanet(frame: Frame) {
-        val body = engine.demoPlanet
-        val rel = frame.rel(body.position(frame.jd))
-        GLES30.glEnable(GLES30.GL_DEPTH_TEST)
-        GLES30.glEnable(GLES30.GL_CULL_FACE)
-        GLES30.glCullFace(GLES30.GL_BACK)
-        val p = programs.sphere
-        p.use()
-        p.setMat4("uViewProj", frame.viewProj)
-        p.set1f("uLogF", frame.logF)
-        val spin = frame.time * 0.05
-        val rot = Quatd.axisAngle(Vec3d.Z, spin)
-        p.setMat4("uModel", Mat4.model(rot, body.radius, rel))
-        p.set1i("uHasTex", 0)
-        p.set1i("uHasNight", 0)
-        p.set1i("uStyle", 4)
-        p.set3f("uColorA", 0.08f, 0.22f, 0.5f)
-        p.set3f("uColorB", 0.25f, 0.45f, 0.18f)
-        p.set3f("uColorC", 0.6f, 0.55f, 0.45f)
-        p.set1f("uSeed", 3.7f)
-        val light = Vec3d(1.0, 0.6, 0.4).normalized()
-        p.set3f("uLightDir", light.x.toFloat(), light.y.toFloat(), light.z.toFloat())
-        p.set1f("uAmbient", 0.06f)
-        programs.sphereMesh.draw()
-        GLES30.glDisable(GLES30.GL_CULL_FACE)
-    }
-
-    /** A sprinkle of distant stars so you can see the view turning (replaced by real stars in Round 5). */
-    private fun buildBackgroundStars(): PointBatch {
-        val r = Rng(42)
-        val n = 6000
-        val data = FloatArray(n * 7)
-        for (i in 0 until n) {
-            val v = r.unitVector() * 1000.0 // 1000 pc away
-            val mag = (-1.0 + 7.0 * Math.pow(r.nextDouble(), 0.4)).toFloat()
-            data[i * 7] = v.x.toFloat(); data[i * 7 + 1] = v.y.toFloat(); data[i * 7 + 2] = v.z.toFloat()
-            val warm = r.nextDouble().toFloat()
-            data[i * 7 + 3] = 0.8f + 0.2f * warm; data[i * 7 + 4] = 0.85f; data[i * 7 + 5] = 1f - 0.25f * warm
-            // absolute magnitude chosen so apparent magnitude from 1000 pc equals mag
-            data[i * 7 + 6] = mag - 10f
+        if (hudTimer >= 0.1) {
+            hudTimer = 0.0
+            publishHud(frame, target, focusDist)
         }
-        return PointBatch.upload(UPos.ZERO, Units.PC, data)
+    }
+
+    private fun publishLabels(picks: List<Pickable>) {
+        val overlay = labelOverlay ?: return
+        val selected = engine.selected
+        val sorted = picks.filter { it.showLabel || it.body == selected }.sortedByDescending { it.priority }
+        val out = ArrayList<Label>()
+        val taken = ArrayList<FloatArray>()
+        val density = context.resources.displayMetrics.density
+        for (p in sorted) {
+            if (out.size >= 40) break
+            val sel = p.body == selected
+            // Skip labels that would overlap a more important one.
+            val box = floatArrayOf(p.x, p.y - 16 * density, p.x + p.body.name.length * 7.5f * density, p.y)
+            if (!sel && taken.any { overlaps(it, box) }) continue
+            taken.add(box)
+            out.add(Label(p.x, p.y, p.body.name, if (sel) 0xFFFFD27A.toInt() else p.labelColor, sel, p.pixelRadius.coerceAtMost(200f)))
+        }
+        overlay.labels = out
+        overlay.refresh()
+    }
+
+    private fun overlaps(a: FloatArray, b: FloatArray) = a[0] < b[2] && b[0] < a[2] && a[1] < b[3] && b[1] < a[3]
+
+    private fun publishHud(frame: Frame, target: Body?, focusDist: Double) {
+        val sel = engine.selected
+        val selDist = sel?.let { (it.position(frame.jd) - frame.camPos).length() }
+        val selFacts = sel?.facts(frame.jd) ?: emptyList()
+        val altitude = if (target != null && target.radius > 0) {
+            val d = (target.position(frame.jd) - frame.camPos).length() - target.radius
+            "Altitude ${Units.formatDistance(d)}"
+        } else ""
+        // Scale bar: a round length close to 28% of the screen width at the focus distance.
+        val metresPerPx = 2 * focusDist * tan(frame.fovY / 2) / frame.height
+        val barMax = metresPerPx * frame.width * 0.28
+        val barLen = Units.niceLength(barMax)
+        val barFraction = (barLen / metresPerPx / frame.width).toFloat()
+        val zoom = engine.zoomFraction()
+        val flying = engine.camera.isFlying
+        Hud.post {
+            Hud.distanceText = Units.formatDistance(focusDist)
+            Hud.focusName = target?.name ?: "Empty space"
+            Hud.altitudeText = altitude
+            Hud.selectedName = sel?.name ?: ""
+            Hud.selectedSubtitle = sel?.subtitle ?: ""
+            Hud.selectedSource = sel?.source?.label ?: ""
+            Hud.selectedDistance = selDist?.let { Units.formatDistance(it) } ?: ""
+            Hud.selectedFacts = selFacts
+            Hud.scaleBarText = Units.formatDistance(barLen)
+            Hud.scaleBarFraction = barFraction
+            if (!Hud.sliderDragging) Hud.zoomFraction = zoom
+            Hud.flying = flying
+        }
     }
 
     private fun now() = SystemClock.elapsedRealtimeNanos() / 1e9

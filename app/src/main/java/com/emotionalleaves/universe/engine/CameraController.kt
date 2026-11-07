@@ -187,6 +187,15 @@ class CameraController {
         orientation = Quatd.lookRotation(-dirFromFocusToCamera, upHint)
     }
 
+    class Snapshot(val focus: UPos, val target: Body?, val distance: Double, val orientation: Quatd)
+
+    fun snapshot() = Snapshot(focus, target, distance, orientation)
+
+    fun restore(s: Snapshot) {
+        focus = s.focus; target = s.target; distance = s.distance; orientation = s.orientation
+        yawVel = 0.0; pitchVel = 0.0; zoomVel = 0.0
+    }
+
     private class Flight(
         val from: UPos, val d0: Double, val body: Body?, val destination: UPos, val d1: Double,
         val peak: Double, val start: Double, val duration: Double,

@@ -60,11 +60,8 @@ class MainActivity : ComponentActivity() {
                     },
                 )
             } else {
-                UniverseScreen(
-                    engine = engine,
-                    version = version,
-                    viewFactory = { ctx -> UniverseView(ctx, engine).also { universeView = it } },
-                )
+                val view = remember { UniverseView(this, engine).also { universeView = it } }
+                UniverseScreen(engine = engine, version = version, view = view)
             }
         }
     }

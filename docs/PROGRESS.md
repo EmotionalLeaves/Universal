@@ -26,7 +26,7 @@ Known problems: none yet.
 
 ## Round 1 — A 3D view you can touch
 
-**Status:** pushed.
+**Status:** build 2 green.
 
 Finished:
 - OpenGL ES 3.0 surface (`ui/UniverseView.kt`) with a renderer (`render/UniverseRenderer.kt`).
@@ -39,3 +39,23 @@ Finished:
 Phone checklist:
 - [ ] Controls feel smooth, and the counter stays near 60
 - [ ] Rotating the phone doesn't crash the app
+
+## Round 2 — The scale engine
+
+**Status:** pushed.
+
+Finished:
+- `core/UPos`: positions as (integer cell of 2^40 m, double offset). Precise to well under 1 mm anywhere in the observable universe.
+- Floating origin: every frame, positions are taken relative to the camera in doubles and only then turned into floats.
+- Logarithmic depth buffer (vertex + fragment), infinite far plane.
+- Camera zoom is multiplicative (pinch amplified ×2.2) with coasting, so speed scales with distance to what you are orbiting.
+- Zoom slider on the right edge: logarithmic, from touching the surface to the whole observable universe.
+- Scale readout (m, km, AU, ly, Mly, Gly) and a scale bar.
+- Test scene: Earth-sized sphere, a 1 m orange cube on its surface, and a gold marker 10 billion light years away.
+- Labels drawn over the 3D view, tap to select, double-tap or Fly To to travel, info card, Home button.
+- Camera can't enter a planet.
+
+Phone checklist:
+- [ ] You can pinch from the cube to the far marker and back in under a minute
+- [ ] Nothing shakes or flickers at any distance
+- [ ] The scale readout changes units correctly
