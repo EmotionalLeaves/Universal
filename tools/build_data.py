@@ -935,8 +935,17 @@ def build_moons(base):
             rows = t["rows"]
             if len(rows) < 2:
                 continue
-            head = [h.lower() for h in rows[0]]
-            log(f"   phys table header {rows[0][:14]}; first row {rows[1][:14]}")
+            hdr = rows[0]
+            body = rows[1:]
+            # Two header rows: grouped columns ("Mean Radius (km)") split into value / sigma / ref.
+            if body and body[0] and body[0][0].strip().lower() == "value":
+                groups = len(body[0]) // 3
+                fixed = len(hdr) - groups
+                hdr = hdr[:fixed] + [x for h in hdr[fixed:] for x in (h, h + " sigma", "ref " + h)]
+                body = body[1:]
+            head = [h.lower() for h in hdr]
+            rows = [hdr] + body
+            log(f"   phys table header {hdr[:14]}; first row {body[0][:14] if body else []}")
             ri = next((i for i, h in enumerate(head) if "radius" in h and not h.startswith(("r_", "ref"))), None)
             ni = next((i for i, h in enumerate(head) if h.startswith("satellite") or h == "name"), None)
             if ni is None:
