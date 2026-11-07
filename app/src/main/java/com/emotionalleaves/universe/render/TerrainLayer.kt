@@ -43,6 +43,8 @@ class TerrainLayer : Layer {
     /** Sky colour and fog for the current frame (read by the renderer). */
     var skyColor = floatArrayOf(0f, 0f, 0f)
     var daylight = 0f
+    /** Detail: how early tiles split (Low 1.5, Medium 2.2, High 3.0). */
+    var splitFactor = 2.2
 
     override fun init(rc: RenderContext) {
         tiles.clear()
@@ -221,7 +223,7 @@ class TerrainLayer : Layer {
         if (key.level > 0 && ang > horizon + angular) return
         val tilePoint = dir * m.radius
         val d = (camLocal - tilePoint).length()
-        val split = key.level < m.maxLevel && d < size * 2.2
+        val split = key.level < m.maxLevel && d < size * splitFactor
         if (split) {
             val kids = key.children()
             if (kids.all { tiles.containsKey(it) }) {

@@ -47,8 +47,7 @@ class StarLayer : Layer {
         // Upload any catalogues (base or newly downloaded packs) not on the GPU yet.
         for (c in rs.allCatalogs()) {
             if (uploaded.any { it.catalog === c }) continue
-            val batches = c.tiles.map { t -> PointBatch.upload(UPos.ZERO + t.anchorPc * Units.PC, Units.PC, t.data) }
-            uploaded.add(Uploaded(c, batches))
+            uploaded.add(Uploaded(c, mergeTiles(c)))
             break // one catalogue per frame
         }
         // Drop catalogues whose pack was deleted.
@@ -131,6 +130,37 @@ class StarLayer : Layer {
         }
         val b = best ?: return null
         return rs.bodyFrom(b.first, b.second)
+    }
+
+    /**
+     * Merges the 200 pc catalogue tiles into ~1,600 pc super-tiles so a catalogue costs tens of draw
+     * calls instead of thousands (offsets stay small enough for float precision).
+     */
+    private fun mergeTiles(c: StarCatalog): List<PointBatch> {
+        val groups = LinkedHashMap<Triple<Int, Int, Int>, MutableList<com.emotionalleaves.universe.engine.StarTile>>()
+        val size = 1600.0
+        for (t in c.tiles) {
+            val k = Triple(kotlin.math.floor(t.anchorPc.x / size).toInt(), kotlin.math.floor(t.anchorPc.y / size).toInt(), kotlin.math.floor(t.anchorPc.z / size).toInt())
+            groups.getOrPut(k) { ArrayList() }.add(t)
+        }
+        return groups.map { (k, tiles) ->
+            val anchor = com.emotionalleaves.universe.core.Vec3d((k.first + 0.5) * size, (k.second + 0.5) * size, (k.third + 0.5) * size)
+            val total = tiles.sumOf { it.count }
+            val data = FloatArray(total * 7)
+            var o = 0
+            for (t in tiles) {
+                val dx = (t.anchorPc.x - anchor.x).toFloat()
+                val dy = (t.anchorPc.y - anchor.y).toFloat()
+                val dz = (t.anchorPc.z - anchor.z).toFloat()
+                for (i in 0 until t.count) {
+                    data[o] = t.data[i * 7] + dx; data[o + 1] = t.data[i * 7 + 1] + dy; data[o + 2] = t.data[i * 7 + 2] + dz
+                    data[o + 3] = t.data[i * 7 + 3]; data[o + 4] = t.data[i * 7 + 4]; data[o + 5] = t.data[i * 7 + 5]
+                    data[o + 6] = t.data[i * 7 + 6]
+                    o += 7
+                }
+            }
+            PointBatch.upload(UPos.ZERO + anchor * Units.PC, Units.PC, data)
+        }
     }
 
     private fun buildConstellations(rs: RealStars): LineMesh? {

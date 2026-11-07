@@ -61,6 +61,11 @@ class UniverseRenderer(private val context: Context, private val engine: Engine)
 
     override fun onDrawFrame(gl: GL10?) {
         val ctx = rc ?: return
+        // Battery saver: cap at ~30 frames per second.
+        if (engine.settings.batterySaver) {
+            val wait = 0.033 - (now() - lastTime)
+            if (wait > 0.002) Thread.sleep((wait * 1000).toLong())
+        }
         val t0 = now()
         val dt = (t0 - lastTime).coerceIn(0.0, 0.1)
         lastTime = t0
@@ -103,6 +108,7 @@ class UniverseRenderer(private val context: Context, private val engine: Engine)
         galaxyCatalogLayer.daylight = terrainLayer.daylight
         cosmicLayer.daylight = terrainLayer.daylight
         galaxyLayer.particles = when (engine.settings.quality) { 0 -> 20_000; 2 -> 70_000; else -> 40_000 }
+        terrainLayer.splitFactor = when (engine.settings.quality) { 0 -> 1.5; 2 -> 3.0; else -> 2.2 }
         solarLayer.showOrbits = engine.settings.showOrbits
         systemLayer.showOrbits = engine.settings.showOrbits
         for (l in layers) l.update(frame, ctx)

@@ -59,8 +59,19 @@ class GalaxyCatalogLayer : Layer {
         else -> floatArrayOf(0.88f, 0.9f, 1f)
     }
 
-    /** Indices of galaxies big enough on screen to draw as shapes, largest first. */
+    private var shapesFrame: Frame? = null
+    private var shapesCache: List<Pair<Int, Double>> = emptyList()
+
+    /** Indices of galaxies big enough on screen to draw as shapes, largest first (cached per frame). */
     private fun visibleShapes(frame: Frame, limit: Int): List<Pair<Int, Double>> {
+        if (shapesFrame !== frame) {
+            shapesCache = computeShapes(frame, 160)
+            shapesFrame = frame
+        }
+        return if (shapesCache.size > limit) shapesCache.subList(0, limit) else shapesCache
+    }
+
+    private fun computeShapes(frame: Frame, limit: Int): List<Pair<Int, Double>> {
         val list = source ?: return emptyList()
         val cam = (frame.camPos - UPos.ZERO) / Units.PC
         val k = frame.height / 2.0 / tan(frame.fovY / 2)

@@ -229,3 +229,20 @@ Finished:
 Phone checklist:
 - [ ] Searching "Kepler-22 b" flies you there
 - [ ] A bookmarked generated planet reopens to the same place
+
+## Round 14 — Polish and performance
+
+**Status:** pushed.
+
+Finished:
+- Performance: catalogue tiles merged into 1,600 pc super-tiles (HYG: ~600 draw calls → a few dozen; AT-HYG pack: ~10,600 → ~100). Galaxy shape selection computed once per frame.
+- Quality presets (Settings): Low / Medium / High change galaxy glow particles (20k / 40k / 70k), GLADE+ points drawn (0.4 M / 1.2 M / 3 M) and how early terrain refines.
+- Battery saver: caps rendering at ~30 fps.
+- Settings screen (one short list): quality, battery saver, labels, orbits, constellation lines, generated objects on/off, star brightness, frame-rate counter, scale-test objects, show tips again.
+- First-launch tips (5 short cards), How-to-use screen, Credits screen with every data source and licence.
+- Android back button closes any open panel. The Round 0 test-crash button is gone (the crash screen itself stays).
+
+Phone checklist:
+- [ ] 30 minutes of exploring with no crash
+- [ ] The phone doesn't get hot on Medium
+- [ ] Someone else can use the app without you explaining it

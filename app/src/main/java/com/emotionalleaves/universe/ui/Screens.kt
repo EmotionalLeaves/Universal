@@ -274,3 +274,165 @@ fun BookmarksScreen(engine: Engine) {
         }
     }
 }
+
+/** Settings mirrored into Compose state so toggles redraw immediately. */
+object SettingsUi {
+    var showStats by mutableStateOf(false)
+    var tipsVisible by mutableStateOf(false)
+
+    fun load(engine: Engine) {
+        showStats = engine.settings.showStats
+        tipsVisible = !engine.settings.seenTips
+    }
+}
+
+@Composable
+private fun ToggleRow(title: String, detail: String, initial: Boolean, onChange: (Boolean) -> Unit) {
+    var on by androidx.compose.runtime.remember { mutableStateOf(initial) }
+    Row(Modifier.fillMaxWidth().padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+        Column(Modifier.weight(1f)) {
+            Text(title, color = TextMain, fontSize = 15.sp)
+            if (detail.isNotEmpty()) Text(detail, color = TextDim, fontSize = 12.sp)
+        }
+        Switch(checked = on, onCheckedChange = { on = it; onChange(it) })
+    }
+}
+
+@Composable
+fun SettingsScreen(engine: Engine) {
+    val s = engine.settings
+    Panel("Settings", { Nav.screen = Screen.NONE }) {
+        Text("Quality", color = TextMain, fontSize = 15.sp)
+        Text("Lower uses less battery and keeps older phones smooth.", color = TextDim, fontSize = 12.sp)
+        var q by androidx.compose.runtime.remember { mutableStateOf(s.quality) }
+        Row(Modifier.padding(vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            listOf("Low", "Medium", "High").forEachIndexed { i, label ->
+                PillButton(label, primary = q == i) {
+                    q = i
+                    s.quality = i
+                    engine.world.packsChanged()
+                }
+            }
+        }
+        ToggleRow("Battery saver", "Limits to 30 frames per second", s.batterySaver) { s.batterySaver = it }
+        ToggleRow("Labels", "Names next to planets, stars and galaxies", s.showLabels) { s.showLabels = it }
+        ToggleRow("Orbits", "Orbit lines of planets and moons", s.showOrbits) { s.showOrbits = it }
+        ToggleRow("Constellation lines", "Stick figures between real stars", s.showConstellations) { s.showConstellations = it }
+        ToggleRow("Generated objects", "Fill gaps in real data with generated stars, planets and galaxies", s.showGenerated) {
+            s.showGenerated = it
+        }
+        Text("Star brightness", color = TextMain, fontSize = 15.sp, modifier = Modifier.padding(top = 8.dp))
+        var b by androidx.compose.runtime.remember { mutableStateOf(s.starBrightness) }
+        androidx.compose.material3.Slider(
+            value = b, valueRange = -1.5f..3f,
+            onValueChange = { b = it; s.starBrightness = it },
+        )
+        ToggleRow("Frame rate counter", "Shows frames per second in the corner", s.showStats) {
+            s.showStats = it
+            SettingsUi.showStats = it
+        }
+        ToggleRow("Scale-test objects", "1 m cube on an Earth-sized sphere, and a marker 10 billion ly away", s.showTestObjects) {
+            s.showTestObjects = it
+        }
+        Spacer(Modifier.height(12.dp))
+        PillButton("Show the tips again") {
+            s.seenTips = false
+            SettingsUi.tipsVisible = true
+            Nav.screen = Screen.NONE
+        }
+    }
+}
+
+@Composable
+fun HelpScreen() {
+    Panel("How to use", { Nav.screen = Screen.NONE }) {
+        val items = listOf(
+            "Look around" to "Drag with one finger to orbit whatever you are looking at.",
+            "Zoom" to "Pinch, or drag the slider on the right. Bottom of the slider = standing on the ground; top = the whole observable universe.",
+            "Pick something" to "Tap a planet, star, nebula or galaxy to see its card. Double-tap (or Fly to) to travel there.",
+            "Move sideways" to "Slide two fingers together. Twist two fingers to roll.",
+            "On the ground" to "Zoom all the way into a rocky planet or moon. Drag up/down to walk, left/right to turn.",
+            "Time" to "Use ⏪ ⏸ ⏩ at the bottom to change how fast time runs. Now goes back to the present.",
+            "Real or generated" to "Every card shows a green Real badge (from scientific catalogues) or a purple Generated badge (made up by rules, the same every time).",
+            "Find things" to "Menu → Search finds planets, stars, exoplanets, nebulae and galaxies by name or catalogue number.",
+            "Save places" to "★ Bookmark on any card. Generated places reopen exactly the same.",
+            "Home" to "Flies back to Earth.",
+        )
+        for ((t, d) in items) {
+            Text(t, color = TextMain, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(top = 10.dp))
+            Text(d, color = TextDim, fontSize = 13.sp)
+        }
+    }
+}
+
+@Composable
+fun CreditsScreen(version: String) {
+    Panel("Credits", { Nav.screen = Screen.NONE }) {
+        Text("Universe Explorer $version", color = TextMain, fontSize = 15.sp)
+        Text("App code: MIT licence.", color = TextDim, fontSize = 13.sp)
+        val items = listOf(
+            "HYG v4.4 and AT-HYG v4.0 star catalogues" to "© Astronexus (David Nash), CC BY-SA 4.0. Built on Hipparcos, Yale Bright Star, Gliese, Tycho-2 and Gaia DR3. Star tiles derived from them are also CC BY-SA 4.0.",
+            "Gaia" to "This app uses data from the ESA mission Gaia, processed by the Gaia DPAC (via AT-HYG).",
+            "NASA Exoplanet Archive" to "This research has made use of the NASA Exoplanet Archive, operated by Caltech under contract with NASA.",
+            "OpenNGC" to "Mattia Verga, CC BY-SA 4.0 (nebulae, clusters, NGC/IC galaxies).",
+            "Cosmicflows-4" to "Tully et al. 2023, ApJ 944, 94 (galaxy distances), via VizieR (CDS).",
+            "GLADE+" to "Dálya et al. 2022, MNRAS 514, 1403, via VizieR (CDS).",
+            "Planck" to "Based on observations obtained with Planck (ESA), SMICA CMB map, via IRSA.",
+            "Planet orbits" to "E. M. Standish and J. G. Williams, JPL Approximate Positions of the Planets.",
+            "Elevation" to "Earth: NOAA ETOPO1. Mars: MGS MOLA (NASA/USGS). Moon: LRO LOLA (NASA SVS CGI Moon Kit).",
+            "Planet maps" to "three.js example textures (NASA-based), Solar System Scope (CC BY 4.0), Planet Pixel Emporium via threex.planets.",
+            "Constellations" to "Stellarium modern sky culture.",
+            "Generated content" to "Stars, planets, terrain, galaxy interiors and the distant cosmic web are generated from seeded rules; they are labelled Generated everywhere.",
+        )
+        for ((t, d) in items) {
+            Text(t, color = TextMain, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(top = 10.dp))
+            Text(d, color = TextDim, fontSize = 13.sp)
+        }
+    }
+}
+
+/** Shown once on first launch. */
+@Composable
+fun TipsOverlay(engine: Engine) {
+    if (!SettingsUi.tipsVisible) return
+    var page by androidx.compose.runtime.remember { mutableStateOf(0) }
+    val tips = listOf(
+        "Welcome!" to "You are looking at Earth, today, from space. Everything you see is in its real place.",
+        "Zoom anywhere" to "Pinch, or drag the slider on the right, to go from standing on a planet to the edge of the observable universe.",
+        "Tap to explore" to "Tap anything for its card. Double-tap or Fly to to travel there.",
+        "Real or generated" to "Green Real = from scientific catalogues. Purple Generated = filled in by rules where nobody has measured yet.",
+        "Find and save" to "☰ menu: search by name, bookmarks, data packs and settings.",
+    )
+    Box(Modifier.fillMaxSize().background(Color(0xAA000000)).clickable { }) {
+        Column(
+            Modifier
+                .align(Alignment.Center)
+                .padding(24.dp)
+                .widthIn(max = 420.dp)
+                .background(PanelBg, RoundedCornerShape(18.dp))
+                .border(1.dp, PanelBorder, RoundedCornerShape(18.dp))
+                .padding(20.dp),
+        ) {
+            val (t, d) = tips[page]
+            Text(t, color = TextMain, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+            Spacer(Modifier.height(8.dp))
+            Text(d, color = TextDim, fontSize = 15.sp)
+            Spacer(Modifier.height(16.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("${page + 1} / ${tips.size}", color = TextDim, fontSize = 12.sp, modifier = Modifier.weight(1f))
+                if (page < tips.size - 1) {
+                    Text("Skip", color = TextDim, fontSize = 14.sp, modifier = Modifier.clickable {
+                        engine.settings.seenTips = true
+                        SettingsUi.tipsVisible = false
+                    }.padding(10.dp))
+                    PillButton("Next", primary = true) { page++ }
+                } else {
+                    PillButton("Start exploring", primary = true) {
+                        engine.settings.seenTips = true
+                        SettingsUi.tipsVisible = false
+                    }
+                }
+            }
+        }
+    }
+}

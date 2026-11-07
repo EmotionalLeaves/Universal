@@ -22,6 +22,7 @@ import com.emotionalleaves.universe.engine.Engine
 fun UniverseScreen(engine: Engine, version: String, view: UniverseView) {
     androidx.compose.runtime.LaunchedEffect(Unit) {
         engine.packs.onChange = { PacksUi.refresh(engine) }
+        SettingsUi.load(engine)
     }
     Box(Modifier.fillMaxSize().background(Color.Black)) {
         AndroidView(factory = { view }, modifier = Modifier.fillMaxSize())
@@ -32,7 +33,7 @@ fun UniverseScreen(engine: Engine, version: String, view: UniverseView) {
 
         Box(Modifier.fillMaxSize().safeDrawingPadding()) {
             TopStatus(Modifier.align(Alignment.TopCenter).padding(top = 8.dp))
-            StatsBadge(Modifier.align(Alignment.TopStart).padding(8.dp))
+            if (SettingsUi.showStats) StatsBadge(Modifier.align(Alignment.TopStart).padding(8.dp))
             ZoomSlider(
                 engine,
                 Modifier.align(Alignment.CenterEnd).padding(end = 6.dp),
@@ -58,7 +59,12 @@ fun UniverseScreen(engine: Engine, version: String, view: UniverseView) {
             Screen.DATA -> DataScreen(engine)
             Screen.SEARCH -> SearchScreen(engine)
             Screen.BOOKMARKS -> BookmarksScreen(engine)
+            Screen.SETTINGS -> SettingsScreen(engine)
+            Screen.HELP -> HelpScreen()
+            Screen.CREDITS -> CreditsScreen(version)
             else -> {}
         }
+        TipsOverlay(engine)
+        androidx.activity.compose.BackHandler(enabled = Nav.screen != Screen.NONE) { Nav.screen = Screen.NONE }
     }
 }
