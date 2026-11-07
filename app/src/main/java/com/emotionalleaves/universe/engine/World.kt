@@ -136,7 +136,7 @@ class World(private val engine: Engine) {
             try {
                 generated = StarField.generate(g, local)
             } catch (e: Throwable) {
-                android.util.Log.w("World", "Star generation failed: $e")
+                ErrorLog.record("generating stars", e)
             } finally {
                 genBusy = false
             }
@@ -194,19 +194,22 @@ class World(private val engine: Engine) {
         loader.execute {
             try {
                 realStars = RealStars.load(engine.context)
+                searchStale = true
             } catch (e: Throwable) {
-                android.util.Log.w("World", "Star catalogue failed: $e")
+                ErrorLog.record("loading stars", e)
             }
             if (realStars == null) starsFailed = true
             try {
                 loadExoplanets()
+                searchStale = true
             } catch (e: Throwable) {
-                android.util.Log.w("World", "Exoplanets failed: $e")
+                ErrorLog.record("loading exoplanets", e)
             }
             try {
                 registerGalaxies(GalaxyCatalog.load(engine.context))
+                searchStale = true
             } catch (e: Throwable) {
-                android.util.Log.w("World", "Galaxies failed: $e")
+                ErrorLog.record("loading galaxies", e)
             }
             packsChanged()
             try {
@@ -215,7 +218,7 @@ class World(private val engine: Engine) {
                 dsos = list
                 searchStale = true
             } catch (e: Throwable) {
-                android.util.Log.w("World", "Deep sky failed: $e")
+                ErrorLog.record("loading nebulae", e)
             }
         }
     }

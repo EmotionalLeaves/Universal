@@ -335,6 +335,17 @@ fun SettingsScreen(engine: Engine) {
         ToggleRow("Scale-test objects", "1 m cube on an Earth-sized sphere, and a marker 10 billion ly away", s.showTestObjects) {
             s.showTestObjects = it
         }
+        Spacer(Modifier.height(16.dp))
+        val problem = androidx.compose.runtime.remember { com.emotionalleaves.universe.engine.ErrorLog.read() }
+        if (problem != null) {
+            val clipboard = androidx.compose.ui.platform.LocalClipboardManager.current
+            Text("Last problem (the app kept running)", color = TextMain, fontSize = 15.sp)
+            Text(problem.lines().take(4).joinToString("\n"), color = TextDim, fontSize = 11.sp)
+            Row(Modifier.padding(vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                PillButton("Copy report") { clipboard.setText(androidx.compose.ui.text.AnnotatedString(problem)) }
+                PillButton("Clear") { com.emotionalleaves.universe.engine.ErrorLog.clear() }
+            }
+        }
         Spacer(Modifier.height(12.dp))
         PillButton("Show the tips again") {
             s.seenTips = false

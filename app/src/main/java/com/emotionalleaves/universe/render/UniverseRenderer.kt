@@ -112,20 +112,22 @@ class UniverseRenderer(private val context: Context, private val engine: Engine)
         galaxyLayer.maxBlob = when (engine.settings.quality) { 0 -> 14f; 2 -> 28f; else -> 20f }
         solarLayer.showOrbits = engine.settings.showOrbits
         systemLayer.showOrbits = engine.settings.showOrbits
-        for (l in layers) l.update(frame, ctx)
-        for (l in layers) l.drawOpaque(frame, ctx)
-        for (l in layers) l.drawTransparent(frame, ctx)
+        for (l in layers) safely(l, "update") { l.update(frame, ctx) }
+        for (l in layers) safely(l, "drawOpaque") { l.drawOpaque(frame, ctx) }
+        for (l in layers) safely(l, "drawTransparent") { l.drawTransparent(frame, ctx) }
 
         lastFrame = frame
         // Tap targets and labels
         val picks = ArrayList<Pickable>(256)
-        for (l in layers) l.collect(frame, ctx, picks)
+        for (l in layers) safely(l, "collect") { l.collect(frame, ctx, picks) }
         engine.pickables = picks
         engine.takeTap()?.let { tap ->
             var body = engine.pick(tap.x, tap.y)?.body
             if (body == null) {
                 for (l in layers.asReversed()) {
-                    body = l.pickAt(frame, ctx, tap.x, tap.y, engine.tapReach)
+                    body = try { l.pickAt(frame, ctx, tap.x, tap.y, engine.tapReach) } catch (e: Exception) {
+                        com.emotionalleaves.universe.engine.ErrorLog.record("${l.javaClass.simpleName}.pickAt", e); null
+                    }
                     if (body != null) break
                 }
             }
@@ -242,6 +244,16 @@ class UniverseRenderer(private val context: Context, private val engine: Engine)
             Hud.scaleBarFraction = barFraction
             if (!Hud.sliderDragging) Hud.zoomFraction = zoom
             Hud.flying = flying
+        }
+    }
+
+    /** One misbehaving layer must not take the whole app down: log it and keep drawing the rest. */
+    private inline fun safely(l: Layer, what: String, block: () -> Unit) {
+        try {
+            block()
+        } catch (e: Exception) {
+            com.emotionalleaves.universe.engine.ErrorLog.record("${l.javaClass.simpleName}.$what", e)
+            rc?.drawer?.end()
         }
     }
 

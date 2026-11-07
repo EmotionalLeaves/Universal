@@ -77,6 +77,8 @@ fun UniverseScreen(engine: Engine, version: String, view: UniverseView) {
             else -> {}
         }
         TipsOverlay(engine)
-        androidx.activity.compose.BackHandler(enabled = Nav.screen != Screen.NONE) { Nav.screen = Screen.NONE }
+        androidx.activity.compose.BackHandler(enabled = Nav.screen != Screen.NONE || Hud.selectedName.isNotEmpty()) {
+            if (Nav.screen != Screen.NONE) Nav.screen = Screen.NONE else engine.clearSelection()
+        }
     }
 }

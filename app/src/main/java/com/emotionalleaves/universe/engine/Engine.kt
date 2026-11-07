@@ -35,10 +35,14 @@ class Engine(val context: Context) {
     /** Selects and flies to the object with [id] (search results, bookmarks). */
     fun goTo(id: String) {
         bg.execute {
-            val b = world.find(id) ?: return@execute
-            selected = b
-            world.rememberGenerated(b)
-            flyTo(b)
+            try {
+                val b = world.find(id) ?: return@execute
+                selected = b
+                world.rememberGenerated(b)
+                flyTo(b)
+            } catch (e: Exception) {
+                ErrorLog.record("goTo($id)", e)
+            }
         }
     }
 
@@ -81,6 +85,7 @@ class Engine(val context: Context) {
     private val density = context.resources.displayMetrics.density
 
     init {
+        ErrorLog.init(context)
         world.start()
         val home = world.homeBody()
         camera.jumpTo(home, home.position(jd), home.viewDistance())
