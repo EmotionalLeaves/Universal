@@ -1,0 +1,42 @@
+name: Probe data sources
+on:
+  push:
+    branches: [probe]
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Probe
+        run: |
+          set +e
+          head_url() { echo "== $1"; curl -sSIL --max-time 40 "$1" | grep -iE "^(HTTP|content-length|content-type|location)" | tail -6; }
+          echo "#### HYG"
+          for u in https://codeberg.org/astronexus/hyg/raw/branch/main/data/hyg/CURRENT/hyg_v42.csv.gz https://codeberg.org/astronexus/hyg/raw/branch/main/hyg/CURRENT/hyg_v42.csv.gz https://raw.githubusercontent.com/astronexus/HYG-Database/main/hyg/CURRENT/hyg_v41.csv https://raw.githubusercontent.com/astronexus/HYG-Database/master/hyg/CURRENT/hyg_v41.csv; do head_url $u; done
+          curl -sSL --max-time 60 https://codeberg.org/astronexus/hyg/raw/branch/main/data/hyg/CURRENT/hyg_v42.csv.gz | gunzip | head -4
+          echo "#### HYG repo tree"
+          curl -sS "https://codeberg.org/api/v1/repos/astronexus/hyg/contents/data/hyg/CURRENT" | python3 -c "import sys,json;[print(x['path'],x.get('size')) for x in json.load(sys.stdin)]"
+          curl -sS "https://codeberg.org/api/v1/repos/astronexus/athyg/contents/data" | python3 -c "import sys,json;[print(x['path'],x.get('size')) for x in json.load(sys.stdin)]"
+          curl -sS "https://codeberg.org/api/v1/repos/astronexus/athyg/contents/data/subsets" | python3 -c "import sys,json;[print(x['path'],x.get('size')) for x in json.load(sys.stdin)]"
+          echo "#### Exoplanets"
+          curl -sS --max-time 90 "https://exoplanetarchive.ipac.caltech.edu/TAP/sync?query=select+top+3+pl_name,hostname,pl_orbsmax,pl_rade,pl_bmasse,pl_orbper,pl_orbeccen,pl_eqt,ra,dec,sy_dist,st_teff,st_rad,st_mass,st_lum+from+pscomp&format=csv"
+          curl -sS --max-time 90 "https://exoplanetarchive.ipac.caltech.edu/TAP/sync?query=select+count(*)+from+pscomp&format=csv"
+          echo "#### OpenNGC"
+          curl -sSL --max-time 60 https://raw.githubusercontent.com/mattiaverga/OpenNGC/master/database_files/NGC.csv | head -3
+          curl -sSL --max-time 60 https://raw.githubusercontent.com/mattiaverga/OpenNGC/master/database_files/NGC.csv | grep -E "^(NGC1976|NGC0224|NGC7000);" 
+          curl -sSL --max-time 60 https://raw.githubusercontent.com/mattiaverga/OpenNGC/master/database_files/addendum.csv | head -3
+          echo "#### VizieR CF4 tables"
+          curl -sS --max-time 90 "https://tapvizier.cds.unistra.fr/TAPVizieR/tap/sync?REQUEST=doQuery&LANG=ADQL&FORMAT=csv&QUERY=SELECT+table_name,description+FROM+TAP_SCHEMA.tables+WHERE+table_name+LIKE+'J/ApJ/944/94%25'"
+          curl -sS --max-time 90 "https://tapvizier.cds.unistra.fr/TAPVizieR/tap/sync?REQUEST=doQuery&LANG=ADQL&FORMAT=csv&QUERY=SELECT+table_name,column_name,unit+FROM+TAP_SCHEMA.columns+WHERE+table_name+LIKE+'J/ApJ/944/94%25'"
+          echo "#### UNGC Karachentsev"
+          curl -sS --max-time 90 "https://tapvizier.cds.unistra.fr/TAPVizieR/tap/sync?REQUEST=doQuery&LANG=ADQL&FORMAT=csv&QUERY=SELECT+table_name,column_name,unit+FROM+TAP_SCHEMA.columns+WHERE+table_name+LIKE+'J/AJ/145/101%25'" | head -40
+          echo "#### GLADE+"
+          for u in http://elysium.elte.hu/~dalyag/GLADE+.txt https://glade.elte.hu/GLADE+.txt; do head_url $u; done
+          curl -sS --max-time 30 https://glade.elte.hu | grep -oiE 'href="[^"]+"' | head -20
+          echo "#### Textures"
+          for n in 2k_earth_daymap.jpg 2k_moon.jpg 2k_mars.jpg 2k_saturn_ring_alpha.png 8k_stars_milky_way.jpg 2k_sun.jpg; do head_url https://www.solarsystemscope.com/textures/download/$n; done
+          echo "#### Planck"
+          for u in https://irsa.ipac.caltech.edu/data/Planck/release_3/all-sky-maps/maps/component-maps/cmb/COM_CMB_IQU-smica_1024_R3.00_full.fits https://irsa.ipac.caltech.edu/data/Planck/release_2/all-sky-maps/maps/component-maps/cmb/COM_CMB_IQU-smica_1024_R2.02_full.fits https://irsa.ipac.caltech.edu/data/Planck/release_3/all-sky-maps/maps/component-maps/cmb/COM_CMB_IQU-smica-nosz_2048_R3.00_full.fits; do head_url $u; done
+          echo "#### Elevation"
+          for u in https://eoimages.gsfc.nasa.gov/images/imagerecords/73000/73934/gebco_08_rev_elev_21600x10800.png https://eoimages.gsfc.nasa.gov/images/imagerecords/73000/73934/gebco_08_rev_elev_5400x2700.png https://svs.gsfc.nasa.gov/vis/a000000/a004700/a004720/ldem_3_8bit.jpg https://svs.gsfc.nasa.gov/vis/a000000/a004700/a004720/ldem_4_uint.tif https://planetarymaps.usgs.gov/mosaic/Mars_MGS_MOLA_DEM_mosaic_global_463m.tif https://astrogeology.usgs.gov/ckan/dataset/7131d503-cdc9-45a5-8f83-5126c0fd397e/resource/6a0d3c6c-2d1c-4d6d-8ed0-0b7e6c3a8e5a/download/mars_mgs_mola_dem_mosaic_global_463m.tif https://svs.gsfc.nasa.gov/vis/a000000/a004700/a004720/lroc_color_poles_1k.jpg; do head_url $u; done
+          echo "#### pip"
+          pip download healpy==1.17.3 --no-deps -d /tmp/x -q && ls /tmp/x
