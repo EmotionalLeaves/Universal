@@ -98,7 +98,7 @@ Phone checklist:
 
 ## Round 5 — Real stars
 
-**Status:** pushed.
+**Status:** build 5 green.
 
 Finished:
 - 109,389 real stars drawn as points with blackbody colours from B−V and brightness from absolute magnitude and *your* distance (stars brighten as you approach them).
@@ -111,7 +111,7 @@ Phone checklist:
 
 ## Round 6 — Star systems and exoplanets
 
-**Status:** pushed.
+**Status:** build 5 green.
 
 Finished:
 - NASA Exoplanet Archive planets around their real host stars. Hosts are matched to HYG by HIP/HD number; hosts not in HYG (TRAPPIST-1, Kepler stars...) become extra real stars at their archive position and distance.
@@ -123,3 +123,20 @@ Phone checklist:
 - [ ] TRAPPIST-1 shows its seven planets
 - [ ] A random star shows the same planets after restarting the app
 - [ ] Info cards show the Real or Generated badge
+
+## Round 7 — Planet surfaces
+
+**Status:** pushed.
+
+Finished:
+- `engine/Terrain.kt`: cube-sphere quadtree (6 faces, tiles of 17×17 vertices + skirts), refined around the camera down to ~5 m tiles (21 levels on Earth). Tiles build on two worker threads (<1 ms each) and upload a few per frame.
+- Real elevation: ETOPO1 (Earth), MOLA (Mars), LOLA (Moon), sampled bilinearly, plus seeded fractal detail from ~40 km down to ~2 m. Earth's oceans are flat water at sea level with sun glints. Verified: Himalaya ≈ 6,000 m, Denver ≈ 1,645 m.
+- Every other solid world (Mercury, Pluto, rocky moons, every generated rocky/ocean/ice/lava planet) gets fully generated terrain; airless worlds get craters.
+- Gas giants have no surface: you stop at the cloud tops.
+- Camera turns with the planet you are near (no sliding over the ground), never goes underground, and stands ~1.7 m above the terrain at the lowest zoom.
+- Near the ground the view tilts up to the horizon; one-finger horizontal drag turns, vertical drag walks; pinch and the slider change your height above the ground.
+- Sky colour and haze from the atmosphere (blue Earth, orange Mars/Titan, sunsets), stars fade in daylight.
+
+Phone checklist:
+- [ ] One continuous zoom takes you from Mars orbit to the slopes of Olympus Mons
+- [ ] A generated exoplanet has terrain you can land on

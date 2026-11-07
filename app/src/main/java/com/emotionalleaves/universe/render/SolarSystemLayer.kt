@@ -150,7 +150,7 @@ class SolarSystemLayer : Layer {
             if (b.look.atmosphereStrength <= 0f || vis <= 0) continue
             val rel = frame.rel(b.position(frame.jd))
             val px = frame.pixelSize(b.radius, rel.length())
-            if (px < 3) continue
+            if (px < 3 || rel.length() < b.radius * 1.03) continue
             rc.drawer.atmosphere(frame, rel, b.radius * 1.025, Material.rgb(b.look.atmosphere), sunRel - rel, b.look.atmosphereStrength)
         }
         // Point glows for bodies too small to see as discs, and the Sun's corona.

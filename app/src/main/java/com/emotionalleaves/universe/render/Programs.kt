@@ -8,6 +8,7 @@ class Programs {
     val line = Program(Shaders.LINE_VS, Shaders.LINE_FS)
     val billboard = Program(Shaders.BILLBOARD_VS, Shaders.BILLBOARD_FS)
     val ring = Program(Shaders.RING_VS, Shaders.RING_FS)
+    val terrain = Program(Shaders.TERRAIN_VS, Shaders.TERRAIN_FS)
 
     val sphereMesh = Meshes.sphere()
     val lowSphereMesh = Meshes.sphere(16, 32)

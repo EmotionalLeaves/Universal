@@ -97,7 +97,7 @@ class SystemLayer : Layer {
             val rel = frame.rel(p.position(frame.jd))
             val dist = rel.length()
             val px = frame.pixelSize(p.radius, dist)
-            if (p.hasAtmosphere && px > 3) {
+            if (p.hasAtmosphere && px > 3 && dist > p.radius * 1.04) {
                 rc.drawer.atmosphere(frame, rel, p.radius * 1.03, Material.rgb(p.palette[2]), starRel - rel, 0.9f)
             }
             if (px < 4) {

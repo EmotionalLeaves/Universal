@@ -360,4 +360,87 @@ void main() {
     writeDepth();
 }
 """
+
+    // ---------------------------------------------------------------- terrain tiles
+
+    val TERRAIN_VS = HEADER + LOG_DEPTH_VS + """
+layout(location = 0) in vec3 aPos;     // relative to the tile centre, body frame, metres
+layout(location = 1) in vec3 aNormal;  // body frame
+layout(location = 2) in vec2 aAttr;    // height (m), detail (0..1, -1 = water)
+uniform mat4 uModel;                   // body rotation + tile centre relative to camera
+uniform mat4 uViewProj;
+uniform mat3 uRot;
+uniform vec3 uCenterLocal;
+out vec3 vNormal;
+out vec3 vDir;
+out vec2 vAttr;
+out vec3 vWorld;
+void main() {
+    vec4 w = uModel * vec4(aPos, 1.0);
+    vWorld = w.xyz;
+    vNormal = uRot * aNormal;
+    vDir = normalize(uCenterLocal + aPos);
+    vAttr = aAttr;
+    gl_Position = logDepth(uViewProj * w);
+}
+"""
+
+    val TERRAIN_FS = HEADER + LOG_DEPTH_FS + NOISE + """
+in vec3 vNormal;
+in vec3 vDir;
+in vec2 vAttr;
+in vec3 vWorld;
+uniform sampler2D uTex;
+uniform int uHasTex;
+uniform vec3 uLightDir;
+uniform vec3 uColorA;
+uniform vec3 uColorB;
+uniform vec3 uColorC;
+uniform int uFlavor;       // 0 rocky, 1 cratered, 2 icy, 3 lava
+uniform vec3 uFogColor;
+uniform float uFogDensity;
+uniform float uSeed;
+uniform mat3 uRot;
+out vec4 oColor;
+void main() {
+    vec3 d = normalize(vDir);
+    vec3 n = normalize(vNormal);
+    vec3 up = normalize(uRot * d);
+    float h = vAttr.x;
+    float detail = vAttr.y;
+    bool water = detail < -0.5;
+    vec3 col;
+    if (uHasTex == 1) {
+        vec2 uv = vec2(atan(d.y, d.x) / 6.2831853 + 0.5, acos(clamp(d.z, -1.0, 1.0)) / 3.1415927);
+        col = textureLod(uTex, uv, 0.0).rgb;
+    } else {
+        float t = clamp(h / 6000.0 + 0.5, 0.0, 1.0);
+        col = mix(uColorB, uColorA, t);
+        col = mix(col, uColorC, smoothstep(0.7, 0.95, t));
+        if (uFlavor == 2) col = mix(col, vec3(0.92, 0.95, 1.0), 0.6);
+        if (uFlavor == 3) col = mix(col * 0.4, uColorC * 1.5, smoothstep(0.42, 0.38, t));
+    }
+    if (water) {
+        col = uHasTex == 1 ? col : vec3(0.05, 0.16, 0.35);
+    } else {
+        // Fine colour variation and darker, greyer rock on steep slopes.
+        float slope = 1.0 - clamp(dot(n, up), 0.0, 1.0);
+        col *= 0.82 + 0.36 * detail;
+        col = mix(col, col * vec3(0.75, 0.72, 0.7), smoothstep(0.25, 0.6, slope));
+    }
+    vec3 l = normalize(uLightDir);
+    float diff = max(dot(n, l), 0.0);
+    float horizon = smoothstep(-0.12, 0.08, dot(up, l));   // terrain behind the terminator stays dark
+    vec3 lit = col * (0.03 + 0.97 * diff * horizon);
+    if (water) {
+        vec3 v = normalize(-vWorld);
+        vec3 r = reflect(-l, n);
+        lit += vec3(0.9, 0.9, 0.85) * pow(max(dot(r, v), 0.0), 60.0) * horizon * 0.6;
+    }
+    float dist = length(vWorld);
+    float f = 1.0 - exp(-dist * uFogDensity);
+    oColor = vec4(mix(lit, uFogColor, clamp(f, 0.0, 1.0)), 1.0);
+    writeDepth();
+}
+"""
 }

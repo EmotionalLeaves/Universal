@@ -184,11 +184,46 @@ class World(private val engine: Engine) {
         return out
     }
 
-    /** Terrain height above the body's radius in direction [fromCentre] (0 for smooth spheres). */
-    fun surfaceHeight(body: Body, fromCentre: Vec3d): Double = 0.0
+    // ------------------------------------------------------------------ terrain
+
+    private val terrainModels = java.util.concurrent.ConcurrentHashMap<String, TerrainModel>()
+    private val noTerrain = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
+    private val terrainLoading = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
+
+    /** Terrain model for a solid world; null while loading or for gas giants. */
+    fun terrainModel(body: Body): TerrainModel? {
+        terrainModels[body.id]?.let { return it }
+        if (body.id in noTerrain) return null
+        if (terrainLoading.add(body.id)) {
+            loader.execute {
+                val m = try { TerrainModel.forBody(engine.context, body) } catch (_: Throwable) { null }
+                if (m != null) terrainModels[body.id] = m else noTerrain.add(body.id)
+                terrainLoading.remove(body.id)
+            }
+        }
+        return null
+    }
+
+    /** Body orientation (body frame -> world), for bodies that spin. */
+    fun orientationOf(body: Body, jd: Double): com.emotionalleaves.universe.core.Quatd? = when (body) {
+        is SolarBody -> body.orientation(jd)
+        is PlanetBody -> body.spin(jd)
+        else -> null
+    }
+
+    /** Terrain height above the body's radius in direction [fromCentre] (world frame). */
+    fun surfaceHeight(body: Body, fromCentre: Vec3d): Double {
+        val m = terrainModels[body.id] ?: return 0.0
+        val q = orientationOf(body, engine.jd) ?: return 0.0
+        val local = q.conjugate().rotate(fromCentre).normalized()
+        return m.height(local)
+    }
+
+    /** Set by the terrain layer: the body whose ground is drawn as terrain tiles. */
+    @Volatile var terrainBodyId: String? = null
 
     /** True when the terrain layer is drawing [body] instead of the plain sphere. */
-    fun terrainActiveFor(body: Body): Boolean = false
+    fun terrainActiveFor(body: Body): Boolean = terrainBodyId == body.id
 
     fun testBodies(): List<Body> = listOf(testPlanet, testCube, farMarker)
 

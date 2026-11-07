@@ -41,6 +41,7 @@ class Engine(val context: Context) {
         if (!paused) jd += dt * timeRate / 86400.0
         synchronized(camera) {
             val before = camera.snapshot()
+            surfaceFollow()
             camera.update(dt, now) { it.position(jd) }
             // Never let the camera end up inside a planet: undo the move instead.
             val cam = camera.position()
@@ -57,6 +58,40 @@ class Engine(val context: Context) {
     }
 
     fun onUserInteraction() {}
+
+    private var lastSpinBody: String? = null
+    private var lastSpin: com.emotionalleaves.universe.core.Quatd? = null
+
+    /** Keeps the camera turning with a nearby planet, and sets ground height and walk mode. Holds the camera lock. */
+    private fun surfaceFollow() {
+        val t = camera.target
+        val spin = when (t) {
+            is SolarBody -> t.orientation(jd)
+            is PlanetBody -> t.spin(jd)
+            else -> null
+        }
+        if (t != null && spin != null && camera.distance < t.radius * 20) {
+            val prev = lastSpin
+            if (prev != null && lastSpinBody == t.id) camera.rotateFrame(spin * prev.conjugate())
+            lastSpin = spin
+            lastSpinBody = t.id
+        } else {
+            lastSpin = null
+            lastSpinBody = null
+        }
+        if (t != null && t.radius > 0) {
+            val center = t.position(jd)
+            val camRel = camera.position() - center
+            camera.surfaceExtra = world.surfaceHeight(t, camRel).coerceAtLeast(-t.radius * 0.5)
+            val alt = camera.altitude().coerceAtLeast(0.1)
+            camera.rotateScale = (alt / t.radius * 1.6).coerceIn(2e-8, 1.0)
+            camera.walkMode = alt < t.radius * 0.002
+        } else {
+            camera.surfaceExtra = 0.0
+            camera.rotateScale = 1.0
+            camera.walkMode = false
+        }
+    }
 
     // ------------------------------------------------------------------ time controls
 
@@ -169,17 +204,17 @@ class Engine(val context: Context) {
         selected = null
     }
 
-    /** Zoom slider: 0 = closest possible, 1 = whole universe. */
+    /** Zoom slider on a log scale of height above the ground: 0 = standing, 1 = whole universe. */
     fun zoomFraction(): Float = synchronized(camera) {
-        val lo = ln(camera.minDistance()); val hi = ln(camera.maxDistance())
-        ((ln(camera.distance) - lo) / (hi - lo)).toFloat().coerceIn(0f, 1f)
+        val lo = ln(1.7); val hi = ln(camera.maxDistance())
+        ((ln(camera.altitude().coerceAtLeast(1.7)) - lo) / (hi - lo)).toFloat().coerceIn(0f, 1f)
     }
 
     fun setZoomFraction(f: Float) {
         synchronized(camera) {
-            val lo = ln(camera.minDistance()); val hi = ln(camera.maxDistance())
+            val lo = ln(1.7); val hi = ln(camera.maxDistance())
             camera.cancelFlight()
-            camera.setDistance(exp(lo + (hi - lo) * f.coerceIn(0f, 1f)))
+            camera.setDistance(camera.surfaceRadius() + exp(lo + (hi - lo) * f.coerceIn(0f, 1f)))
         }
     }
 

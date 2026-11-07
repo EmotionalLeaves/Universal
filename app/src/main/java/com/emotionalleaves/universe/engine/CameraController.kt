@@ -54,7 +54,24 @@ class CameraController {
 
     fun minDistance(): Double {
         val t = target ?: return 0.05
-        return max(t.radius + surfaceExtra + 0.8, 0.05)
+        return max(t.radius + surfaceExtra + 1.7, 0.05)
+    }
+
+    /** Radius of the ground under the camera (0 when orbiting empty space or a point). */
+    fun surfaceRadius(): Double = target?.let { it.radius + surfaceExtra } ?: 0.0
+
+    /** Height above the ground (or distance to the focus point). */
+    fun altitude(): Double = distance - surfaceRadius()
+
+    /** Rotation sensitivity near a surface (set every frame by the engine). */
+    var rotateScale = 1.0
+    /** True when standing close to the ground: horizontal drag turns, vertical drag walks. */
+    var walkMode = false
+
+    /** Applies the rotation of the body you are near, so you turn with it instead of sliding over it. */
+    fun rotateFrame(delta: Quatd) {
+        if (flight != null) return
+        orientation = (delta * orientation).normalized()
     }
 
     fun maxDistance() = Units.UNIVERSE_RADIUS * 3.0
@@ -63,9 +80,17 @@ class CameraController {
     fun rotate(dxPx: Float, dyPx: Float, viewHeightPx: Int) {
         cancelFlight()
         val k = 3.0 / max(viewHeightPx, 1)
-        applyRotation(-dxPx * k, -dyPx * k)
-        yawVel = -dxPx * k * 30
-        pitchVel = -dyPx * k * 30
+        if (walkMode) {
+            // Turn on the spot with horizontal drags, walk forward/back with vertical drags.
+            roll(dxPx * k * 0.9)
+            applyRotation(0.0, -dyPx * k * rotateScale)
+            pitchVel = -dyPx * k * rotateScale * 30
+            yawVel = 0.0
+            return
+        }
+        applyRotation(-dxPx * k * rotateScale, -dyPx * k * rotateScale)
+        yawVel = -dxPx * k * rotateScale * 30
+        pitchVel = -dyPx * k * rotateScale * 30
     }
 
     private fun applyRotation(yaw: Double, pitch: Double) {
@@ -78,8 +103,14 @@ class CameraController {
         cancelFlight()
         if (factor <= 0f) return
         val f = factor.toDouble().pow(ZOOM_POWER)
-        setDistance(distance / f)
+        scaleAltitude(f)
         zoomVel = ln(f) * 20
+    }
+
+    /** Divides the height above the ground (or the distance) by [f]. */
+    private fun scaleAltitude(f: Double) {
+        val s = surfaceRadius()
+        setDistance(s + (distance - s) / f)
     }
 
     /** Sets the distance directly (used by the zoom slider). */
@@ -90,7 +121,7 @@ class CameraController {
     /** Two-finger drag: slide the focus point sideways. Leaves the current target. */
     fun pan(dxPx: Float, dyPx: Float, viewHeightPx: Int) {
         cancelFlight()
-        val worldPerPx = distance * 1.0 / max(viewHeightPx, 1)
+        val worldPerPx = max(altitude(), 0.5) * 1.0 / max(viewHeightPx, 1)
         val move = right() * (-dxPx * worldPerPx) + up() * (dyPx * worldPerPx)
         if (target != null) {
             val keep = position()
@@ -171,7 +202,7 @@ class CameraController {
             yawVel *= decay; pitchVel *= decay
         }
         if (abs(zoomVel) > 1e-4) {
-            setDistance(distance / exp(zoomVel * dt))
+            scaleAltitude(exp(zoomVel * dt))
             zoomVel *= exp(-dt * 6.0)
         }
         if (distance < minDistance()) distance = minDistance()

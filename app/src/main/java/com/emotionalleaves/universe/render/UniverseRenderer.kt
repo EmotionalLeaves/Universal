@@ -35,7 +35,8 @@ class UniverseRenderer(private val context: Context, private val engine: Engine)
     private val solarLayer = SolarSystemLayer()
     private val starLayer = StarLayer()
     private val systemLayer = SystemLayer()
-    private val layers: List<Layer> = listOf(starLayer, systemLayer, solarLayer, testLayer)
+    private val terrainLayer = TerrainLayer()
+    private val layers: List<Layer> = listOf(starLayer, systemLayer, solarLayer, terrainLayer, testLayer)
 
     override fun onSurfaceCreated(gl: GL10?, config: EGLConfig?) {
         textures.contextLost()
@@ -72,16 +73,25 @@ class UniverseRenderer(private val context: Context, private val engine: Engine)
             target = cam.target
         }
         val fovY = Math.toRadians(60.0)
-        val proj = Mat4.perspectiveInfinite(fovY, width.toDouble() / height, 0.01)
-        val viewProj = Mat4.multiply(proj, Mat4.viewRotation(orientation))
-        val frame = Frame(camPos, orientation, viewProj, width, height, fovY, engine.jd, t0, focusDist)
+        // Near the ground, tilt the view up toward the horizon so you see the landscape.
+        var viewOrientation = orientation
+        if (target != null && target.radius > 0) {
+            val alt = (target.position(engine.jd) - camPos).length() - target.radius
+            val f = 1.0 - com.emotionalleaves.universe.core.smoothstep(0.0003, 0.03, alt / target.radius)
+            if (f > 0) viewOrientation = orientation * Quatd.axisAngle(com.emotionalleaves.universe.core.Vec3d.X, Math.toRadians(76.0) * f)
+        }
+        val proj = Mat4.perspectiveInfinite(fovY, width.toDouble() / height, 0.05)
+        val viewProj = Mat4.multiply(proj, Mat4.viewRotation(viewOrientation))
+        val frame = Frame(camPos, viewOrientation, viewProj, width, height, fovY, engine.jd, t0, focusDist)
 
-        GLES30.glClearColor(0f, 0f, 0f, 1f)
+        val sky = terrainLayer.skyColor
+        GLES30.glClearColor(sky[0], sky[1], sky[2], 1f)
         GLES30.glClearDepthf(1f)
         GLES30.glDepthMask(true)
         GLES30.glClear(GLES30.GL_COLOR_BUFFER_BIT or GLES30.GL_DEPTH_BUFFER_BIT)
 
         testLayer.enabled = engine.settings.showTestObjects
+        starLayer.daylight = terrainLayer.daylight
         solarLayer.showOrbits = engine.settings.showOrbits
         systemLayer.showOrbits = engine.settings.showOrbits
         for (l in layers) l.update(frame, ctx)

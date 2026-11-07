@@ -21,6 +21,8 @@ class StarLayer : Layer {
     private var stars: RealStars? = null
     private var fallback: PointBatch? = null
     var magLimit = 7.2f
+    /** 0..1: how much daylight washes out the stars (from the terrain layer). */
+    var daylight = 0f
 
     override fun init(rc: RenderContext) {
         uploaded.clear()
@@ -56,7 +58,8 @@ class StarLayer : Layer {
     }
 
     override fun drawTransparent(frame: Frame, rc: RenderContext) {
-        val lim = magLimit + rc.engine.settings.starBrightness
+        val lim = magLimit + rc.engine.settings.starBrightness - daylight * 7f
+        if (daylight > 0.97f) return
         rc.drawer.beginAdditive()
         fallback?.let { rc.drawer.points(frame, it, lim, 3f, 1f, minSize = 1.5f, maxSize = 9f) }
         for (u in uploaded) for (b in u.batches) {
