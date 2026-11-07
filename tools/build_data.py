@@ -984,18 +984,34 @@ def build_pulsars(base):
     d = os.path.join(base, "exotic")
     os.makedirs(d, exist_ok=True)
     header, data = vizier_tsv("B/psr/psr", "&-out.all")
-    log(f"  pulsar columns: {header[:30]}")
+    log(f"  pulsar columns: {header}")
+    if data:
+        log(f"  first pulsar row: {data[0][:40]}")
     cn = find_col(header, "PSRJ", "Name", "PSR")
-    cra = find_col(header, "_RAJ2000", "RAJ2000", "RA_ICRS")
-    cde = find_col(header, "_DEJ2000", "DEJ2000", "DE_ICRS")
-    cd = find_col(header, "Dist", "DIST", "Dist_DM")
+    cra = find_col(header, "_RA.icrs", "_RAJ2000", "RAJ2000", "RA2000")
+    cde = find_col(header, "_DE.icrs", "_DEJ2000", "DEJ2000", "DE2000")
+    cd = find_col(header, "Dist", "DIST", "Dist_DM", "DistDM", "Dist1")
+    if cd is None:
+        cd = next((i for i, h in enumerate(header) if "dist" in h.lower() and not h.startswith(("e_", "r_"))), None)
     cp = find_col(header, "P0", "P")
+
+    def coord(v, hours):
+        x = fnum(v)
+        if x is not None and ":" not in v and " " not in v.strip():
+            return x
+        try:
+            parts = v.replace(":", " ").split()
+            while len(parts) < 3:
+                parts.append("0")
+            return parse_sexa(":".join(parts[:3]), hours)
+        except Exception:
+            return None
     n = 0
     with open(os.path.join(d, "pulsars.tsv"), "w", encoding="utf-8") as f:
         f.write("name\tra\tdec\tdist_kpc\tperiod_s\n")
         for r in data:
             g = lambda i: r[i].strip() if i is not None and i < len(r) else ""
-            ra, de = fnum(g(cra)), fnum(g(cde))
+            ra, de = coord(g(cra), True), coord(g(cde), False)
             if ra is None or de is None:
                 continue
             dist = fnum(g(cd))
@@ -1047,8 +1063,8 @@ def build_clusters(base):
         header, data = vizier_tsv("VII/110A", "&-out.all")
     log(f"  Abell columns: {header[:20]}")
     cn = find_col(header, "ACO", "A")
-    cra = find_col(header, "_RAJ2000", "RAJ2000")
-    cde = find_col(header, "_DEJ2000", "DEJ2000")
+    cra = find_col(header, "_RA.icrs", "_RAJ2000", "RAJ2000")
+    cde = find_col(header, "_DE.icrs", "_DEJ2000", "DEJ2000")
     cz = find_col(header, "z", "Redshift")
     cm = find_col(header, "m10")
     cr = find_col(header, "Rich", "R")
