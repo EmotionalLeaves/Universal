@@ -3,6 +3,9 @@ package com.emotionalleaves.universe.ui
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -17,6 +20,9 @@ import com.emotionalleaves.universe.engine.Engine
 
 @Composable
 fun UniverseScreen(engine: Engine, version: String, view: UniverseView) {
+    androidx.compose.runtime.LaunchedEffect(Unit) {
+        engine.packs.onChange = { PacksUi.refresh(engine) }
+    }
     Box(Modifier.fillMaxSize().background(Color.Black)) {
         AndroidView(factory = { view }, modifier = Modifier.fillMaxSize())
         AndroidView(
@@ -31,7 +37,11 @@ fun UniverseScreen(engine: Engine, version: String, view: UniverseView) {
                 engine,
                 Modifier.align(Alignment.CenterEnd).padding(end = 6.dp),
             )
-            HomeButton(engine, Modifier.align(Alignment.TopEnd).padding(8.dp))
+            Row(Modifier.align(Alignment.TopEnd).padding(8.dp)) {
+                HomeButton(engine)
+                Spacer(Modifier.width(6.dp))
+                MenuButton()
+            }
             Column(
                 Modifier.align(Alignment.BottomCenter).padding(horizontal = 10.dp, vertical = 8.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
@@ -42,6 +52,11 @@ fun UniverseScreen(engine: Engine, version: String, view: UniverseView) {
                     TimeBar(engine, Modifier.align(Alignment.BottomEnd))
                 }
             }
+        }
+        when (Nav.screen) {
+            Screen.MENU -> MenuSheet(engine)
+            Screen.DATA -> DataScreen(engine)
+            else -> {}
         }
     }
 }

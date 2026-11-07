@@ -16,6 +16,7 @@ class Engine(val context: Context) {
     val camera = CameraController()
     val settings = Settings(context)
     val world = World(this)
+    val packs = PackManager(context, world, settings)
 
     /** Simulation time as a Julian date. */
     @Volatile var jd: Double = Astro.julianDate(System.currentTimeMillis())

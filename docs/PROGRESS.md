@@ -173,7 +173,7 @@ Phone checklist:
 
 ## Round 10 — Other galaxies
 
-**Status:** pushed.
+**Status:** build 9 green.
 
 Finished:
 - 62,171 galaxies at real positions: 55,877 with measured distances from Cosmicflows-4, 6,294 more from OpenNGC redshifts (Hubble's law), plus the Magellanic Clouds and other Local Group members. Verified: Andromeda 2.44 Mly, LMC 160,000 ly, Whirlpool 27 Mly, M87 55 Mly.
@@ -200,3 +200,18 @@ Finished:
 Phone checklist:
 - [ ] Zoomed all the way out, the observable universe is a ball with the glowing shell
 - [ ] Frame rate stays above 30 the whole way
+
+## Round 12 — Data packs
+
+**Status:** pushed.
+
+Finished:
+- Menu (☰, top right) → Data packs screen: each pack with size, Download / Cancel / Delete, progress bar, total storage used, and a Wi-Fi-only switch (on by default).
+- Packs are files in the `data-v1` GitHub Release (found through the GitHub API, downloaded with redirects followed), unzipped into the app's private storage, and loaded live without restarting:
+  - "750,000 more real stars" (AT-HYG to magnitude 11). When installed, generated stars must be fainter than magnitude 10.5 as seen from the Sun (rule 2).
+  - "Millions of real galaxies" (GLADE+, trimmed to a phone-friendly sample). When installed, the generated cosmic web moves out beyond its reach.
+- Deleting a pack instantly falls back to the bundled data plus generated content.
+
+Phone checklist:
+- [ ] Downloading the full AT-HYG pack adds visible stars
+- [ ] Deleting it leaves the app still working

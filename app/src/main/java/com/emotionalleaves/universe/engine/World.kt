@@ -50,6 +50,23 @@ class World(private val engine: Engine) {
     @Volatile var glade: GladePack? = null
         private set
 
+    /** Reloads everything that depends on installed packs (call from any thread). */
+    fun packsChanged() {
+        loader.execute {
+            val rs = realStars
+            if (rs != null) {
+                val f = java.io.File(engine.context.filesDir, "packs/stars-athyg/athyg.bin")
+                rs.packs = if (f.exists()) {
+                    try { listOf(f.inputStream().use { StarFiles.read(it, "AT-HYG") }) } catch (_: Throwable) { emptyList() }
+                } else emptyList()
+                // A deeper real catalogue means generated stars must stay fainter (rule 2).
+                StarField.catalogLimit = if (rs.packs.isNotEmpty()) 10.5 else 8.0
+                genLocal = null
+            }
+        }
+        reloadLargeScale()
+    }
+
     /** Adds a generated galaxy (from the cosmic web) so it can be entered like a real one. */
     fun registerExtraGalaxy(g: GalaxyBody) {
         if (galaxyIndex.containsKey(g.id)) return
@@ -188,7 +205,7 @@ class World(private val engine: Engine) {
             } catch (e: Throwable) {
                 android.util.Log.w("World", "Galaxies failed: $e")
             }
-            reloadLargeScale()
+            packsChanged()
             try {
                 val list = DsoBody.load(engine.context)
                 for (d in list) byIdConcurrent[d.id] = d
