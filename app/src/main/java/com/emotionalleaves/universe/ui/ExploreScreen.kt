@@ -45,7 +45,8 @@ private val CATEGORIES = listOf(
         listOf(
             p("Ceres", "Largest asteroid, a dwarf planet", "1 Ceres"), p("Vesta", "Giant asteroid with a huge crater", "4 Vesta"),
             p("Pallas", "Third-largest asteroid", "2 Pallas"), p("Eros", "First asteroid a spacecraft landed on", "433 Eros"),
-            p("Bennu", "Sampled by OSIRIS-REx", "101955 Bennu"), p("Ryugu", "Sampled by Hayabusa2", "162173 Ryugu"),
+            p("Psyche", "A metal-rich asteroid, NASA mission target", "16 Psyche"), p("Ida", "First asteroid found with a moon", "243 Ida"),
+            p("Eris", "Distant dwarf planet, almost Pluto's size", "136199 Eris"), p("Sedna", "Takes 11,000 years to orbit", "90377 Sedna"),
             p("Halley's Comet", "Returns every 76 years", "1P/Halley"), p("Comet 67P", "Visited by Rosetta", "67P/Churyumov-Gerasimenko"),
             p("Encke's Comet", "Shortest-period big comet", "2P/Encke"),
         ),

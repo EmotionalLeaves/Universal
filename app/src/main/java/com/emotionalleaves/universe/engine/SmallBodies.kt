@@ -62,6 +62,8 @@ class SmallBodies(
                     if (n == 0) continue
                     val p = line.split('\t')
                     if (p.size < 11) continue
+                    // Pluto is already a full body of the solar system.
+                    if (p[0] == "134340 Pluto") continue
                     val v = DoubleArray(9) { p[it + 1].toDoubleOrNull() ?: 0.0 }
                     names.add(p[0])
                     el.add(v[0]); el.add(v[1]); el.add(Math.toRadians(v[2])); el.add(Math.toRadians(v[3]))
@@ -269,6 +271,18 @@ class ExoticCatalog(
 
 /** Every known moon of the planets (JPL mean elements), added beside the hand-made major moons. */
 object CatalogMoons {
+    /** Mean radii (km) of well-known smaller moons; the rest get typical sizes. */
+    private val RADII = mapOf(
+        "phoebe" to 106.5, "himalia" to 69.8, "nereid" to 170.0, "hyperion" to 135.0, "elara" to 43.0, "pasiphae" to 30.0,
+        "sinope" to 19.0, "lysithea" to 18.0, "carme" to 23.0, "ananke" to 14.0, "amalthea" to 83.5, "thebe" to 49.3,
+        "metis" to 21.5, "adrastea" to 8.2, "janus" to 89.2, "epimetheus" to 58.2, "prometheus" to 43.1, "pandora" to 40.7,
+        "atlas" to 15.1, "pan" to 14.1, "helene" to 18.0, "telesto" to 12.4, "calypso" to 9.5, "daphnis" to 3.8,
+        "puck" to 81.0, "portia" to 67.6, "juliet" to 46.8, "belinda" to 45.0, "cressida" to 39.8, "rosalind" to 36.0,
+        "desdemona" to 32.0, "bianca" to 25.7, "ophelia" to 21.4, "cordelia" to 20.1, "sycorax" to 78.0, "caliban" to 36.0,
+        "proteus" to 210.0, "larissa" to 97.0, "galatea" to 88.0, "despina" to 75.0, "thalassa" to 41.0, "naiad" to 33.0,
+        "halimede" to 31.0, "nix" to 25.0, "hydra" to 25.0, "kerberos" to 6.0, "styx" to 5.0,
+    )
+
     /** Adds moons from planets/moons.tsv; major moons already present get the real orbit instead. */
     fun addTo(context: Context, all: MutableList<SolarBody>) {
         val rows = try {
@@ -297,7 +311,8 @@ object CatalogMoons {
             val poleDec = p[10].toDoubleOrNull()?.takeIf { it > -900 } ?: 66.560708
             val epoch = parseEpoch(p[11])
             val irregular = e > 0.12 || Math.toDegrees(inc) in 25.0..155.0 || aKm * 1000 > planet.radius * 80
-            val rKm = (p[12].toDoubleOrNull() ?: 0.0).takeIf { it > 1.0 } ?: if (irregular) 3.0 else 8.0
+            val known0 = RADII[name.lowercase(Locale.US)] ?: (p[12].toDoubleOrNull() ?: 0.0).takeIf { it > 1.0 }
+            val rKm = known0 ?: if (irregular) 3.0 else 8.0
             // Laplace-plane frame: Z = plane pole, X = its ascending node on the equator.
             val z = Vec3d.fromRaDec(poleRa, poleDec)
             var x = Vec3d.Z.cross(z)
@@ -323,7 +338,7 @@ object CatalogMoons {
                 listOf(
                     "Orbit shape" to String.format(Locale.US, "eccentricity %.3f, tilt %.1f°%s", e, Math.toDegrees(inc), if (retro) " (goes backwards)" else ""),
                     "Position" to "JPL mean orbital elements",
-                    "Size" to if ((p[12].toDoubleOrNull() ?: 0.0) > 1.0) String.format(Locale.US, "%,.0f km across", rKm * 2) else "unknown (shown as a typical ${if (irregular) "small captured" else "small"} moon)",
+                    "Size" to if (known0 != null) String.format(Locale.US, "about %,.0f km across", rKm * 2) else "unknown (shown as a typical ${if (irregular) "small captured" else "small"} moon)",
                 ),
                 grey,
             )
