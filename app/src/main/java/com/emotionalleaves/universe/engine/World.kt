@@ -303,7 +303,10 @@ class World(private val engine: Engine) {
                 if (target.kind == Kind.MOON && target.parent.parent != null) parts.add(target.parent.name)
                 parts.add(target.name)
             }
-            is PlanetBody -> parts.add(target.name.removePrefix(target.star.name).trim().ifEmpty { target.name })
+            is PlanetBody -> {
+                target.host?.let { parts.add(it.name.removePrefix(target.star.name).trim().ifEmpty { it.name }) }
+                parts.add(target.name.removePrefix(target.star.name).trim().ifEmpty { target.name })
+            }
             is DsoBody -> parts.add(target.name)
             else -> {}
         }
@@ -382,10 +385,13 @@ class World(private val engine: Engine) {
         if (id.startsWith("gs:") && !id.contains("/")) return StarField.fromId(id) { galaxyIndex[it] }
         if (id.startsWith("hyg:") && !id.contains("/")) return id.removePrefix("hyg:").toIntOrNull()?.let { realStars?.body(it) }
         if (id.contains("/")) {
-            val star = find(id.substringBeforeLast("/")) as? StarBody ?: return null
-            return systemFor(star).planets.firstOrNull { it.id == id }
+            return when (val parent = find(id.substringBeforeLast("/"))) {
+                is StarBody -> systemFor(parent).planets.firstOrNull { it.id == id }
+                is PlanetBody -> parent.moons.firstOrNull { it.id == id }
+                else -> null
+            }
         }
-        if (id.startsWith("exo:")) {
+        if (id.startsWith("exo:") && !id.contains("/m")) {
             val name = id.removePrefix("exo:")
             val cat = exo ?: return null
             for ((sid, rows) in exoForStar) {
@@ -408,7 +414,10 @@ class World(private val engine: Engine) {
         if (engine.settings.showTestObjects && (testPlanet.position(jd) - cam).length() < Units.R_EARTH * 1.5) out.add(testPlanet)
         activeSystem?.let { sys ->
             if ((sys.star.pos - cam).length() < sys.star.radius * 1.5) out.add(sys.star)
-            for (p in sys.planets) if ((p.position(jd) - cam).length() < p.radius * 1.5 + 50_000) out.add(p)
+            for (p in sys.planets) {
+                if ((p.position(jd) - cam).length() < p.radius * 1.5 + 50_000) out.add(p)
+                for (m in p.moons) if ((m.position(jd) - cam).length() < m.radius * 1.5 + 50_000) out.add(m)
+            }
         }
         return out
     }

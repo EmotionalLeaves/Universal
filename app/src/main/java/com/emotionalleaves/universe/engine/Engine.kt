@@ -301,7 +301,7 @@ class Engine(val context: Context) {
     fun parentOf(b: Body?): Body? = when (b) {
         null -> null
         is SolarBody -> b.parent ?: world.milkyWay
-        is PlanetBody -> b.star
+        is PlanetBody -> b.host ?: b.star
         is StarBody -> if (b.galaxyName == "Milky Way") world.milkyWay else world.galaxyContaining(b.pos) ?: world.universe
         is DsoBody -> world.milkyWay
         is GalaxyBody -> if (b.isMilkyWay) world.universe else world.universe

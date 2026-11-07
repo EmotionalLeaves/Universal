@@ -20,9 +20,14 @@ class SystemLayer : Layer {
     override fun init(rc: RenderContext) {
         built = null
         orbits.clear()
+        ringMesh = Meshes.ring(0.62f, 1f)
     }
 
     private fun system(rc: RenderContext) = rc.engine.world.activeSystem
+    private var ringMesh: Mesh? = null
+
+    /** Planets and their moons. */
+    private fun bodies(sys: StarSystem): List<PlanetBody> = sys.planets.flatMap { listOf(it) + it.moons }
 
     override fun update(frame: Frame, rc: RenderContext) {
         val sys = system(rc)
@@ -30,7 +35,7 @@ class SystemLayer : Layer {
             for (m in orbits.values) m.release()
             orbits.clear()
             if (sys != null) {
-                for (p in sys.planets) {
+                for (p in bodies(sys)) {
                     val n = 180
                     val pts = FloatArray((n + 1) * 3)
                     for (i in 0..n) {
@@ -63,7 +68,7 @@ class SystemLayer : Layer {
             rc.drawer.sphere(frame, starRel, sys.star.radius, Quatd.IDENTITY, starMaterial(sys.star), Vec3d.Z,
                 if (spx < 40) rc.programs.lowSphereMesh else rc.programs.sphereMesh)
         }
-        for (p in sys.planets) {
+        for (p in bodies(sys)) {
             if (rc.engine.world.terrainActiveFor(p)) continue
             val rel = frame.rel(p.position(frame.jd))
             val px = frame.pixelSize(p.radius, rel.length())
@@ -82,18 +87,32 @@ class SystemLayer : Layer {
         // Corona glow
         val c = StarBody.tempColor(sys.star.teff)
         rc.drawer.glow(frame, starRel, sys.star.radius * 5, c, 0.8f, minPixels = 0.0)
-        // Orbits
+        // Orbits (moons: only when you are near their planet)
         if (showOrbits) {
-            for (p in sys.planets) {
+            for (p in bodies(sys)) {
                 val m = orbits[p.id] ?: continue
-                val far = 1.0 - smoothstep(p.aM * 60, p.aM * 400, camFromStar)
+                val anchorRel = p.host?.let { frame.rel(it.position(frame.jd)) } ?: starRel
+                val fromAnchor = anchorRel.length()
+                val far = 1.0 - smoothstep(p.aM * 30, p.aM * 200, fromAnchor)
                 val near = smoothstep(p.radius * 30, p.radius * 400, frame.rel(p.position(frame.jd)).length())
-                val a = (0.32 * far * near).toFloat()
-                if (a > 0.01) rc.drawer.lines(frame, m, starRel, 1.0, Quatd.IDENTITY, Material.rgb(p.palette[2]), a)
+                val a = ((if (p.host != null) 0.25 else 0.32) * far * near).toFloat()
+                if (a > 0.01) rc.drawer.lines(frame, m, anchorRel, 1.0, Quatd.IDENTITY, Material.rgb(p.palette[2]), a)
             }
         }
-        // Atmospheres and point glows for small planets
+        rc.drawer.end()
+        // Rings (alpha blended)
+        rc.drawer.beginAlpha()
         for (p in sys.planets) {
+            if (p.ringOuter <= 0) continue
+            val rel = frame.rel(p.position(frame.jd))
+            if (frame.pixelSize(p.radius, rel.length()) < 1.5) continue
+            rc.drawer.ring(frame, ringMesh!!, rel, p.spin(frame.jd), p.radius * p.ringOuter, 0,
+                Material.rgb(p.palette[2]), p.radius, starRel - rel)
+        }
+        rc.drawer.end()
+        rc.drawer.beginAdditive()
+        // Atmospheres and point glows for small planets
+        for (p in bodies(sys)) {
             val rel = frame.rel(p.position(frame.jd))
             val dist = rel.length()
             val px = frame.pixelSize(p.radius, dist)
@@ -123,11 +142,13 @@ class SystemLayer : Layer {
             val px = frame.pixelSize(sys.star.radius, camFromStar).toFloat()
             out.add(Pickable(sys.star, s.first, s.second, max(px, 8f), 9f, true, 0xFFFFE6B0.toInt()))
         }
-        for (p in sys.planets) {
+        for (p in bodies(sys)) {
             val rel = frame.rel(p.position(frame.jd))
             val s = frame.project(rel) ?: continue
             val px = frame.pixelSize(p.radius, rel.length()).toFloat()
-            val label = camFromStar < p.aM * 300
+            val host = p.host
+            val label = if (host != null) (host.position(frame.jd) - frame.camPos).length() < p.aM * 25 else camFromStar < p.aM * 300
+            if (host != null && !label && px < 2 && p != rc.engine.selected) continue
             out.add(Pickable(p, s.first, s.second, max(px, 6f), 7f, label,
                 if (p.source.name == "REAL") 0xFFBFF0D0.toInt() else 0xFFDCCBFF.toInt()))
         }

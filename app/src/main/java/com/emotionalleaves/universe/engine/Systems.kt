@@ -83,9 +83,15 @@ class PlanetBody(
     val hasAtmosphere: Boolean,
     override val source: Source,
     private val extra: List<Pair<String, String>>,
+    /** For moons: the planet they orbit. */
+    val host: PlanetBody? = null,
+    /** Ring outer radius in planet radii (0 = no rings). */
+    val ringOuter: Double = 0.0,
 ) : Body() {
-    override val kind = Kind.PLANET
+    override val kind = if (host != null) Kind.MOON else Kind.PLANET
     override val color = palette[0]
+    /** Generated moons (filled in by SystemFactory). */
+    var moons: List<PlanetBody> = emptyList()
     val solid get() = type == PlanetType.LAVA || type == PlanetType.ROCKY || type == PlanetType.OCEAN ||
         type == PlanetType.ICE || type == PlanetType.SUPER_EARTH
 
@@ -95,18 +101,21 @@ class PlanetBody(
         return plane.rotate(inPlane)
     }
 
-    override fun position(jd: Double): UPos = star.pos + relative(jd)
+    override fun position(jd: Double): UPos = (host?.position(jd) ?: star.pos) + relative(jd)
 
     fun spin(jd: Double): Quatd = plane * Quatd.axisAngle(Vec3d.Z, (jd * 2 * Math.PI / (0.4 + (seed and 15) / 10.0)) % (2 * Math.PI))
 
-    override val subtitle get() = "${type.label} orbiting ${star.name}"
+    override val subtitle get() = if (host != null) "${type.label} · moon of ${host.name}" else "${type.label} orbiting ${star.name}"
     override fun viewDistance() = radius * 3.2
 
     override fun facts(jd: Double): List<Pair<String, String>> {
         val out = ArrayList<Pair<String, String>>()
         out.add("Radius" to String.format(Locale.US, "%.2f × Earth", radius / Units.R_EARTH))
         if (massMe > 0) out.add("Mass" to String.format(Locale.US, "%.2f × Earth", massMe))
-        out.add("Orbit" to String.format(Locale.US, "%.3f AU, %s", aM / Units.AU, SolarBody.period(periodDays)))
+        if (host != null) out.add("Orbit" to String.format(Locale.US, "%,.0f km from ${host.name}, %s", aM / 1000, SolarBody.period(periodDays)))
+        else out.add("Orbit" to String.format(Locale.US, "%.3f AU, %s", aM / Units.AU, SolarBody.period(periodDays)))
+        if (moons.isNotEmpty()) out.add("Moons" to "${moons.size} (generated)")
+        if (ringOuter > 0) out.add("Rings" to "Yes (generated)")
         if (teq > 0) out.add("Temperature" to String.format(Locale.US, "about %.0f K (%.0f °C)", teq, teq - 273.15))
         out.addAll(extra)
         return out
@@ -155,8 +164,50 @@ object SystemFactory {
                 type, teq, palette(type, teq, rng), rng.nextLong(), hasAtmo(type), Source.REAL, extra,
             )
         }
+        for (p in planets) addMoons(p, rng)
         return StarSystem(star, planets, true)
     }
+
+    /** Moons for a planet: more and larger around giants (rule 4: parents decide children). */
+    fun addMoons(p: PlanetBody, parentRng: Rng) {
+        val rng = Rng(Rng.hash(p.seed, 77))
+        val n = when (p.type) {
+            PlanetType.GAS_GIANT, PlanetType.HOT_JUPITER -> if (p.type == PlanetType.HOT_JUPITER) rng.nextInt(2) else 1 + rng.nextInt(5)
+            PlanetType.ICE_GIANT -> 1 + rng.nextInt(4)
+            PlanetType.MINI_NEPTUNE -> rng.nextInt(3)
+            else -> if (rng.chance(0.25)) 1 else 0
+        }
+        if (n == 0) return
+        val massKg = (if (p.massMe > 0) p.massMe else 1.0) * 5.972e24
+        // Keep moons well inside the planet's Hill sphere.
+        val hill = p.aM * (massKg / (3 * 1.989e30)).pow(1.0 / 3)
+        var a = p.radius * (3.0 + rng.nextDouble() * 4)
+        val list = ArrayList<PlanetBody>()
+        for (k in 0 until n) {
+            if (a > hill * 0.4) break
+            val big = p.radius > 3 * Units.R_EARTH
+            val r = (if (big) 0.08 + rng.nextDouble() * 0.35 else 0.03 + rng.nextDouble() * 0.2) * Units.R_EARTH
+            val period = 2 * Math.PI * sqrt(a * a * a / (6.674e-11 * massKg)) / 86400
+            val teq = p.teq
+            val type = when {
+                k == 0 && big && rng.chance(0.2) -> PlanetType.LAVA
+                teq < 200 -> PlanetType.ICE
+                else -> PlanetType.ROCKY
+            }
+            val plane = Quatd.axisAngle(Vec3d.X, Math.toRadians(rng.gaussian() * 3))
+            list.add(
+                PlanetBody(
+                    "${p.id}/m${k + 1}", "${p.name} ${toRoman(k + 1)}", p.star, a, rng.nextDouble() * 0.03, plane,
+                    rng.nextDouble() * 2 * Math.PI, period, r, 0.0, type, teq, palette(type, teq, rng), rng.nextLong(),
+                    false, Source.GENERATED, listOf("Data" to "Generated moon (generator v$GENERATOR_VERSION)"), host = p,
+                ),
+            )
+            a *= 1.6 + rng.nextDouble() * 1.2
+        }
+        p.moons = list
+    }
+
+    private fun toRoman(n: Int) = listOf("I", "II", "III", "IV", "V", "VI", "VII", "VIII").getOrElse(n - 1) { n.toString() }
 
     fun generated(star: StarBody): StarSystem {
         val rng = Rng(Rng.hash(Rng.hashString(star.id), GENERATOR_VERSION.toLong()))
@@ -208,10 +259,12 @@ object SystemFactory {
                     basePlane * tilt, rng.nextDouble() * 2 * Math.PI, period, re * Units.R_EARTH, mass, type, teq,
                     palette(type, teq, rng), rng.nextLong(), hasAtmo(type), Source.GENERATED,
                     listOf("Data" to "Generated from the star's type (generator v$GENERATOR_VERSION)"),
+                    ringOuter = if ((type == PlanetType.GAS_GIANT || type == PlanetType.ICE_GIANT) && rng.chance(0.3)) 1.8 + rng.nextDouble() * 0.8 else 0.0,
                 ),
             )
             aAu *= 1.45 + rng.nextDouble() * 0.9
         }
+        for (p in planets) addMoons(p, rng)
         return StarSystem(star, planets, false)
     }
 
