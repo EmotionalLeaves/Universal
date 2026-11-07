@@ -50,11 +50,30 @@ class World(private val engine: Engine) {
     fun galaxyContaining(cam: UPos): GalaxyBody? {
         var best: GalaxyBody? = null
         var bestF = 1.5
-        for (g in galaxies) {
+        for (g in nearGalaxies) {
             val f = (g.center - cam).length() / g.radius
             if (f < bestF) { bestF = f; best = g }
         }
         return best
+    }
+
+    /** Up to 4 galaxies within 40 of their own radii of the camera, nearest (relative to size) first. */
+    @Volatile var nearGalaxies: List<GalaxyBody> = listOf(milkyWay)
+        private set
+    private var nearTimer = 1.0
+
+    private fun updateNearGalaxies(cam: UPos, dt: Double) {
+        nearTimer += dt
+        if (nearTimer < 0.3) return
+        nearTimer = 0.0
+        val list = galaxies
+        val cand = ArrayList<Pair<GalaxyBody, Double>>()
+        for (g in list) {
+            val f = (g.center - cam).length() / g.radius
+            if (f < 40) cand.add(g to f)
+        }
+        cand.sortBy { it.second }
+        nearGalaxies = cand.take(4).map { it.first }
     }
 
     private fun updateGenerated(cam: UPos, dt: Double) {
@@ -135,6 +154,11 @@ class World(private val engine: Engine) {
                 loadExoplanets()
             } catch (e: Throwable) {
                 android.util.Log.w("World", "Exoplanets failed: $e")
+            }
+            try {
+                registerGalaxies(GalaxyCatalog.load(engine.context))
+            } catch (e: Throwable) {
+                android.util.Log.w("World", "Galaxies failed: $e")
             }
             try {
                 val list = DsoBody.load(engine.context)
@@ -226,6 +250,7 @@ class World(private val engine: Engine) {
 
     fun update(engine: Engine, dt: Double) {
         val cam = synchronized(engine.camera) { engine.camera.position() }
+        updateNearGalaxies(cam, dt)
         updateGenerated(cam, dt)
         systemTimer += dt
         if (systemTimer > 0.25) {

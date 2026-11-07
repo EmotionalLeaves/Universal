@@ -423,7 +423,7 @@ object StarField {
     fun makeBody(g: GalaxyBody, pos: UPos, absMag: Double, teff: Double, cell: Long, tier: Int, i: Int): StarBody {
         val (cx, cy, cz) = unpackCell(cell)
         val hash = (Rng.hash(cx.toLong(), cy.toLong(), cz.toLong(), tier.toLong()) ushr 48).toInt() and 0xFFFF
-        val prefix = if (g.isMilkyWay) "MW" else g.name.split(" ").first().take(6)
+        val prefix = if (g.isMilkyWay) "MW" else shortName(g.name)
         val name = String.format(Locale.US, "%s %04X-%d%s", prefix, hash, i, if (tier % 2 == 1) "L" else "")
         val spect = when {
             teff > 30000 -> "O"
@@ -440,6 +440,13 @@ object StarField {
             listOf("Data" to "Generated from the ${g.name} model (generator v${SystemFactory.GENERATOR_VERSION})"),
             StarBody.rgbInt(c[0], c[1], c[2]), g.name,
         )
+    }
+
+    /** Short code for a galaxy name: "Andromeda Galaxy" -> "Andromeda", "Large Magellanic Cloud" -> "LMC". */
+    fun shortName(name: String): String {
+        if (name.startsWith("PGC ") || name.startsWith("NGC ") || name.startsWith("IC ")) return name.replace(" ", "")
+        val words = name.split(" ").filter { it.isNotEmpty() && it != "Galaxy" }
+        return if (words.size <= 1) (words.firstOrNull() ?: name).take(10) else words.joinToString("") { it.take(1).uppercase() }
     }
 
     /** Rebuilds a generated star from its id (for bookmarks and search). */

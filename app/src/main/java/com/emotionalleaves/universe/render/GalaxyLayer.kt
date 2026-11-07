@@ -52,11 +52,7 @@ class GalaxyLayer : Layer {
     override fun update(frame: Frame, rc: RenderContext) {
         val world = rc.engine.world
         // Keep glow clouds for galaxies within ~40 radii of the camera (at most a few).
-        val near = world.galaxies
-            .map { it to (it.center - frame.camPos).length() / it.radius }
-            .filter { it.second < 40 }
-            .sortedBy { it.second }
-            .take(4)
+        val near = world.nearGalaxies.map { it to 0.0 }
         var built = 0
         for ((g, _) in near) {
             if (!glows.containsKey(g.id) && built == 0) {

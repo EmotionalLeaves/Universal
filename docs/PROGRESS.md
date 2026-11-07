@@ -170,3 +170,18 @@ Finished:
 Phone checklist:
 - [ ] The Orion Nebula sits below Orion's belt
 - [ ] The Pleiades look like a tight cluster when you fly through them
+
+## Round 10 — Other galaxies
+
+**Status:** pushed.
+
+Finished:
+- 62,171 galaxies at real positions: 55,877 with measured distances from Cosmicflows-4, 6,294 more from OpenNGC redshifts (Hubble's law), plus the Magellanic Clouds and other Local Group members. Verified: Andromeda 2.44 Mly, LMC 160,000 ly, Whirlpool 27 Mly, M87 55 Mly.
+- Shapes from the Hubble type (spiral, barred, lenticular, elliptical, irregular), sizes from the catalogue's angular size, tilt from position angle and axis ratio. Where a value is missing it is generated (seeded) and listed under "Generated" on the info card.
+- Far away: points whose brightness follows a zoom-dependent exposure, so distant galaxies stay visible as you zoom out. A few pixels across: shaped discs with arms and bulges, tilted in 3D.
+- Any galaxy can be entered: within ~40 radii its glow is built from its own density model, and inside it stars (then planets, then terrain) are generated with that galaxy's seed. Same galaxy, same stars, every time.
+- Generated star names use a short galaxy code ("Andromeda 4F2A-12", "LMC 0B00-3").
+
+Phone checklist:
+- [ ] You can fly into Andromeda and land on a generated planet there
+- [ ] Leaving and coming back shows the same planet
