@@ -126,7 +126,7 @@ Phone checklist:
 
 ## Round 7 — Planet surfaces
 
-**Status:** pushed.
+**Status:** build 6 green.
 
 Finished:
 - `engine/Terrain.kt`: cube-sphere quadtree (6 faces, tiles of 17×17 vertices + skirts), refined around the camera down to ~5 m tiles (21 levels on Earth). Tiles build on two worker threads (<1 ms each) and upload a few per frame.
@@ -155,3 +155,18 @@ Finished:
 Phone checklist:
 - [ ] Zooming out from the Sun shows the whole galaxy and a "You are here" marker
 - [ ] Zooming back in returns you to the same real stars
+
+## Round 9 — Nebulae and clusters
+
+**Status:** pushed.
+
+Finished:
+- 1,365 nebulae and clusters from OpenNGC at their real sky positions and angular sizes (dark nebulae skipped: an additive renderer can't darken).
+- Distances: curated real values for ~120 famous objects (M42 1,344 ly, Pleiades 444 ly, Crab 6,500 ly...); the rest are estimated from the object type and marked "estimated" on the info card.
+- Nebulae are soft, noise-shaped glowing volumes coloured by type (red emission, blue reflection, teal planetary rings, filamentary supernova remnants), fading as you fly inside them.
+- Clusters glow from afar and resolve into generated member stars up close (Plummer-sphere distribution; old red giants in globulars, hot blue stars in young open clusters). Members bright enough to be in the real catalogue are skipped (rule 2).
+- Labels for Messier and named objects; tap any for an info card.
+
+Phone checklist:
+- [ ] The Orion Nebula sits below Orion's belt
+- [ ] The Pleiades look like a tight cluster when you fly through them

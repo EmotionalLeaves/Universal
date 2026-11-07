@@ -97,6 +97,7 @@ class World(private val engine: Engine) {
     }
 
     private val byId = HashMap<String, Body>()
+    private val byIdConcurrent = java.util.concurrent.ConcurrentHashMap<String, Body>()
     private val loader = java.util.concurrent.Executors.newSingleThreadExecutor()
 
     /** Real star catalogues; null until loaded (or if the data is missing). */
@@ -105,6 +106,9 @@ class World(private val engine: Engine) {
     @Volatile var starsFailed = false
         private set
     @Volatile var exo: ExoCatalog? = null
+        private set
+    /** Nebulae and star clusters (OpenNGC). */
+    @Volatile var dsos: List<DsoBody> = emptyList()
         private set
     private val exoForStar = java.util.concurrent.ConcurrentHashMap<String, List<ExoRow>>()
 
@@ -131,6 +135,13 @@ class World(private val engine: Engine) {
                 loadExoplanets()
             } catch (e: Throwable) {
                 android.util.Log.w("World", "Exoplanets failed: $e")
+            }
+            try {
+                val list = DsoBody.load(engine.context)
+                for (d in list) byIdConcurrent[d.id] = d
+                dsos = list
+            } catch (e: Throwable) {
+                android.util.Log.w("World", "Deep sky failed: $e")
             }
         }
     }
@@ -225,6 +236,7 @@ class World(private val engine: Engine) {
 
     fun find(id: String): Body? {
         byId[id]?.let { return it }
+        byIdConcurrent[id]?.let { return it }
         if (id.startsWith("gal:")) return galaxyIndex[id]
         if (id.startsWith("gs:") && !id.contains("/")) return StarField.fromId(id) { galaxyIndex[it] }
         if (id.startsWith("hyg:") && !id.contains("/")) return id.removePrefix("hyg:").toIntOrNull()?.let { realStars?.body(it) }
