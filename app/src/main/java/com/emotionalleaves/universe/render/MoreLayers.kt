@@ -227,10 +227,47 @@ class ExoticLayer : Layer {
         if (day < 0.03f) return
         val exp = exposure(frame)
         rc.drawer.beginAdditive()
-        psr?.let { rc.drawer.points(frame, it, 7.2f + rc.engine.settings.starBrightness, 2.2f, 0.8f * day, minSize = 1.2f, maxSize = 5f) }
+        // Pulsars are invisible to the eye: show them as markers only when looking at the galaxy
+        // from afar (not as fake stars in the night sky), or when one is selected.
+        val psrVis = pulsarMarkers(frame)
+        psr?.let { if (psrVis > 0.01f) rc.drawer.points(frame, it, 7.2f + rc.engine.settings.starBrightness, 2.2f, 0.8f * day * psrVis, minSize = 1.2f, maxSize = 5f) }
         qso?.let { rc.drawer.points(frame, it, exp, 2.2f, 0.9f * day, minSize = 1.1f, maxSize = 5f) }
         gcl?.let { rc.drawer.points(frame, it, exp, 2.6f, 0.9f * day, minSize = 1.4f, maxSize = 8f) }
+        // Close up: a pulsar is a tiny white-hot ball with a glow; a quasar a blinding core.
+        val ex = src
+        if (ex != null) {
+            for (b in ex.pulsars) {
+                val rel = frame.rel(b.position(0.0))
+                val d = rel.length()
+                if (d > 30 * Units.PC) continue
+                rc.drawer.glow(frame, rel, b.radius * 8, floatArrayOf(0.7f, 0.85f, 1f), 0.8f * day, minPixels = 3.0)
+            }
+            val sel = rc.engine.selected
+            if (sel is ExoticBody && sel.kind == Kind.QUASAR) {
+                val rel = frame.rel(sel.position(0.0))
+                if (rel.length() < 2 * Units.MPC) rc.drawer.glow(frame, rel, 2e17, floatArrayOf(0.8f, 0.88f, 1f), 0.9f, minPixels = 10.0)
+            }
+        }
         rc.drawer.end()
+    }
+
+    override fun drawOpaque(frame: Frame, rc: RenderContext) {
+        val ex = src ?: return
+        rc.drawer.beginOpaque()
+        for (b in ex.pulsars) {
+            val rel = frame.rel(b.position(0.0))
+            val px = frame.pixelSize(b.radius, rel.length())
+            if (px < 0.7) continue
+            val m = Material(Material.STAR, floatArrayOf(0.8f, 0.88f, 1f), floatArrayOf(0.6f, 0.7f, 1f), floatArrayOf(1f, 1f, 1f), ambient = 1f)
+            rc.drawer.sphere(frame, rel, b.radius, Quatd.IDENTITY, m, -rel, if (px < 40) rc.programs.lowSphereMesh else rc.programs.sphereMesh)
+        }
+        rc.drawer.end()
+    }
+
+    private fun pulsarMarkers(frame: Frame): Float {
+        val fromSun = (frame.camPos - UPos.ZERO).length()
+        val zoom = kotlin.math.max(frame.focusDistance, fromSun)
+        return smoothstep(30 * Units.LY, 300 * Units.LY, zoom).toFloat()
     }
 
     override fun pickAt(frame: Frame, rc: RenderContext, x: Float, y: Float, reach: Float): Body? {
@@ -241,6 +278,7 @@ class ExoticLayer : Layer {
         for (list in listOf(ex.clusters, ex.quasars, ex.pulsars)) for (b in list) {
             val rel = frame.rel(b.position(0.0))
             val dist = rel.length()
+            if (b.kind == Kind.PULSAR && pulsarMarkers(frame) < 0.3f && (b.position(0.0) - frame.camPos).length() > 30 * Units.PC) continue
             val lim = if (b.kind == Kind.PULSAR) 7.2 + rc.engine.settings.starBrightness else exp.toDouble()
             val m = absMag(b) + 5 * log10(max(dist / Units.PC, 1.0)) - 5
             if (m > lim + 0.5) continue

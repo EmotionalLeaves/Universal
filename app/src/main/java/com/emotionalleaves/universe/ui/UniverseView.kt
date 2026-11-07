@@ -29,6 +29,8 @@ class UniverseView(context: Context, private val engine: Engine) : GLSurfaceView
     private var lastCx = 0f
     private var lastCy = 0f
     private var panAccum = 0f
+    private var zoomAccum = 0f
+    private var panning = false
     private var twoFinger = false
     private var downTime = 0L
     private var downX = 0f
@@ -70,10 +72,12 @@ class UniverseView(context: Context, private val engine: Engine) : GLSurfaceView
                         val dx = cx - lastCx
                         val dy = cy - lastCy
                         panAccum += hypot(dx, dy)
-                        // Only pan once the fingers have clearly slid together, so pinching
-                        // doesn't knock you off the object you are looking at.
-                        // Never slide off a trip in progress just because the fingers drifted while pinching.
-                        if (panAccum > PAN_THRESHOLD_PX * (if (cam.isFlying) 3 else 1) || (cam.target == null && !cam.isFlying)) cam.pan(dx, dy, height)
+                        zoomAccum += kotlin.math.abs(d - lastDist)
+                        // A pinch always drifts a little; only treat it as a two-finger slide when the
+                        // fingers clearly move together more than they spread, so pinching never knocks
+                        // you off the object you are looking at (or the one you are flying to).
+                        if (!panning && panAccum > PAN_THRESHOLD_PX * (if (cam.isFlying) 3 else 1) && panAccum > zoomAccum * 1.5f) panning = true
+                        if (panning || (cam.target == null && !cam.isFlying)) cam.pan(dx, dy, height)
                         var da = ang - lastAngle
                         if (da > Math.PI) da -= (2 * Math.PI).toFloat()
                         if (da < -Math.PI) da += (2 * Math.PI).toFloat()
@@ -97,6 +101,8 @@ class UniverseView(context: Context, private val engine: Engine) : GLSurfaceView
                 if (remaining < e.pointerCount) {
                     lastX = e.getX(remaining); lastY = e.getY(remaining)
                 }
+                // Back to one finger: let it orbit again (it can no longer count as a tap).
+                if (e.pointerCount == 2) { twoFinger = false; moved = TAP_SLOP_PX * 10 }
             }
             MotionEvent.ACTION_UP -> {
                 val quick = e.eventTime - downTime < 300
@@ -124,6 +130,8 @@ class UniverseView(context: Context, private val engine: Engine) : GLSurfaceView
         lastCy = (e.getY(0) + e.getY(1)) / 2
         lastAngle = angle(e)
         panAccum = 0f
+        zoomAccum = 0f
+        panning = false
     }
 
     private fun dist(e: MotionEvent) = hypot(e.getX(0) - e.getX(1), e.getY(0) - e.getY(1))

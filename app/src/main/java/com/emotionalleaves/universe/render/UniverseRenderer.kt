@@ -82,12 +82,15 @@ class UniverseRenderer(private val context: Context, private val engine: Engine)
         val orientation: Quatd
         val focusDist: Double
         val target: Body?
+        val flyingTo: Body?
         synchronized(cam) {
             camPos = cam.position()
             orientation = cam.orientation
             focusDist = cam.distance
             target = cam.target
+            flyingTo = if (cam.isFlying) cam.zoomTarget() else null
         }
+        this.flyingTo = flyingTo
         val fovY = Math.toRadians(60.0)
         // Near the ground, tilt the view up toward the horizon so you see the landscape.
         var viewOrientation = orientation
@@ -211,6 +214,8 @@ class UniverseRenderer(private val context: Context, private val engine: Engine)
 
     private fun overlaps(a: FloatArray, b: FloatArray) = a[0] < b[2] && b[0] < a[2] && a[1] < b[3] && b[1] < a[3]
 
+    /** What the camera is flying to right now (null when not flying), for the status panel. */
+    private var flyingTo: Body? = null
     private var aboutFor: String? = null
     private var aboutCache: com.emotionalleaves.universe.engine.Describe.About? = null
     private var storyCache = ""
@@ -268,8 +273,9 @@ class UniverseRenderer(private val context: Context, private val engine: Engine)
             Hud.dateText = date
             Hud.rateText = rate
             Hud.distanceText = Units.formatDistance(focusDist)
-            Hud.focusName = target?.name ?: "Empty space"
-            Hud.lastName = if (target == null) (engine.lastTarget?.name ?: "") else ""
+            val going = flyingTo
+            Hud.focusName = target?.name ?: going?.let { "Flying to ${it.name}" } ?: "Empty space"
+            Hud.lastName = if (target == null && going == null) (engine.lastTarget?.name ?: "") else ""
             Hud.altitudeText = altitude
             Hud.selectedName = sel?.name ?: ""
             Hud.selectedSubtitle = sel?.subtitle ?: ""

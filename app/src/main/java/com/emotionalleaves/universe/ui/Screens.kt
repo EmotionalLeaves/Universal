@@ -128,8 +128,8 @@ fun formatBytes(b: Long): String = when {
 fun DataScreen(engine: Engine) {
     Panel("Data packs", { Nav.screen = Screen.NONE }) {
         Text(
-            "The app already includes the Sun's neighbourhood, 109,000 bright stars, 6,000+ exoplanets and " +
-                "62,000 galaxies. Packs add more real data; without them, the gaps are generated.",
+            "The app already includes 109,000 stars, 6,400 exoplanets, 52,000 asteroids, 4,000 comets, every known moon, " +
+                "62,000 galaxies, 56,000 quasars and more. Packs add more real data; without them, the gaps are generated.",
             color = TextDim, fontSize = 13.sp,
         )
         Spacer(Modifier.height(12.dp))
@@ -197,7 +197,7 @@ fun SearchScreen(engine: Engine) {
     androidx.compose.runtime.LaunchedEffect(Unit) {
         engine.prepareSearch {
             SearchUi.ready = true
-            SearchUi.results = engine.search.search(SearchUi.query)
+            engine.searchAsync(SearchUi.query) { SearchUi.results = it }
         }
     }
     Panel("Search", { Nav.screen = Screen.NONE }) {
@@ -205,7 +205,7 @@ fun SearchScreen(engine: Engine) {
             value = SearchUi.query,
             onValueChange = {
                 SearchUi.query = it
-                SearchUi.results = engine.search.search(it)
+                if (it.isBlank()) SearchUi.results = emptyList() else engine.searchAsync(it) { r -> SearchUi.results = r }
             },
             modifier = Modifier.fillMaxWidth(),
             singleLine = true,

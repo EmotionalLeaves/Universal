@@ -140,7 +140,10 @@ class SolarSystemLayer : Layer {
                     val normal = r.cross(v).normalized()
                     val rot = Quatd.fromBasis(r.normalized(), normal.cross(r.normalized()).normalized(), normal)
                     val camToParent = parentRel.length()
-                    val a = (0.28 * (1.0 - smoothstep(b.orbitRadius * 25, b.orbitRadius * 120, camToParent))).toFloat()
+                    // Hundreds of small moons: show their orbits only close in, or when selected.
+                    val big = b.radius > 150_000 || b == rc.engine.selected
+                    val far = if (big) 25.0 to 120.0 else 1.5 to 4.0
+                    val a = (0.28 * (1.0 - smoothstep(b.orbitRadius * far.first, b.orbitRadius * far.second, camToParent))).toFloat()
                     if (a > 0.01) rc.drawer.lines(frame, circle!!, parentRel, r.length(), rot, Material.rgb(b.color), a)
                 }
             }
@@ -198,8 +201,10 @@ class SolarSystemLayer : Layer {
                 Kind.PLANET -> camFromSun < 400 * Units.AU
                 Kind.DWARF_PLANET -> camFromSun < 120 * Units.AU
                 else -> {
+                    // Big moons are named from afar; the hundreds of small ones only up close.
                     val parentDist = (b.parent!!.position(frame.jd) - frame.camPos).length()
-                    parentDist < b.orbitRadius * 30
+                    if (b.radius > 150_000) parentDist < b.orbitRadius * 30
+                    else parentDist < b.orbitRadius * 3 && parentDist < b.parent.radius * 400
                 }
             }
             val pri = when (b.kind) {

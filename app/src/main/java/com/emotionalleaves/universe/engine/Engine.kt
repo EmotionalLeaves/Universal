@@ -22,6 +22,20 @@ class Engine(val context: Context) {
     private val bg = java.util.concurrent.Executors.newSingleThreadExecutor()
 
     /** Builds the search index in the background (first time the search screen opens). */
+    private val searchExec = java.util.concurrent.Executors.newSingleThreadExecutor()
+    @Volatile private var searchGen = 0
+
+    /** Searches off the main thread; only the latest query's results are delivered. */
+    fun searchAsync(query: String, done: (List<SearchHit>) -> Unit) {
+        val gen = ++searchGen
+        searchExec.execute {
+            if (gen != searchGen) return@execute
+            val r = try { search.search(query) } catch (e: Exception) { ErrorLog.record("search", e); emptyList() }
+            if (gen != searchGen) return@execute
+            android.os.Handler(android.os.Looper.getMainLooper()).post { if (gen == searchGen) done(r) }
+        }
+    }
+
     fun prepareSearch(done: () -> Unit) {
         bg.execute {
             if (!search.ready() || world.searchStale) {
@@ -310,8 +324,11 @@ class Engine(val context: Context) {
         is PlanetBody -> b.host ?: b.star
         is StarBody -> if (b.galaxyName == "Milky Way") world.milkyWay else world.galaxyContaining(b.pos) ?: world.universe
         is DsoBody -> world.milkyWay
-        is GalaxyBody -> if (b.isMilkyWay) world.universe else world.universe
+        is GalaxyBody -> world.universe
         is UniverseBody -> null
+        is SmallBody -> world.solar.first()
+        is RemnantBody -> world.galaxyContaining(b.pos) ?: world.milkyWay
+        is ExoticBody -> if (b.kind == Kind.PULSAR) world.milkyWay else world.universe
         else -> world.milkyWay
     }
 

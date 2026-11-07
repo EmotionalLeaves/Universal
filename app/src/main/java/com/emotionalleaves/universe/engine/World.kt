@@ -91,8 +91,11 @@ class World(private val engine: Engine) {
             if (add.size >= 16) break
         }
         if (add.isEmpty()) return
-        for (g in add) galaxyIndex[g.id] = g
-        galaxies = galaxies + add
+        synchronized(galaxyLock) {
+            val fresh = add.filter { !galaxyIndex.containsKey(it.id) }
+            for (g in fresh) galaxyIndex[g.id] = g
+            if (fresh.isNotEmpty()) galaxies = galaxies + fresh
+        }
     }
 
     val universe = UniverseBody()
@@ -123,10 +126,15 @@ class World(private val engine: Engine) {
 
     /** Adds a generated galaxy (from the cosmic web) so it can be entered like a real one. */
     fun registerExtraGalaxy(g: GalaxyBody) {
-        if (galaxyIndex.containsKey(g.id)) return
-        galaxyIndex[g.id] = g
-        galaxies = galaxies + g
+        synchronized(galaxyLock) {
+            if (galaxyIndex.containsKey(g.id)) return
+            galaxyIndex[g.id] = g
+            galaxies = galaxies + g
+        }
     }
+
+    /** Guards changes to [galaxies]: several threads (taps, lookups, loading) add to it. */
+    private val galaxyLock = Any()
 
     /** (Re)loads the GLADE+ pack and regenerates the cosmic web beyond whatever real data we have. */
     fun reloadLargeScale() {
@@ -142,8 +150,12 @@ class World(private val engine: Engine) {
     }
 
     fun registerGalaxies(list: List<GalaxyBody>) {
-        for (g in list) galaxyIndex[g.id] = g
-        galaxies = listOf(milkyWay) + list
+        synchronized(galaxyLock) {
+            for (g in list) galaxyIndex[g.id] = g
+            // Keep anything registered meanwhile (taps on distant galaxies during loading).
+            val ids = list.mapTo(HashSet()) { it.id }
+            galaxies = listOf(milkyWay) + list + galaxies.filter { !it.isMilkyWay && it.id !in ids }
+        }
     }
 
     /** The galaxy the camera is inside, if any. */
@@ -443,6 +455,7 @@ class World(private val engine: Engine) {
                 parts.add(target.name.removePrefix(target.star.name).trim().ifEmpty { target.name })
             }
             is DsoBody -> parts.add(target.name)
+            is SmallBody, is RemnantBody, is ExoticBody -> parts.add(target.name)
             else -> {}
         }
         return parts.joinToString(" › ")

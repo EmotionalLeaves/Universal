@@ -29,29 +29,60 @@ class GalaxyCatalogLayer : Layer {
     override fun init(rc: RenderContext) {
         source = null
         batch = null
+        extraBatch = null
+        mainCount = 0
     }
 
     /** Limiting magnitude grows as you zoom out so distant galaxies stay visible. */
     fun exposure(frame: Frame): Float = (7.2 + 5 * log10(max(1.0, frame.focusDistance / (0.3 * Units.MPC)))).toFloat()
 
-    override fun update(frame: Frame, rc: RenderContext) {
-        val list = rc.engine.world.galaxies
-        if (list === source) return
-        source = list
-        batch?.release()
-        val n = list.size
-        val data = FloatArray(n * 7)
-        px = DoubleArray(n); py = DoubleArray(n); pz = DoubleArray(n); pr = DoubleArray(n)
-        for ((i, g) in list.withIndex()) {
+    /** Galaxies added after the big catalogue (field galaxies you approach) go in a small second batch. */
+    private var mainCount = 0
+    private var extraBatch: PointBatch? = null
+
+    private fun pointData(list: List<GalaxyBody>, from: Int): FloatArray {
+        val data = FloatArray((list.size - from) * 7)
+        for (i in from until list.size) {
+            val g = list[i]
+            val k = (i - from) * 7
+            data[k] = px[i].toFloat(); data[k + 1] = py[i].toFloat(); data[k + 2] = pz[i].toFloat()
+            val c = tint(g.model.type)
+            data[k + 3] = c[0]; data[k + 4] = c[1]; data[k + 5] = c[2]
+            // The Milky Way is drawn from inside by GalaxyLayer; as a point it would blaze in Sagittarius.
+            data[k + 6] = if (g.isMilkyWay) 99f else g.absMag.toFloat()
+        }
+        return data
+    }
+
+    private fun fillCoords(list: List<GalaxyBody>, from: Int) {
+        for (i in from until list.size) {
+            val g = list[i]
             val v = (g.center - UPos.ZERO) / Units.PC
             px[i] = v.x; py[i] = v.y; pz[i] = v.z; pr[i] = g.radiusPc
-            data[i * 7] = v.x.toFloat(); data[i * 7 + 1] = v.y.toFloat(); data[i * 7 + 2] = v.z.toFloat()
-            val c = tint(g.model.type)
-            data[i * 7 + 3] = c[0]; data[i * 7 + 4] = c[1]; data[i * 7 + 5] = c[2]
-            // The Milky Way is drawn from inside by GalaxyLayer; as a point it would blaze in Sagittarius.
-            data[i * 7 + 6] = if (g.isMilkyWay) 99f else g.absMag.toFloat()
         }
-        batch = PointBatch.upload(UPos.ZERO, Units.PC, data)
+    }
+
+    override fun update(frame: Frame, rc: RenderContext) {
+        val list = rc.engine.world.galaxies
+        val old = source
+        if (list === old) return
+        source = list
+        val n = list.size
+        val grows = old != null && old.isNotEmpty() && n > old.size && batch != null &&
+            list[0] === old[0] && list[old.size - 1] === old[old.size - 1] && mainCount <= old.size
+        if (grows) {
+            // Only new galaxies were appended: extend the coordinate arrays, rebuild the small batch.
+            px = px.copyOf(n); py = py.copyOf(n); pz = pz.copyOf(n); pr = pr.copyOf(n)
+            fillCoords(list, old!!.size)
+            extraBatch?.release()
+            extraBatch = PointBatch.upload(UPos.ZERO, Units.PC, pointData(list, mainCount))
+            return
+        }
+        batch?.release(); extraBatch?.release(); extraBatch = null
+        px = DoubleArray(n); py = DoubleArray(n); pz = DoubleArray(n); pr = DoubleArray(n)
+        fillCoords(list, 0)
+        mainCount = n
+        batch = PointBatch.upload(UPos.ZERO, Units.PC, pointData(list, 0))
     }
 
     private fun tint(t: GalaxyType): FloatArray = when (t) {
@@ -95,6 +126,7 @@ class GalaxyCatalogLayer : Layer {
         val exp = exposure(frame)
         rc.drawer.beginAdditive()
         rc.drawer.points(frame, b, exp, 2.4f, 0.85f * day, minSize = 1.2f, maxSize = 6f)
+        extraBatch?.let { rc.drawer.points(frame, it, exp, 2.4f, 0.85f * day, minSize = 1.2f, maxSize = 6f) }
         val near = rc.engine.world.nearGalaxies
         val camRight = frame.orientation.rotate(Vec3d.X)
         val camUp = frame.orientation.rotate(Vec3d.Y)

@@ -1129,7 +1129,7 @@ def wiki_summary(title):
         "User-Agent": "UniverseExplorerDataBuilder/1.1 (https://github.com/EmotionalLeaves/Universal; data build bot)",
         "Accept": "application/json",
     })
-    for attempt in range(5):
+    for attempt in range(7):
         try:
             with urllib.request.urlopen(req, timeout=30) as r:
                 WIKI_STATS["200"] = WIKI_STATS.get("200", 0) + 1
@@ -1137,7 +1137,7 @@ def wiki_summary(title):
         except urllib.error.HTTPError as e:
             WIKI_STATS[str(e.code)] = WIKI_STATS.get(str(e.code), 0) + 1
             if e.code in (429, 503):
-                time.sleep(2.0 * (attempt + 1))
+                time.sleep(4.0 * (attempt + 1))
                 continue
             return None
         except Exception as e:
@@ -1201,7 +1201,7 @@ def build_wiki(base):
         return None
 
     from concurrent.futures import ThreadPoolExecutor
-    with ThreadPoolExecutor(3) as pool:
+    with ThreadPoolExecutor(2) as pool:
         got = [r for r in pool.map(one, todo) if r]
     log(f"  wiki HTTP results: {WIKI_STATS}")
     d = os.path.join(base, "wiki")

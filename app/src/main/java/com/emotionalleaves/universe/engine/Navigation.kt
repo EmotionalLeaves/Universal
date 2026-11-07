@@ -84,24 +84,31 @@ class SearchIndex(private val world: World) {
             if (q.startsWith("hd")) rs?.hdToId?.get(num)?.let { id -> rs.info(id)?.let { hits.add(SearchHit("hyg:$id", it.displayName(), "HD $num", 200)) } }
             if (q.startsWith("pgc")) world.galaxyById("gal:pgc$num")?.let { hits.add(SearchHit(it.id, it.name, "PGC $num", 200)) }
         }
-        if (q.startsWith("gs:") || q.startsWith("gal:") || q.startsWith("hyg:") || q.startsWith("exo:")) {
+        val idPrefixes = listOf("gs:", "gal:", "hyg:", "exo:", "sba:", "sbc:", "psr:", "qso:", "gcl:", "rem:", "sol:")
+        if (idPrefixes.any { q.startsWith(it) }) {
             world.find(query.trim())?.let { hits.add(SearchHit(it.id, it.name, it.subtitle, 300)) }
         }
         val list = entries ?: return hits
         val seen = HashSet<String>()
         hits.forEach { seen.add(it.id) }
-        val scored = ArrayList<SearchHit>()
+        // Keep only the best few hundred matches (a 1-letter query matches most of 300,000 names).
+        val keep = limit * 6
+        val heap = java.util.PriorityQueue<Pair<Int, Entry>>(keep + 1, compareBy { it.first })
+        val spaced = " $q"
         for (e in list) {
-            val s = when {
-                e.key == q -> 1000
-                e.key.startsWith(q) -> 600 - (e.key.length - q.length)
-                e.key.contains(" $q") -> 400 - (e.key.length - q.length)
-                e.key.contains(q) -> 200 - (e.key.length - q.length)
+            val k = e.key
+            val base = when {
+                k == q -> 1000
+                k.startsWith(q) -> 600
+                k.contains(spaced) -> 400
+                q.length >= 2 && k.contains(q) -> 200
                 else -> continue
-            } + e.weight
-            scored.add(SearchHit(e.id, e.name, e.detail, s))
+            }
+            val s = base - (k.length - q.length) + e.weight
+            if (heap.size < keep) heap.add(s to e)
+            else if (s > heap.peek()!!.first) { heap.poll(); heap.add(s to e) }
         }
-        scored.sortByDescending { it.score }
+        val scored = heap.map { SearchHit(it.second.id, it.second.name, it.second.detail, it.first) }.sortedByDescending { it.score }
         for (h in scored) {
             if (hits.size >= limit) break
             if (seen.add(h.id)) hits.add(h)

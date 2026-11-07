@@ -56,7 +56,7 @@ class CameraController {
     private fun solid(t: Body) = t.kind == Kind.STAR || t.kind == Kind.PLANET || t.kind == Kind.MOON ||
         t.kind == Kind.DWARF_PLANET || (t.kind == Kind.MARKER && t.radius > 0) ||
         t.kind == Kind.ASTEROID || t.kind == Kind.COMET || t.kind == Kind.ROGUE_PLANET ||
-        t.kind == Kind.NEUTRON_STAR || t.kind == Kind.BLACK_HOLE
+        t.kind == Kind.NEUTRON_STAR || t.kind == Kind.BLACK_HOLE || t.kind == Kind.PULSAR
 
     fun isSolidTarget(): Boolean = target?.let { solid(it) } ?: false
 
