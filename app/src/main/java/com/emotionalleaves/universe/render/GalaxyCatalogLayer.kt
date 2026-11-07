@@ -104,7 +104,11 @@ class GalaxyCatalogLayer : Layer {
             val dist = rel.length()
             // Close up, the galaxy's own glow and stars (GalaxyLayer) take over.
             val handOff = if (g in near) smoothstep(g.radius * 12, g.radius * 30, dist) else 1.0
-            val alpha = (0.75 * smoothstep(2.5, 8.0, pix) * handOff * day).toFloat()
+            // Surface brightness: total light spread over the disc, relative to the current exposure.
+            val m = g.absMag + 5 * log10(max(dist / Units.PC, 1.0)) - 5
+            val flux = Math.pow(10.0, -0.4 * (m - exp))
+            val surface = (flux * 30.0 / (Math.PI * pix * pix)).coerceIn(0.0, 0.8)
+            val alpha = (surface * smoothstep(2.5, 8.0, pix) * handOff * day).toFloat()
             if (alpha < 0.01f) continue
             val t = g.model.type
             val bulge = floatArrayOf(1f, 0.88f, 0.7f)

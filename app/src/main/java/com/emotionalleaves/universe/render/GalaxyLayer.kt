@@ -81,9 +81,12 @@ class GalaxyLayer : Layer {
             // Seen from far away the galaxy is drawn by the galaxy-catalogue layer instead.
             val fade = (1.0 - smoothstep(g.radius * 12, g.radius * 30, dist)).toFloat()
             if (fade <= 0.01f) continue
+            // Looking through the disk from inside piles up many blobs; from outside far fewer
+            // overlap, so boost the gain with distance to keep the galaxy visible as a whole.
+            val boost = ((dist / (0.5 * g.radius)) * (dist / (0.5 * g.radius))).coerceIn(1.0, 40.0)
             rc.drawer.points(
                 frame, glow.batch, magLimit, 3f, fade * day, fadeNear = 700 * Units.PC,
-                minSize = 1.5f, maxSize = 64f, worldSize = g.radius * 0.012, glowGain = 6f,
+                minSize = 1.5f, maxSize = 64f, worldSize = g.radius * 0.012, glowGain = (2.2 * boost).toFloat(),
             )
         }
         genBatch?.let {

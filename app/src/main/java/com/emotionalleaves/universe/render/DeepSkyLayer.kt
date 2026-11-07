@@ -56,10 +56,14 @@ class DeepSkyLayer : Layer {
             if (px < 1.0) continue
             val inside = smoothstep(d.radius * 0.25, d.radius * 1.2, dist)
             val grow = smoothstep(1.0, 10.0, px)
+            // Faint objects stay faint: catalogue magnitude, brightened as you approach.
+            val fromEarth = (d.pos - com.emotionalleaves.universe.core.UPos.ZERO).length()
+            val appMag = (d.mag ?: 9.5) + 5 * kotlin.math.log10(kotlin.math.max(dist, d.radius) / fromEarth)
+            val dim = Math.pow(10.0, -0.4 * (appMag - 6.0)).coerceIn(0.06, 1.0)
             if (d.hasNebula) {
                 val (a, b) = colors(d)
                 val style = if (d.type == "PN") 4 else 3
-                val alpha = (0.55 * grow * inside * day).toFloat()
+                val alpha = (0.6 * grow * inside * dim * day).toFloat()
                 if (alpha > 0.01f) {
                     val seed = (Rng.hashString(d.id) % 1000) / 10f
                     rc.drawer.billboard(frame, rel, right * d.radius, up * d.radius, style, a, b, seed, alpha)
@@ -69,7 +73,7 @@ class DeepSkyLayer : Layer {
                 val c = if (d.type == "GCl") floatArrayOf(1f, 0.85f, 0.6f) else floatArrayOf(0.7f, 0.8f, 1f)
                 // The glow gives way to individual stars when you get close.
                 val resolve = 1.0 - smoothstep(d.radius * 6, d.radius * 15, dist)
-                val alpha = (0.35 * grow * (1 - resolve * 0.85) * day).toFloat()
+                val alpha = (0.4 * grow * dim * (1 - resolve * 0.85) * day).toFloat()
                 if (alpha > 0.01f) {
                     rc.drawer.billboard(frame, rel, right * d.radius * 0.8, up * d.radius * 0.8,
                         if (d.type == "GCl") 2 else 0, c, c, 0f, alpha)
