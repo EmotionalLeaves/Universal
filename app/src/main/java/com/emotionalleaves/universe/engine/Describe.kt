@@ -107,7 +107,8 @@ object Describe {
         val t = s.teff
         return when {
             s.spect.startsWith("D") || (m > 9.5 && t > 5000) -> "White dwarf"
-            m < -4.5 -> "Supergiant"
+            m < -4.5 && t < 12000 -> "Supergiant"
+            m < -4.5 -> "Blue giant"
             s.spect.contains("III") || s.spect.contains("II") || (t < 5300 && m < 1.5) -> "Red giant"
             t > 20000 -> "Blue giant"
             t > 10000 -> "Blue-white star"
@@ -178,14 +179,50 @@ object Describe {
         )
     }
 
+    /** Mass in Earth masses when the catalogue has none (rough mass-radius relation by type). */
+    fun estimatedMassMe(p: PlanetBody): Double = when (p.type) {
+        PlanetType.GAS_GIANT, PlanetType.HOT_JUPITER -> 300.0
+        PlanetType.ICE_GIANT -> 16.0
+        PlanetType.MINI_NEPTUNE -> 7.0
+        else -> (p.radius / Units.R_EARTH).pow(3.5).coerceIn(0.0001, 20.0)
+    }
+
+    /** Two headline numbers for the top of the info card (distance from you is shown beside them). */
+    fun headline(b: Body, jd: Double): List<Pair<String, String>> {
+        fun km(m: Double) = String.format(Locale.US, "%,.0f km", m / 1000)
+        fun g(rel: Double) = String.format(Locale.US, "%.2f g", rel)
+        return try {
+            when (b) {
+                is StarBody -> listOf("Type" to starType(b), "Surface" to String.format(Locale.US, "%,.0f K", b.teff))
+                is PlanetBody -> {
+                    val re = b.radius / Units.R_EARTH
+                    val me = if (b.massMe > 0) b.massMe else estimatedMassMe(b)
+                    listOf("Gravity" to g(me / (re * re)), if (b.teq > 0) "Surface" to String.format(Locale.US, "%,.0f °C", b.teq - 273.15) else "Width" to km(b.radius * 2))
+                }
+                is SolarBody -> {
+                    if (b.kind == Kind.STAR) return listOf("Width" to km(b.radius * 2), "Surface" to "5,772 K")
+                    val second = if (b.massKg > 0 && b.kind != Kind.STAR) "Gravity" to g(G * b.massKg / (b.radius * b.radius) / G_EARTH)
+                    else "Orbit" to SolarBody.period(kotlin.math.abs(b.orbitPeriodDays))
+                    listOf("Width" to km(b.radius * 2), second)
+                }
+                is GalaxyBody -> if (b.isMilkyWay) listOf("Width" to "~100,000 ly", "Stars" to "100–400 bn") else listOf(
+                    "Width" to String.format(Locale.US, "%,.0f ly", b.radiusPc * 2 * 3.2616),
+                    "Stars" to Units.bigCount(10.0.pow(-0.4 * (b.absMag + 21.0)) * 1.0e11).replace(" billion", " bn").replace(" million", " m"),
+                )
+                is SmallBody -> listOf("Width" to String.format(Locale.US, "%,.1f km", b.radius * 2 / 1000), "Type" to b.kind.label)
+                is RemnantBody -> listOf("Type" to b.kind.label, "Width" to km(b.radius * 2))
+                is ExoticBody -> listOf("Type" to b.kind.label, (b.facts(jd).getOrNull(1) ?: ("" to "")).let { it.first to it.second.substringBefore(" (") })
+                is DsoBody -> listOf("Type" to DsoBody.typeLabel(b.type), "Width" to String.format(Locale.US, "%,.0f ly", b.radius * 2 / Units.LY))
+                else -> emptyList()
+            }.filter { it.second.isNotEmpty() }
+        } catch (_: Exception) {
+            emptyList()
+        }
+    }
+
     fun planetFacts(p: PlanetBody): List<Pair<String, String>> {
         val out = ArrayList<Pair<String, String>>()
-        val massMe = if (p.massMe > 0) p.massMe else when (p.type) {
-            PlanetType.GAS_GIANT, PlanetType.HOT_JUPITER -> 300.0
-            PlanetType.ICE_GIANT -> 16.0
-            PlanetType.MINI_NEPTUNE -> 7.0
-            else -> (p.radius / Units.R_EARTH).pow(3.5).coerceIn(0.01, 20.0)
-        }
+        val massMe = if (p.massMe > 0) p.massMe else estimatedMassMe(p)
         out.addAll(gravityFacts(massMe * M_EARTH, p.radius))
         if (p.host == null) {
             val l = p.star.luminosity

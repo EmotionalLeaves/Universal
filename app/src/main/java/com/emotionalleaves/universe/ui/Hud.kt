@@ -27,6 +27,10 @@ object Hud {
     var selectedLight by mutableStateOf("")
     /** Short description of the selected object, and where it comes from. */
     var selectedAbout by mutableStateOf("")
+    /** Kind label for the chip ("Star", "Moon"…), the vivid description, and two headline numbers. */
+    var selectedKind by mutableStateOf("")
+    var selectedStory by mutableStateOf("")
+    var selectedStats by mutableStateOf<List<Pair<String, String>>>(emptyList())
     var selectedAboutCredit by mutableStateOf("")
     var loading by mutableStateOf("")
 

@@ -42,49 +42,39 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.emotionalleaves.universe.engine.Engine
 
-val PanelBg = Color(0xCC0B0E18)
-val PanelBorder = Color(0x33FFFFFF)
-val TextMain = Color(0xFFE8ECF8)
-val TextDim = Color(0xFF9AA3BC)
-val Accent = Color(0xFFFFD27A)
-val RealGreen = Color(0xFF7BE0A0)
-val GenPurple = Color(0xFFC3A6FF)
 
 @Composable
 fun TopStatus(engine: Engine, modifier: Modifier = Modifier) {
     if (Hud.focusName.isEmpty()) return
     Column(modifier) {
-    Column(
-        Modifier
-            .background(PanelBg, RoundedCornerShape(14.dp))
-            .border(1.dp, PanelBorder, RoundedCornerShape(14.dp))
-            .padding(horizontal = 12.dp, vertical = 6.dp),
-    ) {
-        if (Hud.breadcrumb.isNotEmpty()) {
-            Text(Hud.breadcrumb, color = TextDim, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Column(Modifier.glass(14.dp).padding(horizontal = 12.dp, vertical = 8.dp)) {
+            if (Hud.breadcrumb.isNotEmpty()) Overline(Hud.breadcrumb)
+            Text(Hud.focusName, style = Type.Heading.copy(fontSize = 16.sp), maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(Hud.distanceText, style = Type.Caption.copy(fontFeatureSettings = "tnum"), maxLines = 1)
+                if (Hud.altitudeText.isNotEmpty()) {
+                    Text("  ·  ", style = Type.Caption.copy(color = TextFaint))
+                    Text(Hud.altitudeText, style = Type.Caption.copy(fontFeatureSettings = "tnum"), maxLines = 1)
+                }
+            }
         }
-        Text(Hud.focusName, color = TextMain, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
-        Text(
-            "Distance ${Hud.distanceText}" + if (Hud.altitudeText.isNotEmpty()) "  ·  ${Hud.altitudeText}" else "",
-            color = TextDim, fontSize = 12.sp, maxLines = 1,
-        )
-    }
-    if (Hud.lastName.isNotEmpty()) {
-        PillButton("↩ Back to ${Hud.lastName}", Modifier.padding(top = 6.dp), primary = true) { engine.recenter() }
-    }
+        if (Hud.lastName.isNotEmpty()) {
+            Button("Back to ${Hud.lastName}", Modifier.padding(top = 6.dp), glyph = G.TARGET, primary = true) { engine.recenter() }
+        }
     }
 }
 
 @Composable
 fun LoadingChip(modifier: Modifier = Modifier) {
     if (Hud.loading.isEmpty()) return
-    Text(
-        Hud.loading,
-        modifier = modifier
-            .background(Color(0x99000000), RoundedCornerShape(10.dp))
-            .padding(horizontal = 10.dp, vertical = 4.dp),
-        color = Accent, fontSize = 11.sp,
-    )
+    Row(
+        modifier.glass(10.dp).padding(horizontal = 10.dp, vertical = 5.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(Modifier.size(6.dp).background(Accent, CircleShape))
+        Spacer(Modifier.width(7.dp))
+        Text(Hud.loading, style = Type.Caption.copy(color = TextMain, fontSize = 11.5.sp))
+    }
 }
 
 @Composable
@@ -138,7 +128,7 @@ fun ZoomSlider(engine: Engine, modifier: Modifier = Modifier) {
                     modifier = Modifier
                         .align(Alignment.TopEnd)
                         .offset(y = y)
-                        .background(if (near) Color(0xCC2A2410) else Color(0x66000000), RoundedCornerShape(8.dp))
+                        .background(if (near) Accent.copy(alpha = 0.18f) else Color(0x8C0E121D), RoundedCornerShape(8.dp))
                         .clickable { Hud.zoomFraction = f; engine.setZoomFraction(f) }
                         .padding(horizontal = 6.dp, vertical = 2.dp),
                     color = if (near) Accent else TextDim,
@@ -201,151 +191,144 @@ fun ZoomSlider(engine: Engine, modifier: Modifier = Modifier) {
 
 @Composable
 fun HomeButton(engine: Engine, modifier: Modifier = Modifier) {
-    PillButton("🏠", modifier) { engine.goHome() }
+    IconButton(G.HOME, modifier) { engine.goHome() }
 }
 
 @Composable
 fun SearchButton(modifier: Modifier = Modifier) {
-    PillButton("🔍", modifier) { Nav.screen = Screen.SEARCH }
+    IconButton(G.SEARCH, modifier) { Nav.screen = Screen.SEARCH }
 }
 
 @Composable
 fun ExploreButton(modifier: Modifier = Modifier) {
-    PillButton("✦ Explore", modifier, primary = true) { Nav.screen = Screen.EXPLORE }
-}
-
-@Composable
-fun PillButton(text: String, modifier: Modifier = Modifier, primary: Boolean = false, onClick: () -> Unit) {
-    Text(
-        text,
-        modifier = modifier
-            .background(if (primary) Accent else PanelBg, RoundedCornerShape(18.dp))
-            .border(1.dp, if (primary) Color.Transparent else PanelBorder, RoundedCornerShape(18.dp))
-            .clickable { onClick() }
-            .padding(horizontal = 14.dp, vertical = 8.dp),
-        color = if (primary) Color(0xFF1A1405) else TextMain,
-        fontSize = 13.sp,
-        fontWeight = FontWeight.SemiBold,
-    )
+    Button("Explore", modifier, glyph = G.COMPASS, primary = true) { Nav.screen = Screen.EXPLORE }
 }
 
 @Composable
 fun SourceBadge(source: String) {
     if (source.isEmpty()) return
-    val c = if (source == "Real") RealGreen else GenPurple
-    Text(
-        source,
-        modifier = Modifier
-            .border(1.dp, c, RoundedCornerShape(10.dp))
-            .padding(horizontal = 8.dp, vertical = 1.dp),
-        color = c, fontSize = 11.sp, fontWeight = FontWeight.SemiBold,
-    )
+    Chip(source, if (source == "Real") RealGreen else GenPurple)
 }
 
+/**
+ * The selected object's card: kind and source chips, name, three headline numbers, a short
+ * description, then (expanded) the Wikipedia summary and every fact, and the actions.
+ */
 @Composable
 fun InfoCard(engine: Engine, modifier: Modifier = Modifier) {
     if (Hud.selectedName.isEmpty()) return
     var expanded by remember { mutableStateOf(false) }
     Column(
         modifier
-            .widthIn(max = 520.dp)
+            .widthIn(max = 540.dp)
             .fillMaxWidth()
-            .background(PanelBg, RoundedCornerShape(18.dp))
-            .border(1.dp, PanelBorder, RoundedCornerShape(18.dp))
-            .padding(14.dp),
+            .glass(20.dp)
+            .padding(start = 16.dp, end = 10.dp, top = 12.dp, bottom = 14.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Column(Modifier.weight(1f)) {
-                Text(
-                    Hud.selectedName, color = TextMain, fontSize = 18.sp, fontWeight = FontWeight.Bold,
-                    maxLines = 1, overflow = TextOverflow.Ellipsis,
-                )
-                Text(Hud.selectedSubtitle, color = TextDim, fontSize = 13.sp, maxLines = 2)
+            Row(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+                if (Hud.selectedKind.isNotEmpty()) Chip(Hud.selectedKind, kindColor(Hud.selectedKind), filled = true)
+                SourceBadge(Hud.selectedSource)
             }
-            SourceBadge(Hud.selectedSource)
-            Spacer(Modifier.width(8.dp))
-            Text(
-                "✕", color = TextDim, fontSize = 18.sp,
-                modifier = Modifier.clickable { engine.clearSelection() }.padding(6.dp),
-            )
+            IconButton(G.CLOSE, size = 32.dp, tint = TextDim) { engine.clearSelection() }
         }
-        if (Hud.selectedDistance.isNotEmpty()) {
+        Column(Modifier.padding(end = 6.dp)) {
             Text(
-                "${Hud.selectedDistance} from you" + if (Hud.selectedLight.isNotEmpty()) " · ${Hud.selectedLight}" else "",
-                color = TextDim, fontSize = 12.sp, modifier = Modifier.padding(top = 4.dp),
+                Hud.selectedName, style = Type.Title, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.padding(top = 4.dp),
             )
-        }
-        val facts = Hud.selectedFacts
-        if (facts.isNotEmpty() || Hud.selectedAbout.isNotEmpty()) {
-            Text(
-                if (expanded) "Less ▴" else "About & facts ▾", color = Accent, fontSize = 12.sp,
-                modifier = Modifier.clickable { expanded = !expanded }.padding(top = 6.dp, bottom = 2.dp),
-            )
-        }
-        if (expanded) {
-            // Scrolls inside the card so long descriptions never push the buttons off screen.
-            val maxH = (LocalConfiguration.current.screenHeightDp * 0.38f).dp
-            Column(Modifier.heightIn(max = maxH).verticalScroll(rememberScrollState())) {
-                if (Hud.selectedAbout.isNotEmpty()) {
-                    Text(Hud.selectedAbout, color = TextMain, fontSize = 13.sp, modifier = Modifier.padding(top = 4.dp))
-                    if (Hud.selectedAboutCredit.isNotEmpty()) {
-                        Text(Hud.selectedAboutCredit, color = TextDim, fontSize = 10.sp, modifier = Modifier.padding(top = 2.dp, bottom = 6.dp))
-                    }
-                }
-                for ((k, v) in facts) {
-                    Row(Modifier.fillMaxWidth().padding(vertical = 1.dp)) {
-                        Text(k, color = TextDim, fontSize = 12.sp, modifier = Modifier.weight(0.42f))
-                        Text(v, color = TextMain, fontSize = 12.sp, modifier = Modifier.weight(0.58f))
-                    }
+            if (Hud.selectedSubtitle.isNotEmpty()) Text(Hud.selectedSubtitle, style = Type.BodyDim, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            // Headline numbers
+            val tiles = buildList {
+                if (Hud.selectedDistance.isNotEmpty()) add("From you" to Hud.selectedDistance)
+                addAll(Hud.selectedStats)
+            }.take(3)
+            if (tiles.isNotEmpty()) {
+                Row(Modifier.fillMaxWidth().padding(top = 10.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    for ((k, v) in tiles) StatTile(k, v, Modifier.weight(1f))
                 }
             }
-        }
-        Spacer(Modifier.height(10.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            PillButton("Fly to", primary = true) { engine.flyToSelected() }
-            if (Hud.selectedCanLand) PillButton("Land") { engine.landOnSelected() }
-            PillButton("Out ↑") { engine.goUp() }
-            PillButton("★") {
-                val n = engine.addBookmark()
-                BookmarksUi.toast = "Bookmarked $n"
+            val maxH = (LocalConfiguration.current.screenHeightDp * (if (expanded) 0.42f else 0.16f)).dp
+            Column(Modifier.padding(top = 10.dp).heightIn(max = maxH).verticalScroll(rememberScrollState())) {
+                if (Hud.selectedStory.isNotEmpty()) {
+                    Text(Hud.selectedStory, style = Type.Body.copy(fontSize = 13.5.sp, lineHeight = 19.sp, color = Color(0xFFDCE2EE)),
+                        maxLines = if (expanded) Int.MAX_VALUE else 3, overflow = TextOverflow.Ellipsis)
+                }
+                if (expanded) {
+                    if (Hud.selectedAbout.isNotEmpty()) {
+                        Overline("About", Modifier.padding(top = 14.dp, bottom = 4.dp))
+                        Text(Hud.selectedAbout, style = Type.BodyDim.copy(color = Color(0xFFC4CBDA)))
+                        if (Hud.selectedAboutCredit.isNotEmpty()) Text(Hud.selectedAboutCredit, style = Type.Caption.copy(fontSize = 10.sp, color = TextFaint), modifier = Modifier.padding(top = 4.dp))
+                    }
+                    if (Hud.selectedFacts.isNotEmpty()) {
+                        Overline("Facts", Modifier.padding(top = 14.dp, bottom = 2.dp))
+                        for ((k, v) in Hud.selectedFacts) {
+                            Hairline()
+                            Row(Modifier.fillMaxWidth().padding(vertical = 6.dp)) {
+                                Text(k, style = Type.Caption, modifier = Modifier.weight(0.42f))
+                                Text(v, style = Type.Caption.copy(color = TextMain), modifier = Modifier.weight(0.58f))
+                            }
+                        }
+                    }
+                }
             }
-        }
-        if (BookmarksUi.toast.isNotEmpty()) {
-            Text(BookmarksUi.toast, color = RealGreen, fontSize = 12.sp, modifier = Modifier.padding(top = 6.dp))
-            androidx.compose.runtime.LaunchedEffect(BookmarksUi.toast) {
-                kotlinx.coroutines.delay(2500)
-                BookmarksUi.toast = ""
+            if (Hud.selectedStory.isNotEmpty() || Hud.selectedFacts.isNotEmpty()) {
+                Row(
+                    Modifier.clickable { expanded = !expanded }.padding(top = 6.dp, bottom = 2.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(if (expanded) "Show less" else "Read more & all facts", style = Type.Caption.copy(color = Accent, fontWeight = FontWeight.SemiBold))
+                    Spacer(Modifier.width(4.dp))
+                    Glyph(if (expanded) G.CHEVRON_UP else G.CHEVRON_DOWN, size = 14.dp, color = Accent)
+                }
+            }
+            Row(Modifier.padding(top = 10.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                Button("Fly to", glyph = G.FLY, primary = true) { engine.flyToSelected() }
+                if (Hud.selectedCanLand) Button("Land", glyph = G.LAND) { engine.landOnSelected() }
+                Spacer(Modifier.weight(1f))
+                IconButton(G.UP, size = 40.dp) { engine.goUp() }
+                IconButton(G.BOOKMARK, size = 40.dp) {
+                    val n = engine.addBookmark()
+                    BookmarksUi.toast = "Saved \u201c$n\u201d to bookmarks"
+                }
+            }
+            if (BookmarksUi.toast.isNotEmpty()) {
+                Text(BookmarksUi.toast, style = Type.Caption.copy(color = RealGreen), modifier = Modifier.padding(top = 6.dp))
+                androidx.compose.runtime.LaunchedEffect(BookmarksUi.toast) {
+                    kotlinx.coroutines.delay(2500)
+                    BookmarksUi.toast = ""
+                }
             }
         }
     }
 }
 
-/** Simulation time: date, speed, pause, real-time. */
+/** Simulation time: slower, pause, faster, date and speed, back to now. */
 @Composable
 fun TimeBar(engine: Engine, modifier: Modifier = Modifier) {
     Row(
-        modifier
-            .background(PanelBg, RoundedCornerShape(20.dp))
-            .border(1.dp, PanelBorder, RoundedCornerShape(20.dp))
-            .padding(horizontal = 6.dp, vertical = 2.dp),
+        modifier.glass(22.dp).padding(horizontal = 4.dp, vertical = 3.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        TimeButton("⏪") { engine.slower() }
-        TimeButton(if (Hud.rateText == "Paused") "▶" else "⏸") { engine.togglePause() }
-        TimeButton("⏩") { engine.faster() }
+        TimeButton(G.REW) { engine.slower() }
+        TimeButton(if (Hud.rateText == "Paused") G.PLAY else G.PAUSE) { engine.togglePause() }
+        TimeButton(G.FWD) { engine.faster() }
         Column(Modifier.padding(horizontal = 6.dp)) {
-            Text(Hud.dateText, color = TextMain, fontSize = 12.sp, fontFamily = FontFamily.Monospace)
-            Text(Hud.rateText, color = TextDim, fontSize = 10.sp)
+            Text(Hud.dateText, style = Type.Number.copy(fontSize = 12.5.sp))
+            Text(Hud.rateText, style = Type.Caption.copy(fontSize = 10.5.sp))
         }
-        TimeButton("Now") { engine.timeNow() }
+        Row(
+            Modifier.clickable { engine.timeNow() }.padding(horizontal = 8.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Glyph(G.CLOCK, size = 15.dp, color = Accent)
+            Spacer(Modifier.width(4.dp))
+            Text("Now", style = Type.Caption.copy(color = Accent, fontWeight = FontWeight.SemiBold))
+        }
     }
 }
 
 @Composable
-private fun TimeButton(text: String, onClick: () -> Unit) {
-    Text(
-        text,
-        modifier = Modifier.clickable { onClick() }.padding(horizontal = 8.dp, vertical = 8.dp),
-        color = TextMain, fontSize = 14.sp, fontWeight = FontWeight.SemiBold,
-    )
+private fun TimeButton(g: G, onClick: () -> Unit) {
+    Box(Modifier.size(36.dp).clickable { onClick() }, contentAlignment = Alignment.Center) { Glyph(g, size = 15.dp) }
 }

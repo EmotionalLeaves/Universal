@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -57,7 +58,7 @@ object PacksUi {
 
 @Composable
 fun MenuButton(modifier: Modifier = Modifier) {
-    PillButton("☰", modifier) { Nav.screen = if (Nav.screen == Screen.NONE) Screen.MENU else Screen.NONE }
+    IconButton(G.MENU, modifier, active = Nav.screen == Screen.MENU) { Nav.screen = if (Nav.screen == Screen.NONE) Screen.MENU else Screen.NONE }
 }
 
 /** Full-screen panel with a title bar and a close button. */
@@ -66,13 +67,14 @@ fun Panel(title: String, onClose: () -> Unit, content: @Composable () -> Unit) {
     Box(
         Modifier
             .fillMaxSize()
-            .background(Color(0xE6070912))
+            .background(Color(0xF2080B14))
             .safeDrawingPadding(),
     ) {
-        Column(Modifier.fillMaxSize().padding(horizontal = 16.dp)) {
-            Row(Modifier.fillMaxWidth().padding(vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text(title, color = TextMain, fontSize = 22.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
-                Text("✕", color = TextDim, fontSize = 22.sp, modifier = Modifier.clickable { onClose() }.padding(8.dp))
+        Column(Modifier.fillMaxSize().padding(horizontal = 18.dp)) {
+            Row(Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 14.dp), verticalAlignment = Alignment.CenterVertically) {
+                IconButton(G.BACK, size = 40.dp) { onClose() }
+                Spacer(Modifier.width(12.dp))
+                Text(title, style = Type.Title, modifier = Modifier.weight(1f))
             }
             Column(Modifier.fillMaxWidth().weight(1f).verticalScroll(rememberScrollState())) {
                 content()
@@ -90,30 +92,29 @@ fun MenuSheet(engine: Engine) {
                 .safeDrawingPadding()
                 .align(Alignment.TopEnd)
                 .padding(10.dp)
-                .widthIn(min = 220.dp)
-                .background(PanelBg, RoundedCornerShape(16.dp))
-                .border(1.dp, PanelBorder, RoundedCornerShape(16.dp))
-                .padding(vertical = 6.dp),
+                .padding(top = 52.dp)
+                .widthIn(min = 260.dp, max = 300.dp)
+                .glass(18.dp, raised = true)
+                .clickable(enabled = false) {}
+                .padding(horizontal = 16.dp, vertical = 10.dp),
         ) {
-            MenuItem("Explore places") { Nav.screen = Screen.EXPLORE }
-            MenuItem("What's in the universe") { Nav.screen = Screen.CENSUS }
-            MenuItem("Search") { Nav.screen = Screen.SEARCH }
-            MenuItem("Bookmarks") { Nav.screen = Screen.BOOKMARKS }
-            MenuItem("Data packs") { PacksUi.refresh(engine); Nav.screen = Screen.DATA }
-            MenuItem("Settings") { Nav.screen = Screen.SETTINGS }
-            MenuItem("How to use") { Nav.screen = Screen.HELP }
-            MenuItem("Credits") { Nav.screen = Screen.CREDITS }
+            Overline("Universe Explorer", Modifier.padding(top = 4.dp, bottom = 2.dp))
+            MenuItem(G.COMPASS, "Explore places", kindColor("star")) { Nav.screen = Screen.EXPLORE }
+            MenuItem(G.CHART, "What's in the universe", kindColor("galaxy")) { Nav.screen = Screen.CENSUS }
+            MenuItem(G.SEARCH, "Search", kindColor("planet")) { Nav.screen = Screen.SEARCH }
+            MenuItem(G.BOOKMARK, "Bookmarks", kindColor("nebula")) { Nav.screen = Screen.BOOKMARKS }
+            Hairline(Modifier.padding(vertical = 4.dp))
+            MenuItem(G.DOWNLOAD, "Data packs", TextDim) { PacksUi.refresh(engine); Nav.screen = Screen.DATA }
+            MenuItem(G.SLIDERS, "Settings", TextDim) { Nav.screen = Screen.SETTINGS }
+            MenuItem(G.HELP, "How to use", TextDim) { Nav.screen = Screen.HELP }
+            MenuItem(G.INFO, "Credits", TextDim) { Nav.screen = Screen.CREDITS }
         }
     }
 }
 
 @Composable
-private fun MenuItem(text: String, onClick: () -> Unit) {
-    Text(
-        text,
-        modifier = Modifier.fillMaxWidth().clickable { onClick() }.padding(horizontal = 18.dp, vertical = 12.dp),
-        color = TextMain, fontSize = 16.sp,
-    )
+private fun MenuItem(g: G, text: String, tint: Color, onClick: () -> Unit) {
+    ListRow(text, glyph = g, tint = tint, onClick = onClick)
 }
 
 fun formatBytes(b: Long): String = when {
@@ -150,11 +151,10 @@ fun DataScreen(engine: Engine) {
                 Modifier
                     .fillMaxWidth()
                     .padding(vertical = 6.dp)
-                    .background(PanelBg, RoundedCornerShape(14.dp))
-                    .border(1.dp, PanelBorder, RoundedCornerShape(14.dp))
-                    .padding(14.dp),
+                    .glass(16.dp, raised = true)
+                    .padding(16.dp),
             ) {
-                Text(s.info.title, color = TextMain, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+                Text(s.info.title, style = Type.Heading)
                 Text(s.info.description, color = TextDim, fontSize = 12.sp)
                 Spacer(Modifier.height(6.dp))
                 Text(
@@ -165,7 +165,7 @@ fun DataScreen(engine: Engine) {
                     },
                     color = if (s.installed) RealGreen else TextDim, fontSize = 12.sp,
                 )
-                if (s.error != null) Text(s.error, color = Color(0xFFFF8A8A), fontSize = 12.sp)
+                if (s.error != null) Text(s.error, color = Danger, fontSize = 12.sp)
                 if (s.downloading) {
                     Spacer(Modifier.height(6.dp))
                     LinearProgressIndicator(progress = { s.progress }, modifier = Modifier.fillMaxWidth())
@@ -209,6 +209,8 @@ fun SearchScreen(engine: Engine) {
             },
             modifier = Modifier.fillMaxWidth(),
             singleLine = true,
+            shape = RoundedCornerShape(14.dp),
+            leadingIcon = { Glyph(G.SEARCH, size = 18.dp, color = TextDim) },
             placeholder = { Text("Mars, Sirius, Kepler-22 b, Orion Nebula, M31, HIP 32349…", color = TextDim, fontSize = 13.sp) },
             colors = androidx.compose.material3.OutlinedTextFieldDefaults.colors(
                 focusedTextColor = TextMain, unfocusedTextColor = TextMain, cursorColor = Accent,
@@ -218,24 +220,17 @@ fun SearchScreen(engine: Engine) {
         Spacer(Modifier.height(8.dp))
         if (!SearchUi.ready) Text("Building the index…", color = TextDim, fontSize = 13.sp)
         if (SearchUi.query.isBlank()) {
-            Text("Don't know what to look for?", color = TextDim, fontSize = 13.sp, modifier = Modifier.padding(top = 4.dp))
-            PillButton("✦ Browse famous places", Modifier.padding(top = 6.dp), primary = true) { Nav.screen = Screen.EXPLORE }
+            Text("Don't know what to look for?", style = Type.BodyDim, modifier = Modifier.padding(top = 8.dp))
+            Button("Browse famous places", Modifier.padding(top = 8.dp), glyph = G.COMPASS, primary = true) { Nav.screen = Screen.EXPLORE }
         }
         if (SearchUi.ready && SearchUi.query.isNotBlank() && SearchUi.results.isEmpty()) {
             Text("Nothing found. Try a planet, star, nebula, galaxy or catalogue number.", color = TextDim, fontSize = 13.sp)
         }
         for (h in SearchUi.results) {
-            Column(
-                Modifier
-                    .fillMaxWidth()
-                    .clickable {
-                        Nav.screen = Screen.NONE
-                        engine.goTo(h.id)
-                    }
-                    .padding(vertical = 10.dp),
-            ) {
-                Text(h.name, color = TextMain, fontSize = 16.sp)
-                Text(h.detail, color = TextDim, fontSize = 12.sp)
+            val (g, tint) = glyphForDetail(h.detail)
+            ListRow(h.name, h.detail, g, tint) {
+                Nav.screen = Screen.NONE
+                engine.goTo(h.id)
             }
         }
     }
@@ -250,13 +245,13 @@ object BookmarksUi {
 fun BookmarksScreen(engine: Engine) {
     androidx.compose.runtime.LaunchedEffect(Unit) { BookmarksUi.list = engine.bookmarks.list() }
     Panel("Bookmarks", { Nav.screen = Screen.NONE }) {
-        PillButton("★ Bookmark this view", primary = true) {
+        Button("Bookmark this view", glyph = G.BOOKMARK, primary = true) {
             engine.addBookmark()
             BookmarksUi.list = engine.bookmarks.list()
         }
         Spacer(Modifier.height(12.dp))
         if (BookmarksUi.list.isEmpty()) {
-            Text("No bookmarks yet. Tap ★ on any info card, or the button above.", color = TextDim, fontSize = 13.sp)
+            Text("No bookmarks yet. Tap the bookmark button on any info card, or the button above.", style = Type.BodyDim)
         }
         for (b in BookmarksUi.list) {
             Row(Modifier.fillMaxWidth().padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -266,13 +261,13 @@ fun BookmarksScreen(engine: Engine) {
                         engine.openBookmark(b)
                     }.padding(vertical = 6.dp),
                 ) {
-                    Text(b.name, color = TextMain, fontSize = 16.sp)
+                    Text(b.name, style = Type.Body.copy(fontWeight = FontWeight.Medium))
                     Text(
                         java.text.SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.US).format(java.util.Date(b.created)),
                         color = TextDim, fontSize = 12.sp,
                     )
                 }
-                Text("Delete", color = Color(0xFFFF9A9A), fontSize = 13.sp, modifier = Modifier.clickable {
+                Text("Delete", color = Danger, fontSize = 13.sp, modifier = Modifier.clickable {
                     engine.bookmarks.remove(b)
                     BookmarksUi.list = engine.bookmarks.list()
                 }.padding(8.dp))
@@ -297,8 +292,8 @@ private fun ToggleRow(title: String, detail: String, initial: Boolean, onChange:
     var on by androidx.compose.runtime.remember { mutableStateOf(initial) }
     Row(Modifier.fillMaxWidth().padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
         Column(Modifier.weight(1f)) {
-            Text(title, color = TextMain, fontSize = 15.sp)
-            if (detail.isNotEmpty()) Text(detail, color = TextDim, fontSize = 12.sp)
+            Text(title, style = Type.Body)
+            if (detail.isNotEmpty()) Text(detail, style = Type.Caption)
         }
         Switch(checked = on, onCheckedChange = { on = it; onChange(it) })
     }
@@ -308,7 +303,8 @@ private fun ToggleRow(title: String, detail: String, initial: Boolean, onChange:
 fun SettingsScreen(engine: Engine) {
     val s = engine.settings
     Panel("Settings", { Nav.screen = Screen.NONE }) {
-        Text("Quality", color = TextMain, fontSize = 15.sp)
+        Overline("Performance", Modifier.padding(bottom = 6.dp))
+        Text("Quality", style = Type.Body)
         Text("Lower uses less battery and keeps older phones smooth.", color = TextDim, fontSize = 12.sp)
         var q by androidx.compose.runtime.remember { mutableStateOf(s.quality) }
         Row(Modifier.padding(vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -321,9 +317,11 @@ fun SettingsScreen(engine: Engine) {
             }
         }
         ToggleRow("Battery saver", "Limits to 30 frames per second", s.batterySaver) { s.batterySaver = it }
+        Overline("Display", Modifier.padding(top = 16.dp, bottom = 2.dp))
         ToggleRow("Labels", "Names next to planets, stars and galaxies", s.showLabels) { s.showLabels = it }
         ToggleRow("Orbits", "Orbit lines of planets and moons", s.showOrbits) { s.showOrbits = it }
         ToggleRow("Constellation lines", "Stick figures between real stars", s.showConstellations) { s.showConstellations = it }
+        Overline("Content", Modifier.padding(top = 16.dp, bottom = 2.dp))
         ToggleRow("Generated objects", "Fill gaps in real data with generated stars, planets and galaxies", s.showGenerated) {
             s.showGenerated = it
             engine.world.clearSystems()
@@ -368,23 +366,23 @@ fun HelpScreen() {
             "Look around" to "Drag with one finger to orbit whatever you are looking at.",
             "Zoom" to "Pinch, or drag the slider on the right. Bottom of the slider = standing on the ground; top = the whole observable universe.",
             "Pick something" to "Tap a planet, star, nebula or galaxy to see its card. Double-tap (or Fly to) to travel there.",
-            "Know more" to "Open a card's About & facts for a description and figures: gravity, your weight there, star type, lifetime, habitable zone and more.",
-            "How much is here?" to "☰ → What's in the universe counts the real objects in the app and what is generated as you travel.",
+            "Know more" to "Every card describes the object; tap Read more for the full story, its Wikipedia summary and figures: gravity, your weight there, star type, lifetime, habitable zone and more.",
+            "How much is here?" to "Menu → What's in the universe counts the real objects in the app and what is generated as you travel.",
             "Everything is there" to "Tap anywhere on the glow of a galaxy (even the Milky Way band) to pick an actual star at that spot. Fly to it: it has planets, and rocky ones can be landed on. Between galaxies, millions of dwarf and distant galaxies appear around you as you travel.",
             "Move sideways" to "Slide two fingers together. Twist two fingers to roll.",
             "On the ground" to "Zoom all the way into a rocky planet or moon. Drag up/down to walk, left/right to turn.",
-            "Time" to "Use ⏪ ⏸ ⏩ at the bottom to change how fast time runs. Now goes back to the present.",
+            "Time" to "Use the rewind, pause and fast-forward buttons at the bottom to change how fast time runs. Now goes back to the present.",
             "Real or generated" to "Every card shows a green Real badge (from scientific catalogues) or a purple Generated badge (made up by rules, the same every time).",
-            "Explore" to "Tap ✦ Explore (top right) for a list of famous places sorted by type. One tap flies you there. The 🎲 buttons pick a random alien world or a random galaxy.",
+            "Explore" to "Tap Explore (top right) for famous places sorted by type. One tap flies you there. The Surprise me buttons pick a random alien world, galaxy, black hole and more.",
             "Jump between scales" to "The labels beside the zoom slider (Ground, Planet, Solar system, Nearby stars, Milky Way, Galaxy groups, Universe) jump straight to that size.",
-            "Lost in space?" to "If you drift into empty space, tap ↩ Back to … under the name at the top left, or Home.",
-            "Find things" to "🔍 Search finds planets, stars, exoplanets, nebulae and galaxies by name or catalogue number (HIP, HD, NGC, M, PGC).",
-            "Save places" to "★ Bookmark on any card. Generated places reopen exactly the same.",
+            "Lost in space?" to "If you drift into empty space, tap Back to … under the name at the top left, or the home button.",
+            "Find things" to "Search (magnifier, top right) finds planets, stars, exoplanets, asteroids, nebulae and galaxies by name or catalogue number (HIP, HD, NGC, M, PGC).",
+            "Save places" to "The bookmark button on any card. Generated places reopen exactly the same.",
             "Home" to "Flies back to Earth.",
         )
         for ((t, d) in items) {
-            Text(t, color = TextMain, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(top = 10.dp))
-            Text(d, color = TextDim, fontSize = 13.sp)
+            Text(t, style = Type.Heading.copy(fontSize = 15.sp), modifier = Modifier.padding(top = 14.dp))
+            Text(d, style = Type.BodyDim, modifier = Modifier.padding(top = 2.dp))
         }
     }
 }
@@ -428,11 +426,11 @@ fun TipsOverlay(engine: Engine) {
     val tips = listOf(
         "Welcome!" to "You are looking at Earth, today, from space. Everything you see is in its real place.",
         "Zoom anywhere" to "Pinch, or drag the slider on the right. Tap a label beside it (Planet, Solar system, Milky Way…) to jump to that scale.",
-        "Not sure where to go?" to "Tap ✦ Explore (top right) for famous planets, stars, nebulae and galaxies, or Surprise me for a random alien world.",
+        "Not sure where to go?" to "Tap Explore (top right) for famous planets, stars, nebulae and galaxies, or Surprise me for a random alien world.",
         "Tap to explore" to "Tap anything for its card. Double-tap or Fly to to travel there.",
         "Every star is real to visit" to "Tap anywhere on the glow of a galaxy, even the Milky Way band, to pick a star at that spot. Each one has planets to fly to and land on.",
         "Real or generated" to "Green Real = from scientific catalogues. Purple Generated = filled in by rules where nobody has measured yet.",
-        "Find and save" to "🔍 searches by name. 🏠 flies home. ☰ has bookmarks, data packs and settings.",
+        "Find and save" to "The magnifier searches by name, the house flies home, and the menu has bookmarks, data packs and settings.",
     )
     Box(Modifier.fillMaxSize().background(Color(0xAA000000)).clickable { }) {
         Column(
@@ -440,17 +438,19 @@ fun TipsOverlay(engine: Engine) {
                 .align(Alignment.Center)
                 .padding(24.dp)
                 .widthIn(max = 420.dp)
-                .background(PanelBg, RoundedCornerShape(18.dp))
-                .border(1.dp, PanelBorder, RoundedCornerShape(18.dp))
-                .padding(20.dp),
+                .glass(22.dp, raised = true)
+                .padding(22.dp),
         ) {
             val (t, d) = tips[page]
-            Text(t, color = TextMain, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+            Overline("Welcome tour", color = Accent)
+            Text(t, style = Type.Title, modifier = Modifier.padding(top = 4.dp))
             Spacer(Modifier.height(8.dp))
-            Text(d, color = TextDim, fontSize = 15.sp)
-            Spacer(Modifier.height(16.dp))
+            Text(d, style = Type.Body.copy(color = TextDim, fontSize = 15.sp, lineHeight = 22.sp))
+            Spacer(Modifier.height(18.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("${page + 1} / ${tips.size}", color = TextDim, fontSize = 12.sp, modifier = Modifier.weight(1f))
+                Row(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                    for (k in tips.indices) Box(Modifier.size(if (k == page) 18.dp else 6.dp, 6.dp).background(if (k == page) Accent else TextFaint, RoundedCornerShape(3.dp)))
+                }
                 if (page < tips.size - 1) {
                     Text("Skip", color = TextDim, fontSize = 14.sp, modifier = Modifier.clickable {
                         engine.settings.seenTips = true
@@ -465,5 +465,22 @@ fun TipsOverlay(engine: Engine) {
                 }
             }
         }
+    }
+}
+
+/** Icon and colour for a search result, from its detail line. */
+private fun glyphForDetail(d: String): Pair<G, Color> {
+    val l = d.lowercase(Locale.US)
+    return when {
+        "exoplanet" in l || "planet" in l -> G.PLANET to kindColor("planet")
+        "moon" in l -> G.MOON to kindColor("moon")
+        "asteroid" in l || "comet" in l || "trojan" in l || "neptunian" in l || "centaur" in l -> G.ASTEROID to kindColor("asteroid")
+        "galaxy cluster" in l -> G.GALAXY to kindColor("galaxy cluster")
+        "galaxy" in l || "spiral" in l || "elliptical" in l || "lenticular" in l || "irregular" in l -> G.GALAXY to kindColor("galaxy")
+        "pulsar" in l || "quasar" in l -> G.SPARKLE to kindColor("pulsar")
+        "nebula" in l || "cluster" in l || "remnant" in l -> G.NEBULA to kindColor("nebula")
+        "universe" in l -> G.UNIVERSE to TextDim
+        "star" in l || "sun" in l -> G.STAR to kindColor("star")
+        else -> G.TARGET to TextDim
     }
 }

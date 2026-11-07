@@ -51,12 +51,12 @@ fun UniverseScreen(engine: Engine, version: String, view: UniverseView) {
             Column(Modifier.align(Alignment.TopEnd).padding(8.dp), horizontalAlignment = Alignment.End) {
                 Row {
                     SearchButton()
-                    Spacer(Modifier.width(6.dp))
+                    Spacer(Modifier.width(8.dp))
                     HomeButton(engine)
-                    Spacer(Modifier.width(6.dp))
+                    Spacer(Modifier.width(8.dp))
                     MenuButton()
                 }
-                ExploreButton(Modifier.padding(top = 6.dp))
+                ExploreButton(Modifier.padding(top = 8.dp))
             }
             Column(
                 Modifier.align(Alignment.BottomCenter).padding(horizontal = 10.dp, vertical = 8.dp),

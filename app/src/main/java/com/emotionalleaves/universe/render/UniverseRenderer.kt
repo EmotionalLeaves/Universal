@@ -213,12 +213,16 @@ class UniverseRenderer(private val context: Context, private val engine: Engine)
 
     private var aboutFor: String? = null
     private var aboutCache: com.emotionalleaves.universe.engine.Describe.About? = null
+    private var storyCache = ""
+    private var statsCache: List<Pair<String, String>> = emptyList()
 
     private fun publishHud(frame: Frame, target: Body?, focusDist: Double) {
         val sel = engine.selected
         if (sel?.id != aboutFor) {
             aboutFor = sel?.id
             aboutCache = sel?.let { try { com.emotionalleaves.universe.engine.Describe.about(it) } catch (_: Exception) { null } }
+            storyCache = sel?.let { com.emotionalleaves.universe.engine.Story.of(it, frame.jd) } ?: ""
+            statsCache = sel?.let { com.emotionalleaves.universe.engine.Describe.headline(it, frame.jd) } ?: emptyList()
         }
         val about = aboutCache
         val selDist = sel?.let { (it.position(frame.jd) - frame.camPos).length() }
@@ -274,7 +278,11 @@ class UniverseRenderer(private val context: Context, private val engine: Engine)
             Hud.selectedLight = selDist?.let { if (it > 3e8) "light takes ${Units.lightTime(it)}" else "" } ?: ""
             Hud.loading = loading
             Hud.selectedFacts = selFacts
-            Hud.selectedAbout = about?.text ?: ""
+            // A Wikipedia summary goes under "About"; a generic type explanation is replaced by the story.
+            Hud.selectedAbout = about?.takeIf { it.credit.startsWith("Wikipedia") || storyCache.isEmpty() }?.text ?: ""
+            Hud.selectedStory = storyCache
+            Hud.selectedStats = statsCache
+            Hud.selectedKind = sel?.kind?.label?.takeIf { it != "Marker" } ?: ""
             Hud.selectedAboutCredit = about?.credit ?: ""
             Hud.scaleBarText = Units.formatDistance(barLen)
             Hud.scaleBarFraction = barFraction
