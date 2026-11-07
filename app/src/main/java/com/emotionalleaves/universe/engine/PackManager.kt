@@ -102,7 +102,13 @@ class PackManager(private val context: Context, private val world: World, privat
                 world.packsChanged()
             } catch (e: Exception) {
                 dir(p.id).deleteRecursively()
-                val msg = if (cancelId == id) "Cancelled" else (e.message ?: e.javaClass.simpleName)
+                val msg = when {
+                    cancelId == id -> "Cancelled"
+                    e is java.io.FileNotFoundException ->
+                        "Can't reach the pack. If the GitHub repo is private, the app can't download from it: make the repo public, or install the pack manually."
+                    e is java.net.UnknownHostException -> "No internet connection."
+                    else -> e.message ?: e.javaClass.simpleName
+                }
                 main.post { errors[id] = msg }
             } finally {
                 main.post { active = null; notifyUi() }

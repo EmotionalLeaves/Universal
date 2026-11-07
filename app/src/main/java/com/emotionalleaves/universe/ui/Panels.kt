@@ -48,10 +48,11 @@ val RealGreen = Color(0xFF7BE0A0)
 val GenPurple = Color(0xFFC3A6FF)
 
 @Composable
-fun TopStatus(modifier: Modifier = Modifier) {
+fun TopStatus(engine: Engine, modifier: Modifier = Modifier) {
     if (Hud.focusName.isEmpty()) return
+    Column(modifier) {
     Column(
-        modifier
+        Modifier
             .background(PanelBg, RoundedCornerShape(14.dp))
             .border(1.dp, PanelBorder, RoundedCornerShape(14.dp))
             .padding(horizontal = 12.dp, vertical = 6.dp),
@@ -64,6 +65,10 @@ fun TopStatus(modifier: Modifier = Modifier) {
             "Distance ${Hud.distanceText}" + if (Hud.altitudeText.isNotEmpty()) "  ·  ${Hud.altitudeText}" else "",
             color = TextDim, fontSize = 12.sp, maxLines = 1,
         )
+    }
+    if (Hud.lastName.isNotEmpty()) {
+        PillButton("↩ Back to ${Hud.lastName}", Modifier.padding(top = 6.dp), primary = true) { engine.recenter() }
+    }
     }
 }
 
@@ -109,69 +114,100 @@ fun ScaleBar() {
 
 /**
  * Vertical zoom slider on a logarithmic scale: bottom = touching the surface, top = the whole
- * observable universe. Drag it to cross the universe in one swipe.
+ * observable universe. Drag it to cross the universe in one swipe. Labels on the left jump
+ * straight to a scale (Ground, Planet, Solar system ...).
  */
 @Composable
 fun ZoomSlider(engine: Engine, modifier: Modifier = Modifier) {
     var trackH by remember { mutableStateOf(1) }
     val density = LocalDensity.current
-    Box(
-        modifier
-            .width(44.dp)
-            .height(260.dp)
-            .onSizeChanged { trackH = it.height }
-            .pointerInput(Unit) {
-                detectDragGestures(
-                    onDragStart = { o ->
-                        Hud.sliderDragging = true
+    val trackDp = 300.dp
+    val presets = remember { engine.zoomPresets.map { (n, alt) -> n to engine.zoomFractionFor(alt) } }
+    Row(modifier.height(trackDp)) {
+        // Scale labels, each placed at its height on the track.
+        Box(Modifier.width(92.dp).height(trackDp)) {
+            for ((name, f) in presets) {
+                val near = kotlin.math.abs(Hud.zoomFraction - f) < 0.04f
+                val y = with(density) { ((1f - f) * trackH).toDp() } - 10.dp
+                Text(
+                    name,
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .offset(y = y)
+                        .background(if (near) Color(0xCC2A2410) else Color(0x66000000), RoundedCornerShape(8.dp))
+                        .clickable { Hud.zoomFraction = f; engine.setZoomFraction(f) }
+                        .padding(horizontal = 6.dp, vertical = 2.dp),
+                    color = if (near) Accent else TextDim,
+                    fontSize = 10.sp,
+                    maxLines = 1,
+                )
+            }
+        }
+        Box(
+            Modifier
+                .width(40.dp)
+                .height(trackDp)
+                .onSizeChanged { trackH = it.height }
+                .pointerInput(Unit) {
+                    detectDragGestures(
+                        onDragStart = { o ->
+                            Hud.sliderDragging = true
+                            val f = 1f - (o.y / trackH).coerceIn(0f, 1f)
+                            Hud.zoomFraction = f
+                            engine.setZoomFraction(f)
+                        },
+                        onDragEnd = { Hud.sliderDragging = false },
+                        onDragCancel = { Hud.sliderDragging = false },
+                    ) { change, _ ->
+                        val f = 1f - (change.position.y / trackH).coerceIn(0f, 1f)
+                        Hud.zoomFraction = f
+                        engine.setZoomFraction(f)
+                    }
+                }
+                .pointerInput(Unit) {
+                    detectTapGestures { o ->
                         val f = 1f - (o.y / trackH).coerceIn(0f, 1f)
                         Hud.zoomFraction = f
                         engine.setZoomFraction(f)
-                    },
-                    onDragEnd = { Hud.sliderDragging = false },
-                    onDragCancel = { Hud.sliderDragging = false },
-                ) { change, _ ->
-                    val f = 1f - (change.position.y / trackH).coerceIn(0f, 1f)
-                    Hud.zoomFraction = f
-                    engine.setZoomFraction(f)
-                }
+                    }
+                },
+            contentAlignment = Alignment.TopCenter,
+        ) {
+            Box(
+                Modifier
+                    .width(4.dp)
+                    .height(trackDp)
+                    .background(Color(0x55FFFFFF), RoundedCornerShape(2.dp)),
+            )
+            for ((_, f) in presets) {
+                val ty = with(density) { ((1f - f) * trackH).toDp() } - 1.dp
+                Box(Modifier.offset(y = ty).width(12.dp).height(2.dp).background(Color(0x88FFFFFF)))
             }
-            .pointerInput(Unit) {
-                detectTapGestures { o ->
-                    val f = 1f - (o.y / trackH).coerceIn(0f, 1f)
-                    Hud.zoomFraction = f
-                    engine.setZoomFraction(f)
-                }
-            },
-        contentAlignment = Alignment.TopCenter,
-    ) {
-        Box(
-            Modifier
-                .width(4.dp)
-                .height(260.dp)
-                .background(Color(0x55FFFFFF), RoundedCornerShape(2.dp)),
-        )
-        val y = with(density) { ((1f - Hud.zoomFraction) * trackH).toDp() } - 11.dp
-        Box(
-            Modifier
-                .offset(y = y)
-                .size(22.dp)
-                .background(Accent, CircleShape)
-                .border(2.dp, Color(0xAA000000), CircleShape),
-        )
-        Text("+", color = TextDim, fontSize = 12.sp, modifier = Modifier.align(Alignment.BottomCenter).offset(y = 18.dp))
-        Text("−", color = TextDim, fontSize = 12.sp, modifier = Modifier.align(Alignment.TopCenter).offset(y = (-18).dp))
+            val y = with(density) { ((1f - Hud.zoomFraction) * trackH).toDp() } - 11.dp
+            Box(
+                Modifier
+                    .offset(y = y)
+                    .size(22.dp)
+                    .background(Accent, CircleShape)
+                    .border(2.dp, Color(0xAA000000), CircleShape),
+            )
+        }
     }
 }
 
 @Composable
 fun HomeButton(engine: Engine, modifier: Modifier = Modifier) {
-    PillButton("Home", modifier) { engine.goHome() }
+    PillButton("🏠", modifier) { engine.goHome() }
 }
 
 @Composable
 fun SearchButton(modifier: Modifier = Modifier) {
     PillButton("🔍", modifier) { Nav.screen = Screen.SEARCH }
+}
+
+@Composable
+fun ExploreButton(modifier: Modifier = Modifier) {
+    PillButton("✦ Explore", modifier, primary = true) { Nav.screen = Screen.EXPLORE }
 }
 
 @Composable

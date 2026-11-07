@@ -35,7 +35,7 @@ import com.emotionalleaves.universe.engine.Engine
 import com.emotionalleaves.universe.engine.PackState
 import java.util.Locale
 
-enum class Screen { NONE, MENU, DATA, SETTINGS, SEARCH, BOOKMARKS, HELP, CREDITS }
+enum class Screen { NONE, EXPLORE, MENU, DATA, SETTINGS, SEARCH, BOOKMARKS, HELP, CREDITS }
 
 /** Which overlay screen is open. */
 object Nav {
@@ -95,6 +95,7 @@ fun MenuSheet(engine: Engine) {
                 .border(1.dp, PanelBorder, RoundedCornerShape(16.dp))
                 .padding(vertical = 6.dp),
         ) {
+            MenuItem("Explore places") { Nav.screen = Screen.EXPLORE }
             MenuItem("Search") { Nav.screen = Screen.SEARCH }
             MenuItem("Bookmarks") { Nav.screen = Screen.BOOKMARKS }
             MenuItem("Data packs") { PacksUi.refresh(engine); Nav.screen = Screen.DATA }
@@ -366,7 +367,10 @@ fun HelpScreen() {
             "On the ground" to "Zoom all the way into a rocky planet or moon. Drag up/down to walk, left/right to turn.",
             "Time" to "Use ⏪ ⏸ ⏩ at the bottom to change how fast time runs. Now goes back to the present.",
             "Real or generated" to "Every card shows a green Real badge (from scientific catalogues) or a purple Generated badge (made up by rules, the same every time).",
-            "Find things" to "Menu → Search finds planets, stars, exoplanets, nebulae and galaxies by name or catalogue number.",
+            "Explore" to "Tap ✦ Explore (top right) for a list of famous places sorted by type. One tap flies you there. Surprise me picks a random alien world.",
+            "Jump between scales" to "The labels beside the zoom slider (Ground, Planet, Solar system, Nearby stars, Milky Way, Galaxy groups, Universe) jump straight to that size.",
+            "Lost in space?" to "If you drift into empty space, tap ↩ Back to … under the name at the top left, or Home.",
+            "Find things" to "🔍 Search finds planets, stars, exoplanets, nebulae and galaxies by name or catalogue number (HIP, HD, NGC, M, PGC).",
             "Save places" to "★ Bookmark on any card. Generated places reopen exactly the same.",
             "Home" to "Flies back to Earth.",
         )
@@ -410,10 +414,11 @@ fun TipsOverlay(engine: Engine) {
     var page by androidx.compose.runtime.remember { mutableStateOf(0) }
     val tips = listOf(
         "Welcome!" to "You are looking at Earth, today, from space. Everything you see is in its real place.",
-        "Zoom anywhere" to "Pinch, or drag the slider on the right, to go from standing on a planet to the edge of the observable universe.",
+        "Zoom anywhere" to "Pinch, or drag the slider on the right. Tap a label beside it (Planet, Solar system, Milky Way…) to jump to that scale.",
+        "Not sure where to go?" to "Tap ✦ Explore (top right) for famous planets, stars, nebulae and galaxies, or Surprise me for a random alien world.",
         "Tap to explore" to "Tap anything for its card. Double-tap or Fly to to travel there.",
         "Real or generated" to "Green Real = from scientific catalogues. Purple Generated = filled in by rules where nobody has measured yet.",
-        "Find and save" to "☰ menu: search by name, bookmarks, data packs and settings.",
+        "Find and save" to "🔍 searches by name. 🏠 flies home. ☰ has bookmarks, data packs and settings.",
     )
     Box(Modifier.fillMaxSize().background(Color(0xAA000000)).clickable { }) {
         Column(

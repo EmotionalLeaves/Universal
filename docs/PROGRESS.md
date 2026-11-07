@@ -267,3 +267,11 @@ Phone checklist:
 1. Install the newest APK from Releases (it installs over older builds).
 2. First launch: 5 tips, then Earth from space at the current date and time.
 3. Work through the phone checklists above, round by round. If something fails, open Settings → Last problem → Copy report, or after a crash reopen the app and tap Copy, and paste it into a new AI session with `docs/PLAN.md`.
+
+## Navigation update (after user feedback: "hard to find stuff")
+- [x] ✦ Explore screen: famous places by category (Solar system, stars, exoplanets, nebulae, galaxies, universe), one tap to fly.
+- [x] Surprise me: random generated planet around a real star (alien world or any planet).
+- [x] Zoom slider scale labels (Ground → Universe) that jump straight to that scale.
+- [x] "↩ Back to …" chip when drifting into empty space.
+- [x] Top bar: 🔍 🏠 ☰ icons plus Explore; tips and How to use updated.
+- [x] Readable pack-download errors (private repo / no internet).

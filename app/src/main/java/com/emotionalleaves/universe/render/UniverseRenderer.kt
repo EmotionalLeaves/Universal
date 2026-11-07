@@ -232,6 +232,7 @@ class UniverseRenderer(private val context: Context, private val engine: Engine)
             Hud.rateText = rate
             Hud.distanceText = Units.formatDistance(focusDist)
             Hud.focusName = target?.name ?: "Empty space"
+            Hud.lastName = if (target == null) (engine.lastTarget?.name ?: "") else ""
             Hud.altitudeText = altitude
             Hud.selectedName = sel?.name ?: ""
             Hud.selectedSubtitle = sel?.subtitle ?: ""

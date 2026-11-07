@@ -128,6 +128,7 @@ class Engine(val context: Context) {
     /** Keeps the camera turning with a nearby planet, and sets ground height and walk mode. Holds the camera lock. */
     private fun surfaceFollow() {
         val t = camera.target
+        if (t != null) lastTarget = t
         val spin = when (t) {
             is SolarBody -> t.orientation(jd)
             is PlanetBody -> t.spin(jd)
@@ -312,6 +313,67 @@ class Engine(val context: Context) {
         is GalaxyBody -> if (b.isMilkyWay) world.universe else world.universe
         is UniverseBody -> null
         else -> world.milkyWay
+    }
+
+    /** Last object the camera orbited, so you can get back after drifting into empty space. */
+    @Volatile var lastTarget: Body? = null
+
+    /** Re-centre on the selected object, or the last thing you were orbiting. */
+    fun recenter() {
+        val b = selected ?: lastTarget ?: world.homeBody()
+        selected = b
+        flyTo(b)
+    }
+
+    /** Flies to an object by name (Explore lists). Builds the search index if needed. */
+    fun goToName(name: String) {
+        bg.execute {
+            try {
+                if (!search.ready() || world.searchStale) { world.searchStale = false; search.build() }
+                val hits = search.search(name, 5)
+                val hit = hits.firstOrNull { it.name.equals(name, ignoreCase = true) } ?: hits.firstOrNull() ?: return@execute
+                val b = world.find(hit.id) ?: return@execute
+                selected = b
+                flyTo(b)
+            } catch (e: Exception) {
+                ErrorLog.record("goToName($name)", e)
+            }
+        }
+    }
+
+    /** Picks a random generated rocky planet around a real star and flies there. */
+    fun surprise(land: Boolean) {
+        bg.execute {
+            try {
+                val rs = world.realStars ?: return@execute
+                val rng = java.util.Random()
+                repeat(200) {
+                    val tile = rs.base.tiles[rng.nextInt(rs.base.tiles.size)]
+                    if (tile.count == 0) return@repeat
+                    val star = rs.bodyFrom(tile, rng.nextInt(tile.count))
+                    if (world.exoRowsFor(star) != null) return@repeat
+                    val sys = world.systemFor(star)
+                    val p = sys.planets.filter { if (land) it.solid else true }.randomOrNull() ?: return@repeat
+                    selected = p
+                    world.rememberGenerated(p)
+                    flyTo(p)
+                    return@execute
+                }
+            } catch (e: Exception) {
+                ErrorLog.record("surprise", e)
+            }
+        }
+    }
+
+    /** Zoom presets for the slider labels: height above the ground (or distance) in metres. */
+    val zoomPresets = listOf(
+        "Ground" to 2.0, "Planet" to 3.0e7, "Solar system" to 1.5e13, "Nearby stars" to 2e17,
+        "Milky Way" to 1.2e21, "Galaxy groups" to 3e23, "Universe" to 1.2e27,
+    )
+
+    fun zoomFractionFor(alt: Double): Float {
+        val lo = kotlin.math.ln(1.7); val hi = kotlin.math.ln(camera.maxDistance())
+        return ((kotlin.math.ln(alt) - lo) / (hi - lo)).toFloat().coerceIn(0f, 1f)
     }
 
     /** Zooms out to whatever contains the current focus. */

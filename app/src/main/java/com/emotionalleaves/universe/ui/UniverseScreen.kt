@@ -40,7 +40,7 @@ fun UniverseScreen(engine: Engine, version: String, view: UniverseView) {
 
         Box(Modifier.fillMaxSize().safeDrawingPadding()) {
             Column(Modifier.align(Alignment.TopStart).padding(8.dp).fillMaxWidth(0.58f)) {
-                TopStatus()
+                TopStatus(engine)
                 LoadingChip(Modifier.padding(top = 4.dp))
                 if (SettingsUi.showStats) StatsBadge(Modifier.padding(top = 4.dp))
             }
@@ -48,12 +48,15 @@ fun UniverseScreen(engine: Engine, version: String, view: UniverseView) {
                 engine,
                 Modifier.align(Alignment.CenterEnd).padding(end = 6.dp),
             )
-            Row(Modifier.align(Alignment.TopEnd).padding(8.dp)) {
-                SearchButton()
-                Spacer(Modifier.width(6.dp))
-                HomeButton(engine)
-                Spacer(Modifier.width(6.dp))
-                MenuButton()
+            Column(Modifier.align(Alignment.TopEnd).padding(8.dp), horizontalAlignment = Alignment.End) {
+                Row {
+                    SearchButton()
+                    Spacer(Modifier.width(6.dp))
+                    HomeButton(engine)
+                    Spacer(Modifier.width(6.dp))
+                    MenuButton()
+                }
+                ExploreButton(Modifier.padding(top = 6.dp))
             }
             Column(
                 Modifier.align(Alignment.BottomCenter).padding(horizontal = 10.dp, vertical = 8.dp),
@@ -67,6 +70,7 @@ fun UniverseScreen(engine: Engine, version: String, view: UniverseView) {
             }
         }
         when (Nav.screen) {
+            Screen.EXPLORE -> ExploreScreen(engine)
             Screen.MENU -> MenuSheet(engine)
             Screen.DATA -> DataScreen(engine)
             Screen.SEARCH -> SearchScreen(engine)

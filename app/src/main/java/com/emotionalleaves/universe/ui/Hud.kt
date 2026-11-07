@@ -14,6 +14,8 @@ object Hud {
     var frameMs by mutableStateOf(0f)
     var distanceText by mutableStateOf("")
     var focusName by mutableStateOf("")
+    /** Name of the last object orbited, shown as "Back to …" when drifting in empty space. */
+    var lastName by mutableStateOf("")
     var altitudeText by mutableStateOf("")
 
     var selectedName by mutableStateOf("")
