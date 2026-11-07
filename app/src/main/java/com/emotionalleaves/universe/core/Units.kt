@@ -46,7 +46,7 @@ object Units {
     private fun fmt(v: Double, unit: String): String {
         val a = abs(v)
         val s = when {
-            a >= 100_000 -> String.format(Locale.US, "%,.0f", v)
+            a >= 10_000 -> String.format(Locale.US, "%,.0f", v)
             a >= 100 -> String.format(Locale.US, "%.0f", v)
             a >= 10 -> String.format(Locale.US, "%.1f", v)
             else -> String.format(Locale.US, "%.2f", v)

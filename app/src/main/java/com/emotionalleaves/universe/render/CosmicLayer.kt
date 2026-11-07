@@ -48,8 +48,9 @@ class CosmicLayer : Layer {
 
     /** How strongly the CMB shell shows: only once you have zoomed out to cosmic scales. */
     private fun cmbVisibility(frame: Frame): Double {
-        val fromEarth = (frame.camPos - UPos.ZERO).length()
-        val zoomOut = max(frame.focusDistance, fromEarth)
+        // Depends only on how far you have zoomed out, never on how far you are from Earth:
+        // otherwise the map covers the screen around any distant galaxy you fly to.
+        val zoomOut = frame.focusDistance
         return smoothstep(3 * Units.GLY, 40 * Units.GLY, zoomOut)
     }
 
