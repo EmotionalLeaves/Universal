@@ -7,36 +7,36 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Probe
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           set +e
-          head_url() { echo "== $1"; curl -sSIL --max-time 40 "$1" | grep -iE "^(HTTP|content-length|content-type|location)" | tail -6; }
-          echo "#### HYG"
-          for u in https://codeberg.org/astronexus/hyg/raw/branch/main/data/hyg/CURRENT/hyg_v42.csv.gz https://codeberg.org/astronexus/hyg/raw/branch/main/hyg/CURRENT/hyg_v42.csv.gz https://raw.githubusercontent.com/astronexus/HYG-Database/main/hyg/CURRENT/hyg_v41.csv https://raw.githubusercontent.com/astronexus/HYG-Database/master/hyg/CURRENT/hyg_v41.csv; do head_url $u; done
-          curl -sSL --max-time 60 https://codeberg.org/astronexus/hyg/raw/branch/main/data/hyg/CURRENT/hyg_v42.csv.gz | gunzip | head -4
-          echo "#### HYG repo tree"
-          curl -sS "https://codeberg.org/api/v1/repos/astronexus/hyg/contents/data/hyg/CURRENT" | python3 -c "import sys,json;[print(x['path'],x.get('size')) for x in json.load(sys.stdin)]"
-          curl -sS "https://codeberg.org/api/v1/repos/astronexus/athyg/contents/data" | python3 -c "import sys,json;[print(x['path'],x.get('size')) for x in json.load(sys.stdin)]"
-          curl -sS "https://codeberg.org/api/v1/repos/astronexus/athyg/contents/data/subsets" | python3 -c "import sys,json;[print(x['path'],x.get('size')) for x in json.load(sys.stdin)]"
+          head_url() { echo "== $1"; curl -sSIL --max-time 40 "$1" | grep -iE "^(HTTP|content-length|content-type|location)" | tail -4; }
+          echo "#### HYG media"
+          for f in hyg/media/branch/main/data/hyg/CURRENT/hyg_v44.csv.gz athyg/media/branch/main/data/subsets/hyglike_from_athyg_v40.csv.gz athyg/media/branch/main/data/subsets/athyg_40_reduced_m10.csv.gz athyg/media/branch/main/data/subsets/athyg_40_reduced_m11.csv.gz athyg/media/branch/main/data/athyg_40.csv.gz; do head_url https://codeberg.org/astronexus/$f; done
+          curl -sSL --max-time 120 https://codeberg.org/astronexus/hyg/media/branch/main/data/hyg/CURRENT/hyg_v44.csv.gz | gunzip | head -3
+          curl -sSL --max-time 120 https://codeberg.org/astronexus/athyg/media/branch/main/data/subsets/athyg_40_reduced_m10.csv.gz | gunzip | head -3
+          curl -sSL --max-time 120 https://codeberg.org/astronexus/hyg/media/branch/main/data/hyg/CURRENT/hyg_v44.csv.gz | gunzip | wc -l
           echo "#### Exoplanets"
-          curl -sS --max-time 90 "https://exoplanetarchive.ipac.caltech.edu/TAP/sync?query=select+top+3+pl_name,hostname,pl_orbsmax,pl_rade,pl_bmasse,pl_orbper,pl_orbeccen,pl_eqt,ra,dec,sy_dist,st_teff,st_rad,st_mass,st_lum+from+pscomp&format=csv"
-          curl -sS --max-time 90 "https://exoplanetarchive.ipac.caltech.edu/TAP/sync?query=select+count(*)+from+pscomp&format=csv"
-          echo "#### OpenNGC"
-          curl -sSL --max-time 60 https://raw.githubusercontent.com/mattiaverga/OpenNGC/master/database_files/NGC.csv | head -3
-          curl -sSL --max-time 60 https://raw.githubusercontent.com/mattiaverga/OpenNGC/master/database_files/NGC.csv | grep -E "^(NGC1976|NGC0224|NGC7000);" 
-          curl -sSL --max-time 60 https://raw.githubusercontent.com/mattiaverga/OpenNGC/master/database_files/addendum.csv | head -3
-          echo "#### VizieR CF4 tables"
-          curl -sS --max-time 90 "https://tapvizier.cds.unistra.fr/TAPVizieR/tap/sync?REQUEST=doQuery&LANG=ADQL&FORMAT=csv&QUERY=SELECT+table_name,description+FROM+TAP_SCHEMA.tables+WHERE+table_name+LIKE+'J/ApJ/944/94%25'"
-          curl -sS --max-time 90 "https://tapvizier.cds.unistra.fr/TAPVizieR/tap/sync?REQUEST=doQuery&LANG=ADQL&FORMAT=csv&QUERY=SELECT+table_name,column_name,unit+FROM+TAP_SCHEMA.columns+WHERE+table_name+LIKE+'J/ApJ/944/94%25'"
-          echo "#### UNGC Karachentsev"
-          curl -sS --max-time 90 "https://tapvizier.cds.unistra.fr/TAPVizieR/tap/sync?REQUEST=doQuery&LANG=ADQL&FORMAT=csv&QUERY=SELECT+table_name,column_name,unit+FROM+TAP_SCHEMA.columns+WHERE+table_name+LIKE+'J/AJ/145/101%25'" | head -40
-          echo "#### GLADE+"
-          for u in http://elysium.elte.hu/~dalyag/GLADE+.txt https://glade.elte.hu/GLADE+.txt; do head_url $u; done
-          curl -sS --max-time 30 https://glade.elte.hu | grep -oiE 'href="[^"]+"' | head -20
-          echo "#### Textures"
-          for n in 2k_earth_daymap.jpg 2k_moon.jpg 2k_mars.jpg 2k_saturn_ring_alpha.png 8k_stars_milky_way.jpg 2k_sun.jpg; do head_url https://www.solarsystemscope.com/textures/download/$n; done
-          echo "#### Planck"
-          for u in https://irsa.ipac.caltech.edu/data/Planck/release_3/all-sky-maps/maps/component-maps/cmb/COM_CMB_IQU-smica_1024_R3.00_full.fits https://irsa.ipac.caltech.edu/data/Planck/release_2/all-sky-maps/maps/component-maps/cmb/COM_CMB_IQU-smica_1024_R2.02_full.fits https://irsa.ipac.caltech.edu/data/Planck/release_3/all-sky-maps/maps/component-maps/cmb/COM_CMB_IQU-smica-nosz_2048_R3.00_full.fits; do head_url $u; done
-          echo "#### Elevation"
-          for u in https://eoimages.gsfc.nasa.gov/images/imagerecords/73000/73934/gebco_08_rev_elev_21600x10800.png https://eoimages.gsfc.nasa.gov/images/imagerecords/73000/73934/gebco_08_rev_elev_5400x2700.png https://svs.gsfc.nasa.gov/vis/a000000/a004700/a004720/ldem_3_8bit.jpg https://svs.gsfc.nasa.gov/vis/a000000/a004700/a004720/ldem_4_uint.tif https://planetarymaps.usgs.gov/mosaic/Mars_MGS_MOLA_DEM_mosaic_global_463m.tif https://astrogeology.usgs.gov/ckan/dataset/7131d503-cdc9-45a5-8f83-5126c0fd397e/resource/6a0d3c6c-2d1c-4d6d-8ed0-0b7e6c3a8e5a/download/mars_mgs_mola_dem_mosaic_global_463m.tif https://svs.gsfc.nasa.gov/vis/a000000/a004700/a004720/lroc_color_poles_1k.jpg; do head_url $u; done
-          echo "#### pip"
-          pip download healpy==1.17.3 --no-deps -d /tmp/x -q && ls /tmp/x
+          curl -sS --max-time 90 "https://exoplanetarchive.ipac.caltech.edu/TAP/sync?query=select+top+3+pl_name,hostname,pl_orbsmax,pl_rade,pl_bmasse,pl_orbper,pl_orbeccen,pl_orbincl,pl_eqt,ra,dec,sy_dist,st_teff,st_rad,st_mass,st_lum,hd_name,hip_name,gaia_id,sy_pnum+from+pscomppars&format=csv"
+          curl -sS --max-time 90 "https://exoplanetarchive.ipac.caltech.edu/TAP/sync?query=select+count(*)+from+pscomppars&format=csv"
+          curl -sS --max-time 90 "https://exoplanetarchive.ipac.caltech.edu/TAP/sync?query=select+pl_name,sy_dist,pl_orbsmax+from+pscomppars+where+hostname='TRAPPIST-1'&format=csv"
+          echo "#### VizieR"
+          head_url "https://vizier.cds.unistra.fr/viz-bin/asu-tsv?-source=J/ApJ/944/94&-out.max=3&-out.all"
+          curl -sS --max-time 60 "https://vizier.cds.unistra.fr/viz-bin/asu-tsv?-source=J/ApJ/944/94&-out.max=3&-out.all" | head -60
+          curl -sS --max-time 60 "https://vizier.cfa.harvard.edu/viz-bin/asu-tsv?-source=J/ApJ/944/94&-out.max=3&-out.all" | head -30
+          echo "#### GLADE page"
+          curl -sS --max-time 30 https://glade.elte.hu | grep -iE "txt|hdf|zip|download|GLADE\+" | grep -oiE 'href="[^"]+"' | sort -u | head -30
+          echo "#### USGS mosaics"
+          curl -sS --max-time 40 https://planetarymaps.usgs.gov/mosaic/ | grep -oiE 'href="[^"]+"' | grep -iE "mars|moon|lunar|mercury|venus|earth" | head -60
+          echo "#### Wikimedia"
+          head_url https://upload.wikimedia.org/wikipedia/commons/thumb/8/83/Equirectangular_projection_SW.jpg/640px-Equirectangular_projection_SW.jpg
+          echo "#### GitHub texture repos"
+          for r in homer-jay/solar-system-textures jeromeetienne/threex.planets; do echo "== $r"; gh api "repos/$r/git/trees/HEAD?recursive=1" --jq '.tree[] | select(.type=="blob") | "\(.path) \(.size)"' | grep -iE "\.(jpg|png)" | head -60; done
+          gh api repos/mrdoob/three.js/contents/examples/textures/planets --jq '.[] | "\(.name) \(.size)"'
+          echo "#### ETOPO"
+          head_url https://www.ngdc.noaa.gov/thredds/fileServer/global/ETOPO2022/60s/60s_surface_elev_netcdf/ETOPO_2022_v1_60s_N90W180_surface.nc
+          head_url https://www.ngdc.noaa.gov/mgg/global/relief/ETOPO1/data/ice_surface/grid_registered/georeferenced_tiff/ETOPO1_Ice_g_geotiff.zip
+          head_url https://visibleearth.nasa.gov/images/73934/topography
+          echo "#### Gaia archive tap"
+          curl -sS --max-time 60 "https://gea.esac.esa.int/tap-server/tap/sync?REQUEST=doQuery&LANG=ADQL&FORMAT=csv&QUERY=SELECT+TOP+2+source_id,ra,dec,parallax,phot_g_mean_mag+FROM+gaiadr3.gaia_source" | head -5
