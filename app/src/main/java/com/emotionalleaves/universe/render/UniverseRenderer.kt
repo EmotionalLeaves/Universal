@@ -183,9 +183,12 @@ class UniverseRenderer(private val context: Context, private val engine: Engine)
         val sorted = picks.filter { it.showLabel || it.body == selected }.sortedByDescending { it.priority }
         val out = ArrayList<Label>()
         val taken = ArrayList<FloatArray>()
+        val named = HashSet<String>()
         val density = context.resources.displayMetrics.density
         for (p in sorted) {
             if (out.size >= 40) break
+            // Several layers may offer the same object (e.g. the selection): label it once.
+            if (!named.add(p.body.id)) continue
             val sel = p.body == selected
             // Skip labels that would overlap a more important one.
             val text = p.labelText ?: p.body.name

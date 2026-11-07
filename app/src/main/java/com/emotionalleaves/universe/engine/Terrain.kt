@@ -149,7 +149,8 @@ class TerrainModel(
                         "sol:mars" -> TerrainModel(body.id, body.radius, map, seed, 4000.0, 160.0, null, 0)
                         else -> {
                             val airless = body.look.atmosphereStrength <= 0f
-                            TerrainModel(body.id, body.radius, map, seed, max(500.0, body.radius * 0.002), 120.0,
+                            // Hills scale with the world: no 500 m cliffs on a moon 6 km across.
+                            TerrainModel(body.id, body.radius, map, seed, kotlin.math.min(max(500.0, body.radius * 0.002), body.radius * 0.04), 120.0,
                                 null, if (airless) 1 else if (body.look.style == 2) 2 else 0)
                         }
                     }

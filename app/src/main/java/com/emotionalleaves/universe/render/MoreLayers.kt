@@ -44,6 +44,7 @@ class SmallBodyLayer : Layer {
     }
 
     override fun update(frame: Frame, rc: RenderContext) {
+        zoomOut = smoothstep(2e9, 6e10, frame.focusDistance).toFloat()
         val sb = rc.engine.world.smallBodies ?: return
         if (sb !== set) {
             set = sb
@@ -94,7 +95,12 @@ class SmallBodyLayer : Layer {
         }
     }
 
-    private fun limit(rc: RenderContext) = 13.5f + rc.engine.settings.starBrightness - daylight * 9f
+    /**
+     * Brightness cutoff: realistic (like stars, ~7) when you are near a planet looking at the sky,
+     * rising to show the whole asteroid belt once you zoom out to solar-system scale.
+     */
+    private var zoomOut = 0f
+    private fun limit(rc: RenderContext) = 7.2f + 6.3f * zoomOut + rc.engine.settings.starBrightness - daylight * 9f
 
     override fun drawOpaque(frame: Frame, rc: RenderContext) {
         val sb = set ?: return
@@ -167,7 +173,7 @@ class SmallBodyLayer : Layer {
         }
         // Label the big ones (Ceres, Vesta, Pallas…) when the asteroid belt fills the view.
         val camFromSun = (frame.camPos - UPos.ZERO).length()
-        if (camFromSun > 60 * Units.AU) return
+        if (camFromSun > 60 * Units.AU || zoomOut < 0.5f) return
         var n = 0
         for (i in 0 until sb.cometFrom) {
             if (sb.diamKm[i] < 400f) continue
@@ -322,9 +328,12 @@ class RemnantLayer : Layer {
         val bodies = rc.engine.world.remnants?.bodies ?: emptyList()
         val sel = rc.engine.selected
         val out = ArrayList<Pair<RemnantBody, Double>>()
+        // Markers are a travel aid between the stars; inside a star system only nearby ones show.
+        val interstellar = frame.focusDistance > 0.02 * Units.LY
         for (b in bodies) {
             val d = (b.pos - frame.camPos).length()
-            if (d < reach(b) || b == sel) out.add(b to d)
+            val r = if (interstellar) reach(b) else minOf(reach(b), 0.05 * Units.LY)
+            if (d < r || b == sel) out.add(b to d)
         }
         out.sortBy { it.second }
         near = if (out.size > MAX) out.subList(0, MAX) else out

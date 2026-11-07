@@ -91,6 +91,8 @@ class GalaxyCatalogLayer : Layer {
         else -> floatArrayOf(0.88f, 0.9f, 1f)
     }
 
+    private var namedFor: List<GalaxyBody>? = null
+    private var named = IntArray(0)
     private var shapesFrame: Frame? = null
     private var shapesCache: List<Pair<Int, Double>> = emptyList()
 
@@ -184,10 +186,17 @@ class GalaxyCatalogLayer : Layer {
             if (label) labels++
             out.add(Pickable(g, s.first, s.second, pix.toFloat().coerceAtMost(160f), 3f, label, 0xFFE8DCC8.toInt()))
         }
-        // Bright named galaxies that are still just points.
+        // Bright named galaxies that are still just points (only the ~100 with real names are checked).
         if (labels < 12) {
-            for ((i, g) in list.withIndex()) {
-                if (g.isMilkyWay || g.name.startsWith("PGC ") || g.name.startsWith("NGC ") || g.name.startsWith("IC ")) continue
+            if (namedFor !== list) {
+                namedFor = list
+                named = list.indices.filter { i ->
+                    val g = list[i]
+                    !(g.isMilkyWay || g.name.startsWith("PGC ") || g.name.startsWith("NGC ") || g.name.startsWith("IC ") || g.source != com.emotionalleaves.universe.engine.Source.REAL)
+                }.toIntArray()
+            }
+            for (i in named) {
+                val g = list[i]
                 val dx = px[i] - cam.x; val dy = py[i] - cam.y; val dz = pz[i] - cam.z
                 val d = sqrt(dx * dx + dy * dy + dz * dz)
                 val m = g.absMag + 5 * log10(max(d, 1.0)) - 5

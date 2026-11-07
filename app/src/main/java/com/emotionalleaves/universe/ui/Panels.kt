@@ -217,7 +217,8 @@ fun SourceBadge(source: String) {
 @Composable
 fun InfoCard(engine: Engine, modifier: Modifier = Modifier) {
     if (Hud.selectedName.isEmpty()) return
-    var expanded by remember { mutableStateOf(false) }
+    // Each new selection starts with the compact card.
+    var expanded by remember(Hud.selectedName) { mutableStateOf(false) }
     Column(
         modifier
             .widthIn(max = 540.dp)
