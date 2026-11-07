@@ -1,0 +1,33 @@
+package com.emotionalleaves.universe.engine
+
+import android.content.Context
+
+/** User settings, saved between launches. Read from any thread; write from the UI. */
+class Settings(context: Context) {
+    private val prefs = context.getSharedPreferences("settings", Context.MODE_PRIVATE)
+
+    @Volatile var showOrbits = prefs.getBoolean("orbits", true)
+        set(v) { field = v; prefs.edit().putBoolean("orbits", v).apply() }
+    @Volatile var showLabels = prefs.getBoolean("labels", true)
+        set(v) { field = v; prefs.edit().putBoolean("labels", v).apply() }
+    @Volatile var showGenerated = prefs.getBoolean("generated", true)
+        set(v) { field = v; prefs.edit().putBoolean("generated", v).apply() }
+    @Volatile var showConstellations = prefs.getBoolean("constellations", false)
+        set(v) { field = v; prefs.edit().putBoolean("constellations", v).apply() }
+    @Volatile var showTestObjects = prefs.getBoolean("test", false)
+        set(v) { field = v; prefs.edit().putBoolean("test", v).apply() }
+    @Volatile var showStats = prefs.getBoolean("stats", false)
+        set(v) { field = v; prefs.edit().putBoolean("stats", v).apply() }
+    /** 0 = Low, 1 = Medium, 2 = High. */
+    @Volatile var quality = prefs.getInt("quality", 1)
+        set(v) { field = v; prefs.edit().putInt("quality", v).apply() }
+    @Volatile var batterySaver = prefs.getBoolean("battery", false)
+        set(v) { field = v; prefs.edit().putBoolean("battery", v).apply() }
+    /** Extra star brightness in magnitudes (-2..+3). */
+    @Volatile var starBrightness = prefs.getFloat("starBright", 0.5f)
+        set(v) { field = v; prefs.edit().putFloat("starBright", v).apply() }
+    @Volatile var wifiOnly = prefs.getBoolean("wifiOnly", true)
+        set(v) { field = v; prefs.edit().putBoolean("wifiOnly", v).apply() }
+    @Volatile var seenTips = prefs.getBoolean("seenTips", false)
+        set(v) { field = v; prefs.edit().putBoolean("seenTips", v).apply() }
+}

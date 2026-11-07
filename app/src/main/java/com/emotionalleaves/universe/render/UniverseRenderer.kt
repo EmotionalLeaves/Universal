@@ -32,8 +32,9 @@ class UniverseRenderer(private val context: Context, private val engine: Engine)
     @Volatile var labelOverlay: LabelOverlay? = null
 
     private val testLayer = TestLayer()
+    private val solarLayer = SolarSystemLayer()
     private var background: PointBatch? = null
-    private val layers: List<Layer> = listOf(testLayer)
+    private val layers: List<Layer> = listOf(solarLayer, testLayer)
 
     override fun onSurfaceCreated(gl: GL10?, config: EGLConfig?) {
         textures.contextLost()
@@ -80,6 +81,8 @@ class UniverseRenderer(private val context: Context, private val engine: Engine)
         GLES30.glDepthMask(true)
         GLES30.glClear(GLES30.GL_COLOR_BUFFER_BIT or GLES30.GL_DEPTH_BUFFER_BIT)
 
+        testLayer.enabled = engine.settings.showTestObjects
+        solarLayer.showOrbits = engine.settings.showOrbits
         for (l in layers) l.update(frame, ctx)
         for (l in layers) l.drawOpaque(frame, ctx)
         ctx.drawer.beginAdditive()
@@ -112,6 +115,14 @@ class UniverseRenderer(private val context: Context, private val engine: Engine)
 
     private fun publishLabels(picks: List<Pickable>) {
         val overlay = labelOverlay ?: return
+        if (!engine.settings.showLabels) {
+            val sel = engine.selected
+            overlay.labels = picks.filter { it.body == sel }.take(1).map {
+                Label(it.x, it.y, it.body.name, 0xFFFFD27A.toInt(), true, it.pixelRadius.coerceAtMost(200f))
+            }
+            overlay.refresh()
+            return
+        }
         val selected = engine.selected
         val sorted = picks.filter { it.showLabel || it.body == selected }.sortedByDescending { it.priority }
         val out = ArrayList<Label>()
@@ -147,7 +158,12 @@ class UniverseRenderer(private val context: Context, private val engine: Engine)
         val barFraction = (barLen / metresPerPx / frame.width).toFloat()
         val zoom = engine.zoomFraction()
         val flying = engine.camera.isFlying
+        val date = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm", java.util.Locale.US)
+            .format(java.util.Date(com.emotionalleaves.universe.core.Astro.epochMillis(frame.jd)))
+        val rate = engine.rateLabel()
         Hud.post {
+            Hud.dateText = date
+            Hud.rateText = rate
             Hud.distanceText = Units.formatDistance(focusDist)
             Hud.focusName = target?.name ?: "Empty space"
             Hud.altitudeText = altitude

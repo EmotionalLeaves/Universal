@@ -27,6 +27,8 @@ object Hud {
     var zoomFraction by mutableStateOf(0.5f)
     var sliderDragging by mutableStateOf(false)
     var flying by mutableStateOf(false)
+    var dateText by mutableStateOf("")
+    var rateText by mutableStateOf("")
 
     fun post(block: () -> Unit) {
         main.post(block)

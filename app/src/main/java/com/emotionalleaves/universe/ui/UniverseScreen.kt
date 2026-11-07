@@ -4,6 +4,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.runtime.Composable
@@ -30,11 +31,17 @@ fun UniverseScreen(engine: Engine, version: String, view: UniverseView) {
                 engine,
                 Modifier.align(Alignment.CenterEnd).padding(end = 6.dp),
             )
-            Column(Modifier.align(Alignment.BottomStart).padding(start = 12.dp, bottom = 12.dp)) {
-                ScaleBar()
-            }
             HomeButton(engine, Modifier.align(Alignment.TopEnd).padding(8.dp))
-            InfoCard(engine, Modifier.align(Alignment.BottomCenter).padding(horizontal = 10.dp, vertical = 40.dp))
+            Column(
+                Modifier.align(Alignment.BottomCenter).padding(horizontal = 10.dp, vertical = 8.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                InfoCard(engine, Modifier.padding(bottom = 8.dp))
+                Box(Modifier.fillMaxWidth()) {
+                    Box(Modifier.align(Alignment.BottomStart).padding(start = 4.dp, bottom = 4.dp).fillMaxWidth(0.4f)) { ScaleBar() }
+                    TimeBar(engine, Modifier.align(Alignment.BottomEnd))
+                }
+            }
         }
     }
 }

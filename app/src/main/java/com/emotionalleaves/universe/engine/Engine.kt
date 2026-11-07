@@ -14,6 +14,7 @@ import kotlin.math.exp
 /** Owns the simulation state: camera, time, world and selection. Rendering lives in UniverseRenderer. */
 class Engine(val context: Context) {
     val camera = CameraController()
+    val settings = Settings(context)
     val world = World(this)
 
     /** Simulation time as a Julian date. */
@@ -56,6 +57,58 @@ class Engine(val context: Context) {
     }
 
     fun onUserInteraction() {}
+
+    // ------------------------------------------------------------------ time controls
+
+    private val rateSteps = doubleArrayOf(
+        -31_557_600.0, -2_629_800.0, -604_800.0, -86_400.0, -3_600.0, -60.0, -1.0,
+        1.0, 60.0, 3_600.0, 86_400.0, 604_800.0, 2_629_800.0, 31_557_600.0,
+    )
+
+    fun faster() {
+        paused = false
+        timeRate = rateSteps.firstOrNull { it > timeRate + 1e-9 } ?: timeRate
+    }
+
+    fun slower() {
+        paused = false
+        timeRate = rateSteps.lastOrNull { it < timeRate - 1e-9 } ?: timeRate
+    }
+
+    fun togglePause() {
+        paused = !paused
+    }
+
+    /** Back to the real current time, running at normal speed. */
+    fun timeNow() {
+        jd = Astro.julianDate(System.currentTimeMillis())
+        timeRate = 1.0
+        paused = false
+    }
+
+    fun setDate(epochMillis: Long) {
+        jd = Astro.julianDate(epochMillis)
+    }
+
+    fun rateLabel(): String {
+        if (paused) return "Paused"
+        val r = timeRate
+        val a = kotlin.math.abs(r)
+        val unit = when {
+            a >= 31_557_600.0 -> "${(a / 31_557_600.0).toInt()} year"
+            a >= 2_629_800.0 -> "${(a / 2_629_800.0).toInt()} month"
+            a >= 604_800.0 -> "${(a / 604_800.0).toInt()} week"
+            a >= 86_400.0 -> "${(a / 86_400.0).toInt()} day"
+            a >= 3_600.0 -> "${(a / 3_600.0).toInt()} hour"
+            a >= 60.0 -> "${(a / 60.0).toInt()} min"
+            else -> "real time"
+        }
+        return when {
+            a == 1.0 && r > 0 -> "Real time"
+            r < 0 -> "◀ $unit / s"
+            else -> "$unit / s"
+        }
+    }
 
     /** Single tap: select what is under the finger (or clear the selection). */
     fun onTap(x: Float, y: Float) {

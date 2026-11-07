@@ -133,6 +133,7 @@ uniform vec3 uColorC;
 uniform float uSeed;
 uniform vec3 uLightDir;    // direction from surface toward the light
 uniform float uAmbient;
+uniform int uAlphaMode;    // 0 opaque, 1 clouds (alpha from texture alpha or brightness)
 out vec4 oColor;
 
 vec3 procedural(vec3 p) {
@@ -170,6 +171,15 @@ vec3 procedural(vec3 p) {
 
 void main() {
     vec3 n = normalize(vNormal);
+    if (uAlphaMode == 1) {
+        vec4 t = texture(uTex, vUv);
+        float lum = dot(t.rgb, vec3(0.3333));
+        float a = t.a < 0.999 ? t.a : lum;
+        float d = max(dot(n, normalize(uLightDir)), 0.0);
+        oColor = vec4(vec3(uAmbient + (1.0 - uAmbient) * d), a * 0.95);
+        writeDepth();
+        return;
+    }
     vec3 albedo = uHasTex == 1 ? texture(uTex, vUv).rgb : procedural(normalize(vLocal));
     if (uStyle == 5) {
         // Stars glow: limb darkening, no lighting
@@ -330,12 +340,18 @@ uniform float uPlanetRadius;
 uniform vec3 uLightDir;
 out vec4 oColor;
 void main() {
-    vec4 t = uHasTex == 1 ? texture(uTex, vec2(vR, 0.5)) : vec4(uColorA, 0.6 * (0.5 + 0.5 * sin(vR * 90.0)));
+    vec4 t;
+    if (uHasTex == 1) {
+        t = texture(uTex, vec2(vR, 0.5));
+        t.a = clamp(dot(t.rgb, vec3(0.3333)) * 1.5, 0.0, 0.95);
+    } else {
+        t = vec4(uColorA, 0.6 * (0.5 + 0.5 * sin(vR * 90.0)));
+    }
     // Planet shadow on the rings
     vec3 toP = uPlanetCenter - vWorld;
     float along = dot(toP, uLightDir);
     float shadow = 1.0;
-    if (along < 0.0) {
+    if (along > 0.0) {
         vec3 closest = toP - uLightDir * along;
         shadow = smoothstep(uPlanetRadius * 0.95, uPlanetRadius * 1.05, length(closest));
     }

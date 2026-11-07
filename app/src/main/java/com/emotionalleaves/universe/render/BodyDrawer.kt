@@ -49,6 +49,38 @@ class BodyDrawer(private val programs: Programs) {
         GLES30.glDisable(GLES30.GL_CULL_FACE)
     }
 
+    fun beginAlpha() {
+        GLES30.glEnable(GLES30.GL_DEPTH_TEST)
+        GLES30.glDepthMask(false)
+        GLES30.glEnable(GLES30.GL_BLEND)
+        GLES30.glBlendFunc(GLES30.GL_SRC_ALPHA, GLES30.GL_ONE_MINUS_SRC_ALPHA)
+        GLES30.glDisable(GLES30.GL_CULL_FACE)
+    }
+
+    /** Flat ring in the body's equator plane (Saturn). */
+    fun ring(
+        frame: Frame, mesh: Mesh, rel: Vec3d, rotation: Quatd, outer: Double, texture: Int, color: FloatArray,
+        planetRadius: Double, lightDir: Vec3d,
+    ) {
+        val p = programs.ring
+        p.use()
+        p.setMat4("uViewProj", frame.viewProj)
+        p.set1f("uLogF", frame.logF)
+        p.setMat4("uModel", Mat4.model(rotation, outer, rel))
+        if (texture != 0) {
+            GLES30.glActiveTexture(GLES30.GL_TEXTURE0)
+            GLES30.glBindTexture(GLES30.GL_TEXTURE_2D, texture)
+            p.set1i("uTex", 0)
+            p.set1i("uHasTex", 1)
+        } else p.set1i("uHasTex", 0)
+        p.set3f("uColorA", color[0], color[1], color[2])
+        p.set3f("uPlanetCenter", rel.x.toFloat(), rel.y.toFloat(), rel.z.toFloat())
+        p.set1f("uPlanetRadius", planetRadius.toFloat())
+        val l = lightDir.normalized()
+        p.set3f("uLightDir", l.x.toFloat(), l.y.toFloat(), l.z.toFloat())
+        mesh.draw()
+    }
+
     fun end() {
         GLES30.glDepthMask(true)
         GLES30.glDisable(GLES30.GL_BLEND)
@@ -59,6 +91,7 @@ class BodyDrawer(private val programs: Programs) {
     fun sphere(
         frame: Frame, rel: Vec3d, radius: Double, rotation: Quatd, m: Material, lightDir: Vec3d,
         mesh: Mesh = programs.sphereMesh,
+        alphaMode: Int = 0,
     ) {
         val p = programs.sphere
         p.use()
@@ -89,6 +122,7 @@ class BodyDrawer(private val programs: Programs) {
         val l = lightDir.normalized()
         p.set3f("uLightDir", l.x.toFloat(), l.y.toFloat(), l.z.toFloat())
         p.set1f("uAmbient", m.ambient)
+        p.set1i("uAlphaMode", alphaMode)
         mesh.draw()
         GLES30.glActiveTexture(GLES30.GL_TEXTURE0)
     }

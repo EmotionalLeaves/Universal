@@ -42,7 +42,7 @@ Phone checklist:
 
 ## Round 2 — The scale engine
 
-**Status:** pushed.
+**Status:** build 3 green.
 
 Finished:
 - `core/UPos`: positions as (integer cell of 2^40 m, double offset). Precise to well under 1 mm anywhere in the observable universe.
@@ -59,3 +59,23 @@ Phone checklist:
 - [ ] You can pinch from the cube to the far marker and back in under a minute
 - [ ] Nothing shakes or flickers at any distance
 - [ ] The scale readout changes units correctly
+
+## Round 3 — The real solar system
+
+**Status:** pushed.
+
+Finished:
+- `engine/SolarSystem.kt`: Sun, 8 planets, Pluto and 21 major moons with real radii.
+- Planet positions from the JPL "Approximate Positions of the Planets" Keplerian elements (Table 1, 1800–2050; Pluto from the older table). Earth and Moon orbit their barycentre; the Moon uses the Astronomical Almanac low-precision series.
+- Rotation from IAU pole directions and spin rates; Earth turns with Greenwich sidereal time, so day and night are correct for the date.
+- Other moons: real distances and periods on circular orbits (positions approximate, labelled as such).
+- Textures (loaded in the background, procedural colours until ready), Earth night lights and clouds, Saturn's rings with the planet's shadow, atmosphere glows.
+- Orbit lines that fade in and out with distance; moon orbits appear near their planet.
+- Time controls: slower/faster (down to 1 year per second, forwards or backwards), pause, Now.
+- Info cards with facts; Home flies back to Earth.
+- The Round 2 scale-test objects moved 3,000 AU away and are hidden by default (Settings will turn them on).
+
+Phone checklist:
+- [ ] Planet positions for today roughly match a planetarium website
+- [ ] Saturn has rings and the Moon circles Earth
+- [ ] Fly To lands you smoothly beside any planet

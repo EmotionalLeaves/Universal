@@ -30,6 +30,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -77,23 +78,18 @@ fun StatsBadge(modifier: Modifier = Modifier) {
 
 @Composable
 fun ScaleBar() {
-    val density = LocalDensity.current
-    var width by remember { mutableStateOf(0) }
-    Box(Modifier.fillMaxWidth().onSizeChanged { width = it.width }) {
-        if (width > 0 && Hud.scaleBarText.isNotEmpty()) {
-            val screenW = with(density) { (width).toDp() }
-            val barW = (screenW.value * Hud.scaleBarFraction).coerceIn(20f, screenW.value * 0.6f)
-            Column {
-                Text(Hud.scaleBarText, color = TextMain, fontSize = 11.sp)
-                Spacer(Modifier.height(2.dp))
-                Box(
-                    Modifier
-                        .width(barW.dp)
-                        .height(4.dp)
-                        .background(Color(0xCCE8ECF8), RoundedCornerShape(2.dp)),
-                )
-            }
-        }
+    val screenW = LocalConfiguration.current.screenWidthDp.toFloat()
+    if (Hud.scaleBarText.isEmpty()) return
+    val barW = (screenW * Hud.scaleBarFraction).coerceIn(20f, screenW * 0.4f)
+    Column {
+        Text(Hud.scaleBarText, color = TextMain, fontSize = 11.sp)
+        Spacer(Modifier.height(2.dp))
+        Box(
+            Modifier
+                .width(barW.dp)
+                .height(4.dp)
+                .background(Color(0xCCE8ECF8), RoundedCornerShape(2.dp)),
+        )
     }
 }
 
@@ -231,4 +227,34 @@ fun InfoCard(engine: Engine, modifier: Modifier = Modifier) {
             PillButton("Fly to", primary = true) { engine.flyToSelected() }
         }
     }
+}
+
+/** Simulation time: date, speed, pause, real-time. */
+@Composable
+fun TimeBar(engine: Engine, modifier: Modifier = Modifier) {
+    Row(
+        modifier
+            .background(PanelBg, RoundedCornerShape(20.dp))
+            .border(1.dp, PanelBorder, RoundedCornerShape(20.dp))
+            .padding(horizontal = 6.dp, vertical = 2.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        TimeButton("⏪") { engine.slower() }
+        TimeButton(if (Hud.rateText == "Paused") "▶" else "⏸") { engine.togglePause() }
+        TimeButton("⏩") { engine.faster() }
+        Column(Modifier.padding(horizontal = 6.dp)) {
+            Text(Hud.dateText, color = TextMain, fontSize = 12.sp, fontFamily = FontFamily.Monospace)
+            Text(Hud.rateText, color = TextDim, fontSize = 10.sp)
+        }
+        TimeButton("Now") { engine.timeNow() }
+    }
+}
+
+@Composable
+private fun TimeButton(text: String, onClick: () -> Unit) {
+    Text(
+        text,
+        modifier = Modifier.clickable { onClick() }.padding(horizontal = 8.dp, vertical = 8.dp),
+        color = TextMain, fontSize = 14.sp, fontWeight = FontWeight.SemiBold,
+    )
 }
