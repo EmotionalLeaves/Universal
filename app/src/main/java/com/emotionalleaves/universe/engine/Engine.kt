@@ -17,6 +17,56 @@ class Engine(val context: Context) {
     val settings = Settings(context)
     val world = World(this)
     val packs = PackManager(context, world, settings)
+    val search = SearchIndex(world)
+    val bookmarks = Bookmarks(context)
+    private val bg = java.util.concurrent.Executors.newSingleThreadExecutor()
+
+    /** Builds the search index in the background (first time the search screen opens). */
+    fun prepareSearch(done: () -> Unit) {
+        bg.execute {
+            if (!search.ready() || world.searchStale) {
+                world.searchStale = false
+                search.build()
+            }
+            android.os.Handler(android.os.Looper.getMainLooper()).post(done)
+        }
+    }
+
+    /** Selects and flies to the object with [id] (search results, bookmarks). */
+    fun goTo(id: String) {
+        bg.execute {
+            val b = world.find(id) ?: return@execute
+            selected = b
+            world.rememberGenerated(b)
+            flyTo(b)
+        }
+    }
+
+    /** Saves the current view (and the selected or focused object) as a bookmark. */
+    fun addBookmark(): String {
+        val (focus, dist, q, target) = synchronized(camera) { Quad(camera.focus, camera.distance, camera.orientation, camera.target) }
+        val body = selected ?: target
+        val name = body?.name ?: "View at ${java.text.SimpleDateFormat("yyyy-MM-dd HH:mm", java.util.Locale.US).format(java.util.Date())}"
+        val useBody = body != null && body == target
+        bookmarks.add(Bookmark(name, body?.id, if (useBody) focus else (body?.position(jd) ?: focus),
+            if (useBody) dist else (body?.viewDistance() ?: dist), q, System.currentTimeMillis()))
+        body?.let { world.rememberGenerated(it) }
+        return name
+    }
+
+    private data class Quad(val a: UPos, val b: Double, val c: com.emotionalleaves.universe.core.Quatd, val d: Body?)
+
+    fun openBookmark(b: Bookmark) {
+        bg.execute {
+            val body = b.bodyId?.let { world.find(it) }
+            selected = body
+            synchronized(camera) {
+                if (body != null) camera.flyTo(body, body.position(jd), b.distance, nowSeconds())
+                else camera.flyTo(null, b.focus, b.distance, nowSeconds())
+                camera.lookFrom(b.orientation.rotate(Vec3d.Z), b.orientation.rotate(Vec3d.Y))
+            }
+        }
+    }
 
     /** Simulation time as a Julian date. */
     @Volatile var jd: Double = Astro.julianDate(System.currentTimeMillis())
@@ -168,6 +218,7 @@ class Engine(val context: Context) {
 
     /** Called by the renderer with what was found under a tap. */
     fun applyTap(body: Body?, double: Boolean) {
+        if (body != null && body.source == Source.GENERATED) bg.execute { world.rememberGenerated(body) }
         if (double) {
             if (body != null) { selected = body; flyTo(body) }
         } else {

@@ -28,6 +28,7 @@ object Hud {
     var sliderDragging by mutableStateOf(false)
     var flying by mutableStateOf(false)
     var dateText by mutableStateOf("")
+    var breadcrumb by mutableStateOf("")
     var rateText by mutableStateOf("")
 
     fun post(block: () -> Unit) {

@@ -158,6 +158,9 @@ class World(private val engine: Engine) {
         return if (best >= 0) gs.body(best) else null
     }
 
+    /** Set when catalogues change so the search index is rebuilt. */
+    @Volatile var searchStale = false
+
     private val byId = HashMap<String, Body>()
     private val byIdConcurrent = java.util.concurrent.ConcurrentHashMap<String, Body>()
     private val loader = java.util.concurrent.Executors.newSingleThreadExecutor()
@@ -210,6 +213,7 @@ class World(private val engine: Engine) {
                 val list = DsoBody.load(engine.context)
                 for (d in list) byIdConcurrent[d.id] = d
                 dsos = list
+                searchStale = true
             } catch (e: Throwable) {
                 android.util.Log.w("World", "Deep sky failed: $e")
             }
@@ -253,6 +257,58 @@ class World(private val engine: Engine) {
     }
 
     fun exoRowsFor(star: StarBody): List<ExoRow>? = exoForStar[star.id]
+
+    /** Body id of the star hosting the named exoplanet system. */
+    fun starIdForHost(host: String): String? {
+        for ((sid, rows) in exoForStar) if (rows.isNotEmpty() && rows[0].host == host) return sid
+        return null
+    }
+
+    // ------------------------------------------------------------------ generated objects you have seen
+
+    private val visitedPrefs = engine.context.getSharedPreferences("visited", android.content.Context.MODE_PRIVATE)
+
+    /** Remembers a generated object so its catalogue-style name can be searched later (rule 6). */
+    fun rememberGenerated(b: Body) {
+        if (b.source != Source.GENERATED) return
+        val list = LinkedHashMap<String, String>()
+        list[b.name] = b.id
+        for ((n, id) in visitedGenerated()) if (list.size < 300 && n != b.name) list[n] = id
+        val arr = org.json.JSONArray()
+        for ((n, id) in list) arr.put(org.json.JSONObject().put("n", n).put("id", id))
+        visitedPrefs.edit().putString("list", arr.toString()).apply()
+    }
+
+    fun visitedGenerated(): List<Pair<String, String>> = try {
+        val arr = org.json.JSONArray(visitedPrefs.getString("list", "[]") ?: "[]")
+        (0 until arr.length()).map { arr.getJSONObject(it).let { o -> o.getString("n") to o.getString("id") } }
+    } catch (_: Exception) {
+        emptyList()
+    }
+
+    /** "Universe › Milky Way › Sun › Earth" for where the camera is. */
+    fun breadcrumb(cam: UPos, target: Body?): String {
+        val parts = ArrayList<String>()
+        parts.add("Universe")
+        val g = galaxyContaining(cam)
+        if (g != null) parts.add(g.name) else if ((cam - UPos.ZERO).length() < 4 * Units.MLY) parts.add("Local Group")
+        val sys = activeSystem
+        val nearSun = (cam - UPos.ZERO).length() < 0.6 * Units.LY
+        when {
+            nearSun -> parts.add("Sun")
+            sys != null -> parts.add(sys.star.name)
+        }
+        when (target) {
+            is SolarBody -> if (target.parent != null) {
+                if (target.kind == Kind.MOON && target.parent.parent != null) parts.add(target.parent.name)
+                parts.add(target.name)
+            }
+            is PlanetBody -> parts.add(target.name.removePrefix(target.star.name).trim().ifEmpty { target.name })
+            is DsoBody -> parts.add(target.name)
+            else -> {}
+        }
+        return parts.joinToString(" › ")
+    }
 
     fun systemFor(star: StarBody): StarSystem = synchronized(systemCache) {
         systemCache.getOrPut(star.id) {

@@ -183,3 +183,94 @@ fun DataScreen(engine: Engine) {
 
 @Composable
 fun Spacer8() = Spacer(Modifier.width(8.dp))
+
+object SearchUi {
+    var query by mutableStateOf("")
+    var results by mutableStateOf<List<com.emotionalleaves.universe.engine.SearchHit>>(emptyList())
+    var ready by mutableStateOf(false)
+}
+
+@Composable
+fun SearchScreen(engine: Engine) {
+    androidx.compose.runtime.LaunchedEffect(Unit) {
+        engine.prepareSearch {
+            SearchUi.ready = true
+            SearchUi.results = engine.search.search(SearchUi.query)
+        }
+    }
+    Panel("Search", { Nav.screen = Screen.NONE }) {
+        androidx.compose.material3.OutlinedTextField(
+            value = SearchUi.query,
+            onValueChange = {
+                SearchUi.query = it
+                SearchUi.results = engine.search.search(it)
+            },
+            modifier = Modifier.fillMaxWidth(),
+            singleLine = true,
+            placeholder = { Text("Mars, Sirius, Kepler-22 b, Orion Nebula, M31, HIP 32349…", color = TextDim, fontSize = 13.sp) },
+            colors = androidx.compose.material3.OutlinedTextFieldDefaults.colors(
+                focusedTextColor = TextMain, unfocusedTextColor = TextMain, cursorColor = Accent,
+                focusedBorderColor = Accent, unfocusedBorderColor = PanelBorder,
+            ),
+        )
+        Spacer(Modifier.height(8.dp))
+        if (!SearchUi.ready) Text("Building the index…", color = TextDim, fontSize = 13.sp)
+        if (SearchUi.ready && SearchUi.query.isNotBlank() && SearchUi.results.isEmpty()) {
+            Text("Nothing found. Try a planet, star, nebula, galaxy or catalogue number.", color = TextDim, fontSize = 13.sp)
+        }
+        for (h in SearchUi.results) {
+            Column(
+                Modifier
+                    .fillMaxWidth()
+                    .clickable {
+                        Nav.screen = Screen.NONE
+                        engine.goTo(h.id)
+                    }
+                    .padding(vertical = 10.dp),
+            ) {
+                Text(h.name, color = TextMain, fontSize = 16.sp)
+                Text(h.detail, color = TextDim, fontSize = 12.sp)
+            }
+        }
+    }
+}
+
+object BookmarksUi {
+    var list by mutableStateOf<List<com.emotionalleaves.universe.engine.Bookmark>>(emptyList())
+    var toast by mutableStateOf("")
+}
+
+@Composable
+fun BookmarksScreen(engine: Engine) {
+    androidx.compose.runtime.LaunchedEffect(Unit) { BookmarksUi.list = engine.bookmarks.list() }
+    Panel("Bookmarks", { Nav.screen = Screen.NONE }) {
+        PillButton("★ Bookmark this view", primary = true) {
+            engine.addBookmark()
+            BookmarksUi.list = engine.bookmarks.list()
+        }
+        Spacer(Modifier.height(12.dp))
+        if (BookmarksUi.list.isEmpty()) {
+            Text("No bookmarks yet. Tap ★ on any info card, or the button above.", color = TextDim, fontSize = 13.sp)
+        }
+        for (b in BookmarksUi.list) {
+            Row(Modifier.fillMaxWidth().padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                Column(
+                    Modifier.weight(1f).clickable {
+                        Nav.screen = Screen.NONE
+                        engine.openBookmark(b)
+                    }.padding(vertical = 6.dp),
+                ) {
+                    Text(b.name, color = TextMain, fontSize = 16.sp)
+                    Text(
+                        java.text.SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.US).format(java.util.Date(b.created)),
+                        color = TextDim, fontSize = 12.sp,
+                    )
+                }
+                Text("Delete", color = Color(0xFFFF9A9A), fontSize = 13.sp, modifier = Modifier.clickable {
+                    engine.bookmarks.remove(b)
+                    BookmarksUi.list = engine.bookmarks.list()
+                }.padding(8.dp))
+            }
+        }
+    }
+}

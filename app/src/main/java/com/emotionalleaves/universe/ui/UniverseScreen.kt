@@ -56,6 +56,8 @@ fun UniverseScreen(engine: Engine, version: String, view: UniverseView) {
         when (Nav.screen) {
             Screen.MENU -> MenuSheet(engine)
             Screen.DATA -> DataScreen(engine)
+            Screen.SEARCH -> SearchScreen(engine)
+            Screen.BOOKMARKS -> BookmarksScreen(engine)
             else -> {}
         }
     }

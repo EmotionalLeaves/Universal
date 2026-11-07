@@ -191,7 +191,9 @@ class UniverseRenderer(private val context: Context, private val engine: Engine)
         val date = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm", java.util.Locale.US)
             .format(java.util.Date(com.emotionalleaves.universe.core.Astro.epochMillis(frame.jd)))
         val rate = engine.rateLabel()
+        val crumb = engine.world.breadcrumb(frame.camPos, target)
         Hud.post {
+            Hud.breadcrumb = crumb
             Hud.dateText = date
             Hud.rateText = rate
             Hud.distanceText = Units.formatDistance(focusDist)

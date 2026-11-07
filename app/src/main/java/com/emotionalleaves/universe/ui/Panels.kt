@@ -57,6 +57,9 @@ fun TopStatus(modifier: Modifier = Modifier) {
             .padding(horizontal = 14.dp, vertical = 6.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
+        if (Hud.breadcrumb.isNotEmpty()) {
+            Text(Hud.breadcrumb, color = TextDim, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
         Text(Hud.focusName, color = TextMain, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
         Text(
             "Distance ${Hud.distanceText}" + if (Hud.altitudeText.isNotEmpty()) "  ·  ${Hud.altitudeText}" else "",
@@ -225,6 +228,17 @@ fun InfoCard(engine: Engine, modifier: Modifier = Modifier) {
         Spacer(Modifier.height(10.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             PillButton("Fly to", primary = true) { engine.flyToSelected() }
+            PillButton("★ Bookmark") {
+                val n = engine.addBookmark()
+                BookmarksUi.toast = "Bookmarked $n"
+            }
+        }
+        if (BookmarksUi.toast.isNotEmpty()) {
+            Text(BookmarksUi.toast, color = RealGreen, fontSize = 12.sp, modifier = Modifier.padding(top = 6.dp))
+            androidx.compose.runtime.LaunchedEffect(BookmarksUi.toast) {
+                kotlinx.coroutines.delay(2500)
+                BookmarksUi.toast = ""
+            }
         }
     }
 }

@@ -188,7 +188,7 @@ Phone checklist:
 
 ## Round 11 — The whole universe
 
-**Status:** pushed.
+**Status:** green (in build 11).
 
 Finished:
 - Generated cosmic web (`engine/CosmicWeb.kt`): 220,000 galaxies placed along a seeded ridged-noise filament field (~160 Mpc structure), from where the real catalogues end out to the edge of the observable universe (14 Gpc ≈ 46 billion ly). Fixed count and seed, so ids are stable. Any of them can be tapped and entered (generated names such as "GX-ED98-0123").
@@ -203,7 +203,7 @@ Phone checklist:
 
 ## Round 12 — Data packs
 
-**Status:** pushed.
+**Status:** build 11 green.
 
 Finished:
 - Menu (☰, top right) → Data packs screen: each pack with size, Download / Cancel / Delete, progress bar, total storage used, and a Wi-Fi-only switch (on by default).
@@ -215,3 +215,17 @@ Finished:
 Phone checklist:
 - [ ] Downloading the full AT-HYG pack adds visible stars
 - [ ] Deleting it leaves the app still working
+
+## Round 13 — Finding your way
+
+**Status:** pushed.
+
+Finished:
+- Search (menu → Search): planets and moons, named stars and Bayer designations, HIP/HD numbers ("HIP 32349"), 6,400+ exoplanets and their host stars ("Kepler-22 b"), Messier/NGC objects and common names ("Orion Nebula", "M31"), 10,000+ named galaxies, PGC numbers, and any generated object you have visited or bookmarked (rule 6). Ranked exact → prefix → word → substring.
+- Bookmarks: ★ on any info card or "Bookmark this view"; saves the object id plus the exact camera position, distance and orientation. Generated objects are rebuilt from their ids, so a bookmarked generated planet reopens in the same place.
+- Breadcrumb trail above the focus name: Universe › Milky Way › Sun › Earth (or Universe › Andromeda Galaxy › Andromeda 4F2A-12 › b).
+- Home button and scale bar (from Round 2).
+
+Phone checklist:
+- [ ] Searching "Kepler-22 b" flies you there
+- [ ] A bookmarked generated planet reopens to the same place
