@@ -374,6 +374,24 @@ class Engine(val context: Context) {
         }
     }
 
+    /** Flies to a random far-away galaxy from the cosmic web. */
+    fun surpriseGalaxy() {
+        busy = "Picking a galaxy…"
+        bg.execute {
+            try {
+                val web = world.cosmicWeb ?: return@execute
+                val g = world.find("gal:web${java.util.Random().nextInt(web.count)}") ?: return@execute
+                selected = g
+                world.rememberGenerated(g)
+                flyTo(g)
+            } catch (e: Exception) {
+                ErrorLog.record("surpriseGalaxy", e)
+            } finally {
+                busy = ""
+            }
+        }
+    }
+
     /** Zoom presets for the slider labels: height above the ground (or distance) in metres. */
     val zoomPresets = listOf(
         "Ground" to 2.0, "Planet" to 3.0e7, "Solar system" to 1.5e13, "Nearby stars" to 2e17,

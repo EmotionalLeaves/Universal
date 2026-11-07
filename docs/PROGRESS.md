@@ -289,3 +289,9 @@ Phone checklist:
 - [x] Star cards say how many planets the star has (real or generated).
 - [x] Empty search offers ✦ Browse famous places; Explore remembers open sections.
 - [x] Low quality skips the supergiant tier (faster phones stay smooth).
+
+## Pass 12 (polish)
+- [x] 🎲 Galaxy: fly to a random far-away galaxy; Explore dice buttons laid out evenly.
+- [x] Updated first-run tour (shown once again to everyone) with "tap the glow" and Explore tips.
+- [x] Field galaxies join the galaxy list at most every 1.5 s (no stutter from repeated rebuilds).
+- [x] Galaxy distances over 1,000 Mly shown in billions of light years.

@@ -50,6 +50,7 @@ class World(private val engine: Engine) {
         private set
     private var fieldCell: Triple<Int, Int, Int>? = null
     @Volatile private var fieldBusy = false
+    private var fieldTimer = 0.0
 
     private fun updateField(cam: UPos) {
         if (!engine.settings.showGenerated) { field = null; fieldCell = null; return }
@@ -153,7 +154,8 @@ class World(private val engine: Engine) {
         if (nearTimer < 0.3) return
         nearTimer = 0.0
         updateField(cam)
-        registerNearField(cam)
+        fieldTimer += 0.3
+        if (fieldTimer >= 1.5) { fieldTimer = 0.0; registerNearField(cam) }
         val list = galaxies
         val cand = ArrayList<Pair<GalaxyBody, Double>>()
         for (g in list) {

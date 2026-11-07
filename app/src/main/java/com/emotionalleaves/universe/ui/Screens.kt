@@ -372,7 +372,7 @@ fun HelpScreen() {
             "On the ground" to "Zoom all the way into a rocky planet or moon. Drag up/down to walk, left/right to turn.",
             "Time" to "Use ⏪ ⏸ ⏩ at the bottom to change how fast time runs. Now goes back to the present.",
             "Real or generated" to "Every card shows a green Real badge (from scientific catalogues) or a purple Generated badge (made up by rules, the same every time).",
-            "Explore" to "Tap ✦ Explore (top right) for a list of famous places sorted by type. One tap flies you there. Surprise me picks a random alien world.",
+            "Explore" to "Tap ✦ Explore (top right) for a list of famous places sorted by type. One tap flies you there. The 🎲 buttons pick a random alien world or a random galaxy.",
             "Jump between scales" to "The labels beside the zoom slider (Ground, Planet, Solar system, Nearby stars, Milky Way, Galaxy groups, Universe) jump straight to that size.",
             "Lost in space?" to "If you drift into empty space, tap ↩ Back to … under the name at the top left, or Home.",
             "Find things" to "🔍 Search finds planets, stars, exoplanets, nebulae and galaxies by name or catalogue number (HIP, HD, NGC, M, PGC).",
@@ -422,6 +422,7 @@ fun TipsOverlay(engine: Engine) {
         "Zoom anywhere" to "Pinch, or drag the slider on the right. Tap a label beside it (Planet, Solar system, Milky Way…) to jump to that scale.",
         "Not sure where to go?" to "Tap ✦ Explore (top right) for famous planets, stars, nebulae and galaxies, or Surprise me for a random alien world.",
         "Tap to explore" to "Tap anything for its card. Double-tap or Fly to to travel there.",
+        "Every star is real to visit" to "Tap anywhere on the glow of a galaxy, even the Milky Way band, to pick a star at that spot. Each one has planets to fly to and land on.",
         "Real or generated" to "Green Real = from scientific catalogues. Purple Generated = filled in by rules where nobody has measured yet.",
         "Find and save" to "🔍 searches by name. 🏠 flies home. ☰ has bookmarks, data packs and settings.",
     )

@@ -108,16 +108,20 @@ fun ExploreScreen(engine: Engine) {
         )
         Spacer(Modifier.padding(top = 8.dp))
         Row(Modifier.fillMaxWidth()) {
-            PillButton("🎲 Surprise me: alien world", Modifier.weight(1f), primary = true) {
+            PillButton("🎲 Alien world", Modifier.weight(1f), primary = true) {
                 engine.surprise(land = true); Nav.screen = Screen.NONE
             }
             Spacer(Modifier.width(8.dp))
-            PillButton("🎲 Any planet", Modifier) {
+            PillButton("🎲 Any planet", Modifier.weight(1f)) {
                 engine.surprise(land = false); Nav.screen = Screen.NONE
+            }
+            Spacer(Modifier.width(8.dp))
+            PillButton("🎲 Galaxy", Modifier.weight(1f)) {
+                engine.surpriseGalaxy(); Nav.screen = Screen.NONE
             }
         }
         Text(
-            "Surprise me picks a real star and visits one of its generated planets.",
+            "Alien world and Any planet pick a real star and visit one of its generated planets. Galaxy picks one of the millions far away.",
             color = TextDim, fontSize = 11.sp, modifier = Modifier.padding(top = 4.dp),
         )
         for (c in CATEGORIES) {

@@ -28,6 +28,7 @@ class Settings(context: Context) {
         set(v) { field = v; prefs.edit().putFloat("starBright", v).apply() }
     @Volatile var wifiOnly = prefs.getBoolean("wifiOnly", true)
         set(v) { field = v; prefs.edit().putBoolean("wifiOnly", v).apply() }
-    @Volatile var seenTips = prefs.getBoolean("seenTips", false)
-        set(v) { field = v; prefs.edit().putBoolean("seenTips", v).apply() }
+    // Key bumped when the tour changes, so everyone sees the new features once.
+    @Volatile var seenTips = prefs.getBoolean("seenTips2", false)
+        set(v) { field = v; prefs.edit().putBoolean("seenTips2", v).apply() }
 }
