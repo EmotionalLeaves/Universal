@@ -41,4 +41,7 @@ interface Layer {
 
     /** Tap targets and labels. */
     fun collect(frame: Frame, rc: RenderContext, out: MutableList<Pickable>) {}
+
+    /** Second chance for taps on things not in the pickable list (e.g. any of 100,000 stars). */
+    fun pickAt(frame: Frame, rc: RenderContext, x: Float, y: Float, reach: Float): Body? = null
 }

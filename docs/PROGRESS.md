@@ -62,7 +62,7 @@ Phone checklist:
 
 ## Round 3 — The real solar system
 
-**Status:** pushed.
+**Status:** build 4 green.
 
 Finished:
 - `engine/SolarSystem.kt`: Sun, 8 planets, Pluto and 21 major moons with real radii.
@@ -79,3 +79,47 @@ Phone checklist:
 - [ ] Planet positions for today roughly match a planetarium website
 - [ ] Saturn has rings and the Moon circles Earth
 - [ ] Fly To lands you smoothly beside any planet
+
+## Round 4 — The data factory
+
+**Status:** data workflow green (run 1).
+
+Finished:
+- `tools/build_data.py` + `.github/workflows/build-data.yml` (run from the Actions tab, or push to the `data` branch).
+- Every source is a separate step; a failing source logs a warning and the app falls back to generated data.
+- Outputs go to the `data-v1` release: `base-data.zip` (bundled into every APK by `build-apk.yml`) and `pack-*.zip` (optional downloads).
+- Star tiles: binary format `UXST` (200 pc tiles, 24 bytes per star). First run: 109,389 HYG stars in 623 tiles (2.6 MB); AT-HYG pack 750,619 extra stars in 10,601 tiles (18.4 MB).
+- Also built: 6,464 exoplanets (4,857 hosts), 1,367 nebulae/clusters and 10,792 NGC/IC galaxies (OpenNGC), 55,877 Cosmicflows-4 galaxy distances + 6,294 redshift distances, 14 planet textures, ETOPO1/MOLA/LOLA elevation maps, the Planck CMB map (rotated to equatorial), constellation figures (Stellarium).
+- The app reads tiles from assets (`engine/StarCatalog.kt`), verified locally against the real files (Sirius: RA 101.29°, Dec −16.72°, 8.6 ly).
+
+Phone checklist:
+- [x] The data workflow turns green
+- [x] Its log prints how many tiles were made and their total size
+
+## Round 5 — Real stars
+
+**Status:** pushed.
+
+Finished:
+- 109,389 real stars drawn as points with blackbody colours from B−V and brightness from absolute magnitude and *your* distance (stars brighten as you approach them).
+- Labels for the brightest named stars from wherever you are; tap any star (all 100,000+ are tappable) for an info card: distance, brightness from Earth, temperature, luminosity, radius, catalogue numbers.
+- Constellation lines (Stellarium figures) in true 3D, switchable in Settings; they fade out once you are far from the Sun.
+
+Phone checklist:
+- [ ] Standing on Earth at night, Orion is recognizable
+- [ ] You can fly to Sirius and it glows blue-white, bigger than the Sun
+
+## Round 6 — Star systems and exoplanets
+
+**Status:** pushed.
+
+Finished:
+- NASA Exoplanet Archive planets around their real host stars. Hosts are matched to HYG by HIP/HD number; hosts not in HYG (TRAPPIST-1, Kepler stars...) become extra real stars at their archive position and distance.
+- Every other star gets generated planets (rules 1, 3, 4): count from the star's temperature/size, spacing by orbital ratios, sizes with more giants beyond the snow line, type from temperature (lava, rocky, ocean, ice, super-Earth, mini-Neptune, ice/gas giant, hot Jupiter). Same star → same planets, always (seeded by the star id + generator version).
+- Transiting systems are oriented edge-on to Earth.
+- When you approach a star its system switches on: star as a glowing sphere, planets with orbits, labels (green = real, purple = generated) and the Real/Generated badge.
+
+Phone checklist:
+- [ ] TRAPPIST-1 shows its seven planets
+- [ ] A random star shows the same planets after restarting the app
+- [ ] Info cards show the Real or Generated badge

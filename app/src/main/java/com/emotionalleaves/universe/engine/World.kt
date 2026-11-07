@@ -26,17 +26,148 @@ class World(private val engine: Engine) {
     val cubeOrientationUp: Vec3d get() = cubeDir
 
     private val byId = HashMap<String, Body>()
+    private val loader = java.util.concurrent.Executors.newSingleThreadExecutor()
+
+    /** Real star catalogues; null until loaded (or if the data is missing). */
+    @Volatile var realStars: RealStars? = null
+        private set
+    @Volatile var starsFailed = false
+        private set
+    @Volatile var exo: ExoCatalog? = null
+        private set
+    private val exoForStar = java.util.concurrent.ConcurrentHashMap<String, List<ExoRow>>()
+
+    /** The star system the camera is in (other than our own), with its planets. */
+    @Volatile var activeSystem: StarSystem? = null
+        private set
+    private val systemCache = object : LinkedHashMap<String, StarSystem>(16, 0.75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, StarSystem>?) = size > 12
+    }
+    private var systemTimer = 0.0
 
     fun start() {
         for (b in solar) byId[b.id] = b
         for (b in testBodies()) byId[b.id] = b
+        loader.execute {
+            try {
+                realStars = RealStars.load(engine.context)
+            } catch (e: Throwable) {
+                android.util.Log.w("World", "Star catalogue failed: $e")
+            }
+            if (realStars == null) starsFailed = true
+            try {
+                loadExoplanets()
+            } catch (e: Throwable) {
+                android.util.Log.w("World", "Exoplanets failed: $e")
+            }
+        }
     }
+
+    /** Matches exoplanet hosts to catalogue stars; hosts not in HYG become extra stars. */
+    private fun loadExoplanets() {
+        val cat = ExoCatalog.load(engine.context) ?: return
+        val rs = realStars
+        val extraStars = ArrayList<FloatArray>()
+        val extraIds = ArrayList<Int>()
+        val extraInfo = ArrayList<StarInfo>()
+        var k = 0
+        for ((host, rows) in cat.byHost) {
+            val r0 = rows[0]
+            val hip = r0.hip.removePrefix("HIP ").trim()
+            val hd = r0.hd.removePrefix("HD ").trim()
+            val id = rs?.let { (if (hip.isNotEmpty()) it.hipToId[hip] else null) ?: (if (hd.isNotEmpty()) it.hdToId[hd] else null) }
+            if (id != null) {
+                exoForStar["hyg:$id"] = rows
+                continue
+            }
+            val d = r0.distPc ?: continue
+            val teff = r0.stTeff ?: 5000.0
+            val rad = r0.stRad ?: 1.0
+            val v = Vec3d.fromRaDec(r0.ra, r0.dec) * d
+            val c = StarBody.tempColor(teff)
+            val sid = 20_000_000 + k++
+            extraStars.add(floatArrayOf(v.x.toFloat(), v.y.toFloat(), v.z.toFloat(), c[0], c[1], c[2],
+                SystemFactory.absMagFrom(teff, rad).toFloat()))
+            extraIds.add(sid)
+            extraInfo.add(StarInfo(sid, host, "", "", "", "", r0.stSpect, d, "", teff, ""))
+            exoForStar["hyg:$sid"] = rows
+        }
+        if (rs != null && extraStars.isNotEmpty()) {
+            rs.addInfo(extraInfo)
+            rs.exoHosts = StarCatalog.fromStars(extraStars, extraIds.toIntArray(), "Exoplanet hosts")
+        }
+        exo = cat
+    }
+
+    fun exoRowsFor(star: StarBody): List<ExoRow>? = exoForStar[star.id]
+
+    fun systemFor(star: StarBody): StarSystem = synchronized(systemCache) {
+        systemCache.getOrPut(star.id) {
+            val rows = exoForStar[star.id]
+            when {
+                rows != null -> SystemFactory.real(star, rows)
+                engine.settings.showGenerated -> SystemFactory.generated(star)
+                else -> StarSystem(star, emptyList(), false)
+            }
+        }
+    }
+
+    /** Picks the star system around the camera (call a few times a second). */
+    private fun updateActiveSystem() {
+        val cam: UPos
+        val target: Body?
+        synchronized(engine.camera) { cam = engine.camera.position(); target = engine.camera.target }
+        val fromSun = (cam - UPos.ZERO).length()
+        var star: StarBody? = when (target) {
+            is StarBody -> target.takeIf { (it.pos - cam).length() < 0.6 * Units.LY }
+            is PlanetBody -> target.star
+            else -> null
+        }
+        if (star == null) {
+            val current = activeSystem?.star
+            if (current != null && (current.pos - cam).length() < 0.4 * Units.LY) star = current
+        }
+        if (star == null && fromSun > 0.3 * Units.LY) {
+            val rs = realStars
+            val hit = rs?.nearest(cam - UPos.ZERO, 0.1)
+            if (hit != null) star = rs.bodyFrom(hit.first, hit.second)
+            if (star == null) star = extraStarNear?.invoke(cam)
+        }
+        activeSystem = star?.let { s -> activeSystem?.takeIf { it.star.id == s.id } ?: systemFor(s) }
+    }
+
+    /** Hook for generated stars (set by the galaxy generator). */
+    @Volatile var extraStarNear: ((UPos) -> StarBody?)? = null
 
     fun homeBody(): Body = earth
 
-    fun update(engine: Engine) {}
+    fun update(engine: Engine, dt: Double) {
+        systemTimer += dt
+        if (systemTimer > 0.25) {
+            systemTimer = 0.0
+            updateActiveSystem()
+        }
+    }
 
-    fun find(id: String): Body? = byId[id]
+    fun find(id: String): Body? {
+        byId[id]?.let { return it }
+        if (id.startsWith("hyg:") && !id.contains("/")) return id.removePrefix("hyg:").toIntOrNull()?.let { realStars?.body(it) }
+        if (id.contains("/")) {
+            val star = find(id.substringBeforeLast("/")) as? StarBody ?: return null
+            return systemFor(star).planets.firstOrNull { it.id == id }
+        }
+        if (id.startsWith("exo:")) {
+            val name = id.removePrefix("exo:")
+            val cat = exo ?: return null
+            for ((sid, rows) in exoForStar) {
+                if (rows.none { it.name == name }) continue
+                val star = find(sid) as? StarBody ?: return null
+                return systemFor(star).planets.firstOrNull { it.id == id }
+            }
+            if (cat.planetCount == 0) return null
+        }
+        return null
+    }
 
     /** Bodies the camera must not enter. */
     fun solidBodiesNear(cam: UPos, jd: Double): List<Body> {
@@ -46,6 +177,10 @@ class World(private val engine: Engine) {
             if (d < b.radius * 1.5 + 50_000) out.add(b)
         }
         if (engine.settings.showTestObjects && (testPlanet.position(jd) - cam).length() < Units.R_EARTH * 1.5) out.add(testPlanet)
+        activeSystem?.let { sys ->
+            if ((sys.star.pos - cam).length() < sys.star.radius * 1.5) out.add(sys.star)
+            for (p in sys.planets) if ((p.position(jd) - cam).length() < p.radius * 1.5 + 50_000) out.add(p)
+        }
         return out
     }
 

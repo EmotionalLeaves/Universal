@@ -44,6 +44,30 @@ PLANCK_URL = ("https://irsa.ipac.caltech.edu/data/Planck/release_2/all-sky-maps/
 ETOPO_URL = ("https://www.ngdc.noaa.gov/mgg/global/relief/ETOPO1/data/ice_surface/grid_registered/"
              "georeferenced_tiff/ETOPO1_Ice_g_geotiff.zip")
 MOLA_URL = "https://planetarymaps.usgs.gov/mosaic/Mars_MGS_MOLA_DEM_mosaic_global_463m.tif"
+CONSTELLATION_URLS = [
+    "https://raw.githubusercontent.com/Stellarium/stellarium/master/skycultures/modern/index.json",
+    "https://raw.githubusercontent.com/Stellarium/stellarium/master/skycultures/modern_st/index.json",
+    "https://raw.githubusercontent.com/Stellarium/stellarium/v23.4/skycultures/modern/constellationship.fab",
+]
+CONSTELLATION_NAMES = {
+    "And": "Andromeda", "Ant": "Antlia", "Aps": "Apus", "Aqr": "Aquarius", "Aql": "Aquila", "Ara": "Ara",
+    "Ari": "Aries", "Aur": "Auriga", "Boo": "Boötes", "Cae": "Caelum", "Cam": "Camelopardalis", "Cnc": "Cancer",
+    "CVn": "Canes Venatici", "CMa": "Canis Major", "CMi": "Canis Minor", "Cap": "Capricornus", "Car": "Carina",
+    "Cas": "Cassiopeia", "Cen": "Centaurus", "Cep": "Cepheus", "Cet": "Cetus", "Cha": "Chamaeleon",
+    "Cir": "Circinus", "Col": "Columba", "Com": "Coma Berenices", "CrA": "Corona Australis",
+    "CrB": "Corona Borealis", "Crv": "Corvus", "Crt": "Crater", "Cru": "Crux", "Cyg": "Cygnus",
+    "Del": "Delphinus", "Dor": "Dorado", "Dra": "Draco", "Equ": "Equuleus", "Eri": "Eridanus", "For": "Fornax",
+    "Gem": "Gemini", "Gru": "Grus", "Her": "Hercules", "Hor": "Horologium", "Hya": "Hydra", "Hyi": "Hydrus",
+    "Ind": "Indus", "Lac": "Lacerta", "Leo": "Leo", "LMi": "Leo Minor", "Lep": "Lepus", "Lib": "Libra",
+    "Lup": "Lupus", "Lyn": "Lynx", "Lyr": "Lyra", "Men": "Mensa", "Mic": "Microscopium", "Mon": "Monoceros",
+    "Mus": "Musca", "Nor": "Norma", "Oct": "Octans", "Oph": "Ophiuchus", "Ori": "Orion", "Pav": "Pavo",
+    "Peg": "Pegasus", "Per": "Perseus", "Phe": "Phoenix", "Pic": "Pictor", "Psc": "Pisces",
+    "PsA": "Piscis Austrinus", "Pup": "Puppis", "Pyx": "Pyxis", "Ret": "Reticulum", "Sge": "Sagitta",
+    "Sgr": "Sagittarius", "Sco": "Scorpius", "Scl": "Sculptor", "Sct": "Scutum", "Ser": "Serpens",
+    "Sex": "Sextans", "Tau": "Taurus", "Tel": "Telescopium", "Tri": "Triangulum", "TrA": "Triangulum Australe",
+    "Tuc": "Tucana", "UMa": "Ursa Major", "UMi": "Ursa Minor", "Vel": "Vela", "Vir": "Virgo", "Vol": "Volans",
+    "Vul": "Vulpecula",
+}
 LOLA_URL = "https://svs.gsfc.nasa.gov/vis/a000000/a004700/a004720/ldem_3_8bit.jpg"
 
 THREEX = "https://raw.githubusercontent.com/jeromeetienne/threex.planets/master/images/"
@@ -297,6 +321,47 @@ def build_athyg_pack(packs):
     return {"athyg_extra_stars": len(stars), "athyg_tiles": n_tiles}
 
 
+def build_constellations(base):
+    """Stick figures as pairs of Hipparcos numbers, from Stellarium's modern sky culture."""
+    log("Constellations: Stellarium modern sky culture")
+    lines_out = []
+    for url in CONSTELLATION_URLS:
+        try:
+            txt = fetch(url, retries=2).decode("utf-8")
+        except Exception:
+            continue
+        if url.endswith(".json"):
+            data = json.loads(txt)
+            for c in data.get("constellations", []):
+                abbr = c.get("id", "").split()[-1]
+                pairs = []
+                for poly in c.get("lines", []):
+                    hips = [h for h in poly if isinstance(h, int)]
+                    for a, b in zip(hips, hips[1:]):
+                        pairs += [a, b]
+                if pairs:
+                    lines_out.append((abbr, pairs))
+        else:
+            for line in txt.split("\n"):
+                p = line.split()
+                if len(p) < 4:
+                    continue
+                abbr = p[0]
+                nums = [int(x) for x in p[2:] if x.isdigit()]
+                lines_out.append((abbr, nums))
+        if lines_out:
+            log(f"  from {url}")
+            break
+    if not lines_out:
+        raise RuntimeError("no constellation source reachable")
+    os.makedirs(os.path.join(base, "stars"), exist_ok=True)
+    with open(os.path.join(base, "stars", "constellations.tsv"), "w", encoding="utf-8") as f:
+        for abbr, pairs in lines_out:
+            f.write(f"{abbr}\t{CONSTELLATION_NAMES.get(abbr, abbr)}\t{' '.join(str(x) for x in pairs)}\n")
+    log(f"Constellations: {len(lines_out)} figures")
+    return {"constellations": len(lines_out)}
+
+
 # ----------------------------------------------------------------------------- exoplanets
 
 def build_exoplanets(base):
@@ -449,7 +514,7 @@ def build_galaxies(base, ngc_galaxies):
                 if n in idx:
                     return idx[n]
             return None
-        i_ra, i_de = col("_RA", "RAJ2000"), col("_DE", "DEJ2000")
+        i_ra, i_de = col("_RAJ2000", "_RA", "RAJ2000"), col("_DEJ2000", "_DE", "DEJ2000")
         i_pgc = col("PGC", "pgc")
         i_dm = col("DM", "DMav", "<DM>", "DMtot")
         i_d = col("Dist", "D", "dist")
@@ -539,7 +604,7 @@ def build_glade_pack(packs):
             idx = {h.strip(): i for i, h in enumerate(header)}
             for r in data:
                 try:
-                    ra = float(r[idx["_RA"]]); de = float(r[idx["_DE"]]); d = float(r[idx["dL"]])
+                    ra = float(r[idx.get("_RAJ2000", idx.get("_RA"))]); de = float(r[idx.get("_DEJ2000", idx.get("_DE"))]); d = float(r[idx["dL"]])
                 except Exception:
                     continue
                 if d <= 0:
@@ -704,6 +769,8 @@ def main():
     steps = []
     if want("stars"):
         steps.append(("stars", lambda: build_hyg(base)))
+    if want("constellations"):
+        steps.append(("constellations", lambda: build_constellations(base)))
     if want("planets"):
         steps.append(("planets", lambda: build_exoplanets(base)))
     dso_state = {}

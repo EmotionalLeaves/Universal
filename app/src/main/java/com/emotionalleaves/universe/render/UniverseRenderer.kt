@@ -33,15 +33,15 @@ class UniverseRenderer(private val context: Context, private val engine: Engine)
 
     private val testLayer = TestLayer()
     private val solarLayer = SolarSystemLayer()
-    private var background: PointBatch? = null
-    private val layers: List<Layer> = listOf(solarLayer, testLayer)
+    private val starLayer = StarLayer()
+    private val systemLayer = SystemLayer()
+    private val layers: List<Layer> = listOf(starLayer, systemLayer, solarLayer, testLayer)
 
     override fun onSurfaceCreated(gl: GL10?, config: EGLConfig?) {
         textures.contextLost()
         val programs = Programs()
         val ctx = RenderContext(context, engine, programs, BodyDrawer(programs), textures)
         rc = ctx
-        background = TestLayer.backgroundStars()
         for (l in layers) l.init(ctx)
         lastTime = now()
     }
@@ -83,17 +83,25 @@ class UniverseRenderer(private val context: Context, private val engine: Engine)
 
         testLayer.enabled = engine.settings.showTestObjects
         solarLayer.showOrbits = engine.settings.showOrbits
+        systemLayer.showOrbits = engine.settings.showOrbits
         for (l in layers) l.update(frame, ctx)
         for (l in layers) l.drawOpaque(frame, ctx)
-        ctx.drawer.beginAdditive()
-        background?.let { ctx.drawer.points(frame, it, 6.5f, 3f, 1f, minSize = 1.5f, maxSize = 9f) }
-        ctx.drawer.end()
         for (l in layers) l.drawTransparent(frame, ctx)
 
         // Tap targets and labels
         val picks = ArrayList<Pickable>(256)
         for (l in layers) l.collect(frame, ctx, picks)
         engine.pickables = picks
+        engine.takeTap()?.let { tap ->
+            var body = engine.pick(tap.x, tap.y)?.body
+            if (body == null) {
+                for (l in layers.asReversed()) {
+                    body = l.pickAt(frame, ctx, tap.x, tap.y, engine.tapReach)
+                    if (body != null) break
+                }
+            }
+            engine.applyTap(body, tap.double)
+        }
         publishLabels(picks)
 
         // Stats and HUD (a few times a second)

@@ -53,7 +53,7 @@ class Engine(val context: Context) {
                 }
             }
         }
-        world.update(this)
+        world.update(this, dt)
     }
 
     fun onUserInteraction() {}
@@ -110,17 +110,36 @@ class Engine(val context: Context) {
         }
     }
 
-    /** Single tap: select what is under the finger (or clear the selection). */
+    class Tap(val x: Float, val y: Float, val double: Boolean)
+
+    @Volatile private var pendingTap: Tap? = null
+
+    /** Single tap: select what is under the finger (resolved on the next frame). */
     fun onTap(x: Float, y: Float) {
-        selected = pick(x, y)?.body
+        pendingTap = Tap(x, y, false)
     }
 
     /** Double tap: fly to what is under the finger. */
     fun onDoubleTap(x: Float, y: Float) {
-        val p = pick(x, y) ?: return
-        selected = p.body
-        flyTo(p.body)
+        pendingTap = Tap(x, y, true)
     }
+
+    fun takeTap(): Tap? {
+        val t = pendingTap
+        pendingTap = null
+        return t
+    }
+
+    /** Called by the renderer with what was found under a tap. */
+    fun applyTap(body: Body?, double: Boolean) {
+        if (double) {
+            if (body != null) { selected = body; flyTo(body) }
+        } else {
+            selected = body
+        }
+    }
+
+    val tapReach: Float get() = 36f * density
 
     fun pick(x: Float, y: Float): Pickable? {
         val reach = 36f * density
