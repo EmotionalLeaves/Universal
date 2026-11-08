@@ -47,9 +47,10 @@ class UniverseRenderer(private val context: Context, private val engine: Engine)
     private val beltLayer = BeltLayer()
     private val rockLayer = RockLayer()
     private val webLodLayer = WebLodLayer()
+    private val famousLayer = FamousLayer()
     private val layers: List<Layer> = listOf(
         cosmicLayer, hazeLayer, webLodLayer, exoticLayer, fieldLayer, galaxyCatalogLayer, galaxyLayer, deepSkyLayer, starLayer, remnantLayer, systemLayer, beltLayer, rockLayer,
-        solarLayer, smallBodyLayer, testLayer,
+        solarLayer, smallBodyLayer, famousLayer, testLayer,
     )
 
     override fun onSurfaceCreated(gl: GL10?, config: EGLConfig?) {
@@ -344,6 +345,8 @@ class UniverseRenderer(private val context: Context, private val engine: Engine)
             Hud.lastName = if (!free && target == null && going == null) (engine.lastTarget?.name ?: "") else ""
             Hud.altitudeText = altitude
             Hud.selectedName = sel?.name ?: ""
+            Hud.selectedId = sel?.id ?: ""
+            Hud.selectedWidth = sel?.let { if (it.radius > 0) it.radius * 2 else 0.0 } ?: 0.0
             if (Hud.choices != choices) Hud.choices = choices
             Hud.selectedSubtitle = sel?.subtitle ?: ""
             Hud.selectedSource = sel?.source?.label ?: ""
@@ -358,6 +361,7 @@ class UniverseRenderer(private val context: Context, private val engine: Engine)
             Hud.selectedKind = sel?.kind?.label?.takeIf { it != "Marker" } ?: ""
             Hud.selectedAboutCredit = about?.credit ?: ""
             Hud.scaleBarText = Units.formatDistance(barLen)
+            Hud.scaleBarHint = com.emotionalleaves.universe.engine.ScaleRefs.like(barLen)
             Hud.scaleBarFraction = barFraction
             if (!Hud.sliderDragging) Hud.zoomFraction = zoom
             Hud.flying = flying

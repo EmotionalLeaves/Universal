@@ -67,6 +67,7 @@ class World(private val engine: Engine) {
         fun consider(b: Body, d: Double) { if (d < best) { best = d; bestBody = b }; keep(b, d) }
         val jd = engine.jd
         for (b in solar) consider(b, (b.position(jd) - cam).length() - b.radius)
+        for (b in Famous.all) if (b.kind != Kind.VOID && b.kind != Kind.SUPERCLUSTER) consider(b, (b.position(jd) - cam).length() - b.radius)
         activeSystem?.let { s ->
             consider(s.star, (s.star.pos - cam).length() - s.star.radius)
             for (p in s.planets) { consider(p, (p.position(jd) - cam).length() - p.radius); for (m in p.moons) consider(m, (m.position(jd) - cam).length() - m.radius) }
@@ -691,6 +692,7 @@ class World(private val engine: Engine) {
     }
 
     fun find(id: String): Body? {
+        if (id.startsWith("fam:")) return Famous.find(id)
         byId[id]?.let { return it }
         byIdConcurrent[id]?.let { return it }
         if (id.startsWith("gal:out")) {

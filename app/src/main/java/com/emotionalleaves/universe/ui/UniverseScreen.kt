@@ -87,6 +87,7 @@ fun UniverseScreen(engine: Engine, version: String, view: UniverseView) {
             Screen.BOOKMARKS -> BookmarksScreen(engine)
             Screen.SETTINGS -> SettingsScreen(engine)
             Screen.HELP -> HelpScreen()
+            Screen.SCALE -> ScaleScreen(engine)
             Screen.CREDITS -> CreditsScreen(version)
             else -> {}
         }

@@ -90,8 +90,11 @@ tap_text "Go to nearest"; sleep 8; shot free_nearest2; texts
 tap_text "Exit"; sleep 2; shot free_exit
 
 # Search
-tap_text "Search"; sleep 3; adb shell input text "Sirius"; sleep 5; shot search; texts
-adb shell input keyevent 66; log "enter"; sleep 10; shot sirius; texts
+tap_text "Search"; sleep 3; shot search_empty; texts
+adb shell input text "ton%s618"; sleep 5; shot search; texts
+adb shell input keyevent 66; log "enter"; sleep 12; shot ton618; texts
+tap_text "Compare size"; sleep 3; shot sizes; texts
+adb shell input keyevent 4; sleep 2
 
 # Menu and census
 sleep 2; tap_text "Menu"; sleep 3; shot menu; texts

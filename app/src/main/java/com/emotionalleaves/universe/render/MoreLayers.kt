@@ -370,6 +370,8 @@ class RemnantLayer : Layer {
     override fun drawTransparent(frame: Frame, rc: RenderContext) {
         if (near.isEmpty() || daylight > 0.9f) return
         rc.drawer.beginAdditive()
+        // Towards the crowded galactic centre hundreds of nebula glows piled into a pink fog: nearest 40 only.
+        var nebulaeDrawn = 0
         for ((b, d) in near) {
             val rel = frame.rel(b.pos)
             when (b.kind) {
@@ -381,7 +383,7 @@ class RemnantLayer : Layer {
                 Kind.NEUTRON_STAR -> rc.drawer.glow(frame, rel, b.radius * 6, floatArrayOf(0.7f, 0.85f, 1f), 0.55f, minPixels = 3.0)
                 // Clusters sparkle blue-white, nebulae glow pink-red; both fade as you fly inside.
                 Kind.CLUSTER -> rc.drawer.glow(frame, rel, b.radius * 1.4, floatArrayOf(0.66f, 0.78f, 1f), (0.5 * kotlin.math.min(1.0, d / (b.radius * 2))).toFloat(), minPixels = 3.0)
-                Kind.NEBULA -> rc.drawer.glow(frame, rel, b.radius * 1.6, floatArrayOf(1f, 0.45f, 0.62f), (0.45 * kotlin.math.min(1.0, d / (b.radius * 2))).toFloat(), minPixels = 4.0)
+                Kind.NEBULA -> if (nebulaeDrawn++ < 40) rc.drawer.glow(frame, rel, b.radius * 1.6, floatArrayOf(1f, 0.45f, 0.62f), (0.3 * kotlin.math.min(1.0, d / (b.radius * 2))).toFloat(), minPixels = 4.0)
                 else -> rc.drawer.glow(frame, rel, 0.0, floatArrayOf(0.7f, 0.42f, 0.38f), 0.35f, minPixels = 2.5)
             }
         }

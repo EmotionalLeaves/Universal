@@ -392,3 +392,9 @@ How it was tested: an Android emulator on GitHub (ui-test.yml + tools/ui_test.sh
 - [x] Quasars dimmer at the whole-universe scale (the survey footprint showed as white patches).
 - [x] Catalogues parsed with a fast tab-separated reader (no split/toDouble): interpreted-mode load of star names, galaxies, asteroids and quasars about 2× faster; galaxy card facts built only when a card opens.
 - [x] Opens on Earth's sunlit side (it opened on whatever side was night at the time).
+
+## Pass 20: search, famous objects, sizes
+- [x] Famous objects and record holders missing from the catalogues (TON 618, Phoenix A, Sagittarius A*, M87*, Cygnus X-1, Gaia BH1, UY Scuti, Stephenson 2-18, VY CMa, WOH G64, Earendel, GN-z11, JADES-GS-z14-0, Boötes Void, Laniakea, Great Attractor, Sloan Great Wall, Her–CrB Great Wall, Bullet Cluster, El Gordo, Voyager 1 & 2): real positions, sizes and stories; drawn up close (black holes with bent-light rings, the quasar's disk, red supergiants) and tappable. New "Record holders" category in Explore.
+- [x] Search: matches ignore spaces and punctuation ("ton618", "TON-618"), tolerate typos ("betelguese", "andromida"), know nicknames (Pillars of Creation, Sag A*, Whirlpool Galaxy) and Messier/NGC/IC numbers of galaxies (M31, NGC 224). Empty search shows recent searches and popular picks; a clearer "nothing found" message.
+- [x] Sizes compared: a ladder from a person to the observable universe (Everest, Earth, the Sun, UY Scuti, the Solar System, TON 618's horizon, the Milky Way, Laniakea…) with the selected object slotted in and compared ("≈ 18 × the Solar System", "1,600 Suns wide"). From the card's ruler button, the menu, or tapping the scale bar; the scale bar also says what it is about as long as ("≈ 3 × Earth").
+- [x] Galactic-centre nebula glows limited to the nearest 40 (they piled into a pink fog).

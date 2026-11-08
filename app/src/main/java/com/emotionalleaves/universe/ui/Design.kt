@@ -86,7 +86,7 @@ fun Modifier.glass(radius: Dp = 16.dp, raised: Boolean = false): Modifier =
 enum class G {
     SEARCH, HOME, MENU, CLOSE, STAR, PLAY, PAUSE, FWD, REW, COMPASS, DICE, UP, FLY, LAND, CHEVRON_DOWN, CHEVRON_UP,
     CHEVRON_RIGHT, BACK, BOOKMARK, SLIDERS, INFO, HELP, DOWNLOAD, CHART, CLOCK, TARGET,
-    SUN, PLANET, MOON, ASTEROID, NEBULA, GALAXY, BLACKHOLE, UNIVERSE, SPARKLE,
+    SUN, PLANET, MOON, ASTEROID, NEBULA, GALAXY, BLACKHOLE, UNIVERSE, SPARKLE, RULER,
 }
 
 @Composable
@@ -152,6 +152,11 @@ private fun DrawScope.drawGlyph(g: G, c: Color) {
             line(12f, 12.4f, 12f, 13.6f); circle(12f, 16.8f, 1.1f, true)
         }
         G.DOWNLOAD -> { line(12f, 4f, 12f, 14.5f); poly(7.5f, 10f, 12f, 14.5f, 16.5f, 10f); poly(4.5f, 15f, 4.5f, 19.5f, 19.5f, 19.5f, 19.5f, 15f) }
+        G.RULER -> {
+            // A ruler laid diagonally with tick marks.
+            poly(3f, 15f, 15f, 3f, 21f, 9f, 9f, 21f, close = true)
+            line(7f, 11f, 9f, 13f); line(10f, 8f, 13f, 11f); line(13f, 5f, 15f, 7f)
+        }
         G.CHART -> { poly(5f, 20f, 5f, 13f, 8.5f, 13f, 8.5f, 20f); poly(10.3f, 20f, 10.3f, 8f, 13.7f, 8f, 13.7f, 20f); poly(15.5f, 20f, 15.5f, 4f, 19f, 4f, 19f, 20f) }
         G.CLOCK -> { circle(12f, 12f, 9f); poly(12f, 7f, 12f, 12f, 15.5f, 14f) }
         G.TARGET -> { circle(12f, 12f, 6f); line(12f, 2.5f, 12f, 6f); line(12f, 18f, 12f, 21.5f); line(2.5f, 12f, 6f, 12f); line(18f, 12f, 21.5f, 12f); circle(12f, 12f, 1.5f, true) }

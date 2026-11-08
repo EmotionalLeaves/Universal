@@ -35,6 +35,23 @@ private fun p(label: String, hint: String, query: String = label) = Place(label,
 
 private val CATEGORIES = listOf(
     Category(
+        G.BLACKHOLE, "black hole", "Record holders", "The biggest, farthest and strangest things known.",
+        listOf(
+            p("TON 618", "One of the biggest black holes: 40 billion Suns"),
+            p("Phoenix A", "Possibly the biggest black hole of all"),
+            p("Sagittarius A*", "The black hole at our galaxy's centre"),
+            p("M87*", "The first black hole ever photographed"),
+            p("Stephenson 2-18", "Perhaps the largest star known"),
+            p("UY Scuti", "A star wider than Mars' orbit"),
+            p("Gaia BH1", "The nearest known black hole"),
+            p("Earendel", "The most distant single star seen"),
+            p("JADES-GS-z14-0", "The most distant galaxy confirmed"),
+            p("Boötes Void", "330 million light years of almost nothing"),
+            p("Hercules–Corona Borealis Great Wall", "The largest structure claimed"),
+            p("Voyager 1", "The farthest human-made object"),
+        ),
+    ),
+    Category(
         G.SUN, "star", "Solar system", "Our Sun, its planets and their moons.",
         listOf(
             p("Sun", "Our star"), p("Mercury", "Smallest planet"), p("Venus", "Hottest planet"),

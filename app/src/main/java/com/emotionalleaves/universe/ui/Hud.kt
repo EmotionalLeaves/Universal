@@ -30,6 +30,9 @@ object Hud {
     var altitudeText by mutableStateOf("")
 
     var selectedName by mutableStateOf("")
+    var selectedId by mutableStateOf("")
+    /** Width of the selection in metres (0 = point-like). */
+    var selectedWidth by mutableStateOf(0.0)
     /** Other things under the last tap (name, id): "Also here" on the card. */
     var choices by mutableStateOf<List<Pair<String, String>>>(emptyList())
     var selectedSubtitle by mutableStateOf("")
@@ -47,6 +50,8 @@ object Hud {
     var loading by mutableStateOf("")
 
     var scaleBarText by mutableStateOf("")
+    /** "≈ 3 × Earth": something familiar the scale bar is about as long as. */
+    var scaleBarHint by mutableStateOf("")
     var scaleBarFraction by mutableStateOf(0.25f)
     var zoomFraction by mutableStateOf(0.5f)
     var sliderDragging by mutableStateOf(false)

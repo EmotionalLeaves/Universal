@@ -106,7 +106,7 @@ fun ScaleBar() {
     val screenW = LocalConfiguration.current.screenWidthDp.toFloat()
     if (Hud.scaleBarText.isEmpty()) return
     val barW = (screenW * Hud.scaleBarFraction).coerceIn(20f, screenW * 0.4f)
-    Column {
+    Column(Modifier.clickable { ScaleUi.openFor(null); Nav.screen = Screen.SCALE }) {
         Text(Hud.scaleBarText, color = TextMain, fontSize = 11.sp)
         Spacer(Modifier.height(2.dp))
         Box(
@@ -115,6 +115,7 @@ fun ScaleBar() {
                 .height(4.dp)
                 .background(Color(0xCCE8ECF8), RoundedCornerShape(2.dp)),
         )
+        if (Hud.scaleBarHint.isNotEmpty()) Text(Hud.scaleBarHint, color = TextDim, fontSize = 10.sp, maxLines = 1)
     }
 }
 
@@ -362,6 +363,9 @@ fun InfoCard(engine: Engine, modifier: Modifier = Modifier) {
             Row(Modifier.padding(top = 10.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                 Button("Fly to", glyph = G.FLY, primary = true) { mini = true; expanded = false; restoreOnArrival = true; engine.flyToSelected() }
                 Spacer(Modifier.weight(1f))
+                if (Hud.selectedWidth > 0) IconButton(G.RULER, size = 40.dp, label = "Compare size") {
+                    ScaleUi.openFor(Triple(Hud.selectedName, Hud.selectedWidth, Hud.selectedId)); Nav.screen = Screen.SCALE
+                }
                 IconButton(G.UP, size = 40.dp) { engine.goUp() }
                 IconButton(G.BOOKMARK, size = 40.dp) {
                     val n = engine.addBookmark()

@@ -40,6 +40,17 @@ object GalaxyCatalog {
         parse(emptySequence())
     }
 
+    /** "NGC 224" / "IC 342" style designations of catalogue galaxies, to their ids (for search). */
+    val designations = java.util.concurrent.ConcurrentHashMap<String, String>()
+
+    /** "NGC0224" -> "NGC 224". */
+    fun designation(raw: String): String? {
+        val letters = raw.takeWhile { it.isLetter() }
+        val digits = raw.drop(letters.length).trimStart('0').trim()
+        if (letters.isEmpty() || digits.isEmpty()) return null
+        return "$letters $digits"
+    }
+
     fun parse(lines: Sequence<String>): List<GalaxyBody> {
         val out = ArrayList<GalaxyBody>(64_000)
         val seen = HashSet<Int>()
@@ -58,6 +69,8 @@ object GalaxyCatalog {
                         pa = p.num(8), incl = p.num(9), distSrc = p.str(10), ngc = p.str(11),
                     ) ?: continue
                     out.add(g)
+                    val ngc = p.str(11)
+                    if (ngc.isNotEmpty()) designation(ngc)?.let { designations[it] = g.id }
                 }
             }
         }

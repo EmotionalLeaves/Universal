@@ -37,7 +37,7 @@ import com.emotionalleaves.universe.engine.Engine
 import com.emotionalleaves.universe.engine.PackState
 import java.util.Locale
 
-enum class Screen { NONE, EXPLORE, CENSUS, MENU, DATA, SETTINGS, SEARCH, BOOKMARKS, HELP, CREDITS }
+enum class Screen { NONE, EXPLORE, CENSUS, MENU, DATA, SETTINGS, SEARCH, BOOKMARKS, HELP, CREDITS, SCALE }
 
 /** Which overlay screen is open. */
 object Nav {
@@ -103,6 +103,7 @@ fun MenuSheet(engine: Engine) {
             MenuItem(G.COMPASS, "Explore places", kindColor("star")) { Nav.screen = Screen.EXPLORE }
             MenuItem(G.CHART, "What's in the universe", kindColor("galaxy")) { Nav.screen = Screen.CENSUS }
             MenuItem(G.SEARCH, "Search", kindColor("planet")) { Nav.screen = Screen.SEARCH }
+            MenuItem(G.RULER, "Sizes compared", kindColor("star")) { ScaleUi.openFor(null); Nav.screen = Screen.SCALE }
             MenuItem(G.BOOKMARK, "Bookmarks", kindColor("nebula")) { Nav.screen = Screen.BOOKMARKS }
             Hairline(Modifier.padding(vertical = 4.dp))
             MenuItem(G.DOWNLOAD, "Data packs", TextDim) { PacksUi.refresh(engine); Nav.screen = Screen.DATA }
@@ -188,13 +189,39 @@ fun DataScreen(engine: Engine) {
 fun Spacer8() = Spacer(Modifier.width(8.dp))
 
 object SearchUi {
+    /** Recently opened results (name, id), newest first; kept between launches. */
+    var recent by mutableStateOf<List<Pair<String, String>>>(emptyList())
+    private var loaded = false
+
+    fun load(engine: Engine) {
+        if (loaded) return
+        loaded = true
+        val raw = engine.context.getSharedPreferences("search", android.content.Context.MODE_PRIVATE).getString("recent", "") ?: ""
+        recent = raw.split("\n").mapNotNull { l -> l.split("\t").takeIf { it.size == 2 }?.let { it[0] to it[1] } }
+    }
+
+    fun remember(engine: Engine, name: String, id: String) {
+        recent = (listOf(name to id) + recent.filter { it.second != id }).take(8)
+        engine.context.getSharedPreferences("search", android.content.Context.MODE_PRIVATE).edit()
+            .putString("recent", recent.joinToString("\n") { "${it.first}\t${it.second}" }).apply()
+    }
+
+    /** Suggestions shown before you type: record holders and favourites. */
+    val popular = listOf(
+        "TON 618" to "fam:ton618", "Sagittarius A*" to "fam:sgra", "UY Scuti" to "fam:uyscuti", "Betelgeuse" to "",
+        "Andromeda Galaxy" to "", "Pillars of Creation" to "", "Saturn" to "sol:saturn", "Proxima Centauri" to "",
+        "M87*" to "fam:m87bh", "Voyager 1" to "fam:voyager1", "Boötes Void" to "fam:bootes", "JADES-GS-z14-0" to "fam:jadesz14",
+    )
+
     var query by mutableStateOf("")
     var results by mutableStateOf<List<com.emotionalleaves.universe.engine.SearchHit>>(emptyList())
     var ready by mutableStateOf(false)
 }
 
 @Composable
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 fun SearchScreen(engine: Engine) {
+    SearchUi.load(engine)
     androidx.compose.runtime.LaunchedEffect(Unit) {
         engine.prepareSearch {
             SearchUi.ready = true
@@ -220,31 +247,52 @@ fun SearchScreen(engine: Engine) {
             // The keyboard's search key goes to the best match.
             keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(imeAction = androidx.compose.ui.text.input.ImeAction.Search),
             keyboardActions = androidx.compose.foundation.text.KeyboardActions(onSearch = {
-                SearchUi.results.firstOrNull()?.let { h -> Nav.screen = Screen.NONE; keyboard?.hide(); engine.goTo(h.id) }
+                SearchUi.results.firstOrNull()?.let { h -> Nav.screen = Screen.NONE; keyboard?.hide(); SearchUi.remember(engine, h.name, h.id); engine.goTo(h.id) }
             }),
             shape = RoundedCornerShape(14.dp),
             leadingIcon = { Glyph(G.SEARCH, size = 18.dp, color = TextDim) },
-            placeholder = { Text("Mars, Sirius, Kepler-22 b, Orion Nebula, M31, HIP 32349…", color = TextDim, fontSize = 13.sp) },
+            placeholder = { Text("TON 618, Mars, Betelgeuse, M31, Kepler-22 b…", color = TextDim, fontSize = 13.sp) },
             colors = androidx.compose.material3.OutlinedTextFieldDefaults.colors(
                 focusedTextColor = TextMain, unfocusedTextColor = TextMain, cursorColor = Accent,
                 focusedBorderColor = Accent, unfocusedBorderColor = PanelBorder,
             ),
         )
         Spacer(Modifier.height(8.dp))
-        if (!SearchUi.ready && SearchUi.results.isEmpty()) Text("Building the index…", color = TextDim, fontSize = 13.sp)
+        fun open(name: String, id: String) {
+            Nav.screen = Screen.NONE
+            keyboard?.hide()
+            SearchUi.remember(engine, name, id)
+            if (id.isNotEmpty()) engine.goTo(id) else engine.goToName(name)
+        }
+        if (!SearchUi.ready && SearchUi.results.isEmpty() && SearchUi.query.isNotBlank()) Text("Building the index…", color = TextDim, fontSize = 13.sp)
         if (SearchUi.query.isBlank()) {
-            Text("Don't know what to look for?", style = Type.BodyDim, modifier = Modifier.padding(top = 8.dp))
-            Button("Browse famous places", Modifier.padding(top = 8.dp), glyph = G.COMPASS, primary = true) { Nav.screen = Screen.EXPLORE }
+            if (SearchUi.recent.isNotEmpty()) {
+                Overline("Recent", modifier = Modifier.padding(top = 8.dp, bottom = 2.dp))
+                for ((name, id) in SearchUi.recent) ListRow(name, "", G.CLOCK, TextDim) { open(name, id) }
+            }
+            Overline("Popular", modifier = Modifier.padding(top = 14.dp, bottom = 8.dp))
+            androidx.compose.foundation.layout.FlowRow(
+                horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(8.dp),
+                verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(8.dp),
+            ) {
+                for ((name, id) in SearchUi.popular) {
+                    Text(
+                        name, color = TextMain, fontSize = 13.sp,
+                        modifier = Modifier.background(Color(0x14FFFFFF), RoundedCornerShape(16.dp))
+                            .clickable { open(name, id) }.padding(horizontal = 12.dp, vertical = 7.dp),
+                    )
+                }
+            }
+            Text("Search any planet, moon, star, exoplanet, nebula, galaxy, black hole, quasar or catalogue number (M31, NGC 224, HIP 32349). Spelling does not need to be exact.",
+                style = Type.BodyDim, modifier = Modifier.padding(top = 16.dp))
+            Button("Browse famous places", Modifier.padding(top = 12.dp), glyph = G.COMPASS) { Nav.screen = Screen.EXPLORE }
         }
         if (SearchUi.ready && SearchUi.query.isNotBlank() && SearchUi.results.isEmpty()) {
-            Text("Nothing found. Try a planet, star, nebula, galaxy or catalogue number.", color = TextDim, fontSize = 13.sp)
+            Text("Nothing found for \u201c${SearchUi.query.trim()}\u201d. Try another spelling, or a catalogue number like M31 or HIP 32349.", color = TextDim, fontSize = 13.sp)
         }
         for (h in SearchUi.results) {
             val (g, tint) = glyphForDetail(h.detail)
-            ListRow(h.name, h.detail, g, tint) {
-                Nav.screen = Screen.NONE
-                engine.goTo(h.id)
-            }
+            ListRow(h.name, h.detail, g, tint) { open(h.name, h.id) }
         }
     }
 }
@@ -496,7 +544,10 @@ private fun glyphForDetail(d: String): Pair<G, Color> {
         "asteroid" in l || "comet" in l || "trojan" in l || "neptunian" in l || "centaur" in l -> G.ASTEROID to kindColor("asteroid")
         "galaxy cluster" in l -> G.GALAXY to kindColor("galaxy cluster")
         "galaxy" in l || "spiral" in l || "elliptical" in l || "lenticular" in l || "irregular" in l -> G.GALAXY to kindColor("galaxy")
+        "black hole" in l && "quasar" !in l -> G.BLACKHOLE to kindColor("black hole")
         "pulsar" in l || "quasar" in l -> G.SPARKLE to kindColor("pulsar")
+        "void" in l || "supercluster" in l || "wall" in l -> G.UNIVERSE to kindColor("galaxy")
+        "spacecraft" in l || "probe" in l -> G.TARGET to TextMain
         "nebula" in l || "cluster" in l || "remnant" in l -> G.NEBULA to kindColor("nebula")
         "universe" in l -> G.UNIVERSE to TextDim
         "star" in l || "sun" in l -> G.STAR to kindColor("star")

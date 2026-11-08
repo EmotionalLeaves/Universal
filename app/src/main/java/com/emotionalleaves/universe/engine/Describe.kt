@@ -54,6 +54,7 @@ object Describe {
         if (b is DsoBody && b.messier.isNotEmpty()) names.add("messier ${b.messier.trimStart('0')}")
         if (b is DsoBody) names.add(b.catalogName)
         if (b is SolarBody && b.id == "sol:sun") names.add("sun")
+        if (b is FamousBody) return About(b.about, "")
         wikiFor(*names.toTypedArray())?.let { return it }
         val text = generic(b) ?: return null
         return About(text, if (b.source == Source.GENERATED) "Generated object, described from its type" else "")
@@ -61,6 +62,7 @@ object Describe {
 
     /** One or two plain sentences about what kind of thing this is. */
     private fun generic(b: Body): String? = when (b) {
+        is FamousBody -> b.about
         is StarBody -> when (starType(b)) {
             "Red dwarf" -> "A red dwarf: a small, cool, dim star. Three out of four stars are like this. They burn so slowly that none has died yet since the universe began."
             "Orange dwarf" -> "An orange dwarf, a little smaller and cooler than the Sun. These stars live 15–30 billion years and are good places to look for life."
