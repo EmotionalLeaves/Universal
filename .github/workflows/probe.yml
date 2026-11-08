@@ -1,0 +1,20 @@
+name: Probe online catalogues
+on:
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - run: bash tools/probe_online.sh || true
+      - name: Keep results
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          zip -qr probe.zip probe
+          gh release view probe >/dev/null 2>&1 || gh release create probe --title "Probe results" --notes "Online catalogue probe" --prerelease
+          gh release upload probe probe.zip --clobber
