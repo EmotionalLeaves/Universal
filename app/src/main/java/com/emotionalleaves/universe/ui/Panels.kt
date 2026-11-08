@@ -112,7 +112,7 @@ fun ScaleBar() {
 /**
  * Vertical zoom slider on a logarithmic scale: bottom = touching the surface, top = the whole
  * observable universe. Drag it to cross the universe in one swipe. Labels on the left jump
- * straight to a scale (Ground, Planet, Solar system ...).
+ * straight to a scale (Planet, Solar system ...).
  */
 @Composable
 fun ZoomSlider(engine: Engine, modifier: Modifier = Modifier) {
@@ -235,10 +235,10 @@ fun InfoCard(engine: Engine, modifier: Modifier = Modifier) {
     // Each new selection starts with the normal card.
     var expanded by remember(Hud.selectedName) { mutableStateOf(false) }
     var mini by remember(Hud.selectedName) { mutableStateOf(false) }
-    // Get out of the way while you fly, land, roam freely or move the view; tap to bring it back.
+    // Get out of the way while you fly, roam freely or move the view; tap to bring it back.
     val firstTick = remember(Hud.selectedName) { Hud.dragTick }
-    // After a "Fly to" the card comes back on arrival (that is when you want Land and the facts);
-    // after Land, a drag or free flight it stays small until you ask for it.
+    // After a "Fly to" the card comes back on arrival (that is when you want the facts);
+    // after a drag or free flight it stays small until you ask for it.
     var restoreOnArrival by remember(Hud.selectedName) { mutableStateOf(true) }
     androidx.compose.runtime.LaunchedEffect(Hud.flying, Hud.freeFlight) {
         if (Hud.flying || Hud.freeFlight) { mini = true; expanded = false }
@@ -335,7 +335,6 @@ fun InfoCard(engine: Engine, modifier: Modifier = Modifier) {
             }
             Row(Modifier.padding(top = 10.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                 Button("Fly to", glyph = G.FLY, primary = true) { mini = true; expanded = false; restoreOnArrival = true; engine.flyToSelected() }
-                if (Hud.selectedCanLand) Button("Land", glyph = G.LAND) { mini = true; expanded = false; restoreOnArrival = false; engine.landOnSelected() }
                 Spacer(Modifier.weight(1f))
                 IconButton(G.UP, size = 40.dp) { engine.goUp() }
                 IconButton(G.BOOKMARK, size = 40.dp) {
@@ -405,7 +404,7 @@ fun FlightPad(engine: Engine, modifier: Modifier = Modifier) {
                 engine.warp = (engine.warp + 1) % engine.warpFactors.size
             }.padding(horizontal = 10.dp, vertical = 6.dp))
         HoldButton(G.UP, "Forward") { engine.thrust = if (it) 1 else 0 }
-        HoldButton(G.LAND, "Back") { engine.thrust = if (it) -1 else 0 }
+        HoldButton(G.CHEVRON_DOWN, "Back") { engine.thrust = if (it) -1 else 0 }
         Text(Hud.speedText, style = Type.Caption.copy(fontSize = 10.sp, fontFeatureSettings = "tnum"), maxLines = 1)
         Text("Exit", style = Type.Caption.copy(color = TextDim), modifier = Modifier.clickable { engine.setFreeFlight(false); Hud.freeFlight = false }.padding(4.dp))
     }

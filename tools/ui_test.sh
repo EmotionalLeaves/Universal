@@ -68,11 +68,11 @@ adb shell input tap 540 1200; sleep 3; shot tap_center; texts
 tap_text "Explore"; sleep 3; shot explore; texts
 tap_text "Mars"; sleep 12; shot at_mars; texts
 tap_text "Read more & all facts"; sleep 2; shot card_expanded
-tap_text "Land"; sleep 3; shot landing_3s; sleep 9; shot landed_12s; texts
-drag 540 1500 540 1100 800; sleep 2; shot walk_up
-drag 300 1200 800 1200 800; sleep 2; shot turn
+tap_text "Show less"; sleep 1
+drag 300 1000 800 1000 800; sleep 2; shot orbit_drag
+tap_text "Show card"; sleep 1; shot card_back
 
-# Close the card so the slider is reachable
+# Close the card
 tap_text "Close"; sleep 1
 # Zoom out through the scales with the slider labels
 for s in "Planet" "Solar system" "Nearby stars" "Milky Way" "Galaxy groups" "Universe" "Beyond"; do

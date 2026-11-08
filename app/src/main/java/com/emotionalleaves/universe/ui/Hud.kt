@@ -32,7 +32,6 @@ object Hud {
     var selectedSource by mutableStateOf("")
     var selectedDistance by mutableStateOf("")
     var selectedFacts by mutableStateOf<List<Pair<String, String>>>(emptyList())
-    var selectedCanLand by mutableStateOf(false)
     var selectedLight by mutableStateOf("")
     /** Short description of the selected object, and where it comes from. */
     var selectedAbout by mutableStateOf("")

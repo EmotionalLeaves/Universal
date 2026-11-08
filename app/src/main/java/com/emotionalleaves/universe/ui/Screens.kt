@@ -382,18 +382,17 @@ fun HelpScreen() {
     Panel("How to use", { Nav.screen = Screen.NONE }) {
         val items = listOf(
             "Look around" to "Drag with one finger to orbit whatever you are looking at.",
-            "Zoom" to "Pinch, or drag the slider on the right. Bottom of the slider = standing on the ground; top = the whole observable universe.",
+            "Zoom" to "Pinch, or drag the slider on the right. Bottom of the slider = a low orbit over whatever you picked; top = the whole universe.",
             "Pick something" to "Tap a planet, star, nebula or galaxy to see its card. Double-tap (or Fly to) to travel there.",
             "Know more" to "Every card describes the object; tap Read more for the full story, its Wikipedia summary and figures: gravity, your weight there, star type, lifetime, habitable zone and more.",
             "How much is here?" to "Menu → What's in the universe counts the real objects in the app and what is generated as you travel.",
-            "Everything is there" to "Tap anywhere on the glow of a galaxy (even the Milky Way band) to pick an actual star at that spot. Fly to it: it has planets, and rocky ones can be landed on. Between galaxies, millions of dwarf and distant galaxies appear around you as you travel.",
+            "Everything is there" to "Tap anywhere on the glow of a galaxy (even the Milky Way band) to pick an actual star at that spot. Fly to it: it has planets. Between galaxies, millions of dwarf and distant galaxies appear around you as you travel.",
             "Move sideways" to "Slide two fingers together. Twist two fingers to roll.",
             "Free flight" to "Tap the paper-plane button (next to Explore) to roam anywhere: drag to look around, hold Forward or Back to fly, pinch for a quick hop. Speed adjusts to what is nearby and grows the longer you hold; the ×1 button goes up to a thousand times faster. Tap a planet's Fly to (or the button again) to go back to orbiting.",
-            "On the ground" to "Zoom all the way into a rocky planet or moon. Drag up/down to walk, left/right to turn.",
             "Time" to "Use the rewind, pause and fast-forward buttons at the bottom to change how fast time runs. Now goes back to the present.",
             "Real or generated" to "Every card shows a green Real badge (from scientific catalogues) or a purple Generated badge (made up by rules, the same every time).",
             "Explore" to "Tap Explore (top right) for famous places sorted by type. One tap flies you there. The Surprise me buttons pick a random alien world, galaxy, black hole and more.",
-            "Jump between scales" to "The labels beside the zoom slider (Ground, Planet, Solar system, Nearby stars, Milky Way, Galaxy groups, Universe) jump straight to that size.",
+            "Jump between scales" to "The labels beside the zoom slider (Planet, Solar system, Nearby stars, Milky Way, Galaxy groups, Universe, Beyond) jump straight to that size.",
             "Lost in space?" to "If you drift into empty space, tap Back to … under the name at the top left, or the home button.",
             "Find things" to "Search (magnifier, top right) finds planets, stars, exoplanets, asteroids, nebulae and galaxies by name or catalogue number (HIP, HD, NGC, M, PGC).",
             "Save places" to "The bookmark button on any card. Generated places reopen exactly the same.",
@@ -425,10 +424,9 @@ fun CreditsScreen(version: String) {
             "GLADE+" to "Dálya et al. 2022, MNRAS 514, 1403, via VizieR (CDS).",
             "Planck" to "Based on observations obtained with Planck (ESA), SMICA CMB map, via IRSA.",
             "Planet orbits" to "E. M. Standish and J. G. Williams, JPL Approximate Positions of the Planets.",
-            "Elevation" to "Earth: NOAA ETOPO1. Mars: MGS MOLA (NASA/USGS). Moon: LRO LOLA (NASA SVS CGI Moon Kit).",
             "Planet maps" to "three.js example textures (NASA-based), Solar System Scope (CC BY 4.0), Planet Pixel Emporium via threex.planets.",
             "Constellations" to "Stellarium modern sky culture.",
-            "Generated content" to "Stars, planets, terrain, galaxy interiors and the distant cosmic web are generated from seeded rules; they are labelled Generated everywhere.",
+            "Generated content" to "Stars, planets, galaxy interiors and the distant cosmic web are generated from seeded rules; they are labelled Generated everywhere.",
         )
         for ((t, d) in items) {
             Text(t, color = TextMain, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(top = 10.dp))
@@ -449,7 +447,7 @@ fun TipsOverlay(engine: Engine) {
         "Not sure where to go?" to "Tap Explore (top right) for famous planets, stars, nebulae and galaxies, or Surprise me for a random alien world.",
         "Tap to explore" to "Tap anything for its card. Double-tap or Fly to to travel there.",
         "Fly freely" to "The paper-plane button next to Explore switches to free flight: look around and fly anywhere, at a speed that adapts to what is near you.",
-        "Every star is real to visit" to "Tap anywhere on the glow of a galaxy, even the Milky Way band, to pick a star at that spot. Each one has planets to fly to and land on.",
+        "Every star is real to visit" to "Tap anywhere on the glow of a galaxy, even the Milky Way band, to pick a star at that spot. Each one has planets to fly to.",
         "Real or generated" to "Green Real = from scientific catalogues. Purple Generated = filled in by rules where nobody has measured yet.",
         "Find and save" to "The magnifier searches by name, the house flies home, and the menu has bookmarks, data packs and settings.",
     )

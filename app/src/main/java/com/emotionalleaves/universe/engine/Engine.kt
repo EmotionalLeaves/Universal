@@ -112,23 +112,16 @@ class Engine(val context: Context) {
         synchronized(camera) {
             val before = camera.snapshot()
             freeFlightStep(dt)
-            steerLanding()
             surfaceFollow()
             camera.update(dt, now) { it.position(jd) }
-            // Never let the camera end up inside a planet. Over the body you are orbiting, lift the
-            // camera above the ground (so you can walk uphill); for any other body, undo the move.
+            // Never let the camera end up inside a planet: over the body you orbit, keep above its
+            // surface; for any other body, undo the move.
             if (!camera.isFlying) {
                 val cam = camera.position()
                 for (b in world.solidBodiesNear(cam, jd)) {
                     val c = b.position(jd)
-                    val ground = b.radius + world.surfaceHeight(b, cam - c)
-                    if ((cam - c).length() >= ground + 0.3) continue
-                    if (b == camera.target) {
-                        camera.surfaceExtra = ground - b.radius
-                        camera.setDistance(ground + 1.7)
-                    } else {
-                        camera.restore(before)
-                    }
+                    if ((cam - c).length() >= b.radius * 1.01) continue
+                    if (b == camera.target) camera.setDistance(camera.minDistance()) else camera.restore(before)
                     break
                 }
             }
@@ -141,7 +134,7 @@ class Engine(val context: Context) {
     private var lastSpinBody: String? = null
     private var lastSpin: com.emotionalleaves.universe.core.Quatd? = null
 
-    /** Keeps the camera turning with a nearby planet, and sets ground height and walk mode. Holds the camera lock. */
+    /** Keeps the camera turning with a nearby planet and slows rotation close to it. Holds the camera lock. */
     private fun surfaceFollow() {
         val t = camera.target
         if (t != null) lastTarget = t
@@ -160,16 +153,10 @@ class Engine(val context: Context) {
             lastSpinBody = null
         }
         if (t != null && camera.isSolidTarget()) {
-            val center = t.position(jd)
-            val camRel = camera.position() - center
-            camera.surfaceExtra = world.surfaceHeight(t, camRel).coerceAtLeast(-t.radius * 0.5)
             val alt = camera.altitude().coerceAtLeast(0.1)
-            camera.rotateScale = (alt / t.radius * 1.6).coerceIn(2e-8, 1.0)
-            camera.walkMode = alt < t.radius * 0.002
+            camera.rotateScale = (alt / t.radius * 1.6).coerceIn(0.02, 1.0)
         } else {
-            camera.surfaceExtra = 0.0
             camera.rotateScale = 1.0
-            camera.walkMode = false
         }
     }
 
@@ -300,75 +287,6 @@ class Engine(val context: Context) {
         selected?.let { flyTo(it) }
     }
 
-    /** True if [b] has ground you can stand on. */
-    fun canLand(b: Body?): Boolean = when (b) {
-        is SolarBody -> b.kind != Kind.STAR && b.id !in setOf("sol:jupiter", "sol:saturn", "sol:uranus", "sol:neptune", "sol:venus") && b.look.style != 1
-        is PlanetBody -> b.solid
-        else -> false
-    }
-
-    /** World being landed on and the landing spot (direction in the body's own frame). */
-    @Volatile private var landing: Body? = null
-    private var landingDir: Vec3d = Vec3d.Z
-
-    /** While landing: aim for the real ground height at the landing spot as soon as it is known. */
-    private fun steerLanding() {
-        val b = landing ?: return
-        if (!camera.isFlying || camera.zoomTarget() != b) { landing = null; return }
-        val q = world.orientationOf(b, jd) ?: return
-        val h = world.surfaceHeight(b, q.rotate(landingDir) * b.radius)
-        camera.setDistance(b.radius + kotlin.math.max(h, 0.0) + 2.0)
-    }
-
-    /** Flies down to stand on the selected world, below where the camera is now. */
-    fun landOnSelected() {
-        val b = selected ?: return
-        if (!canLand(b)) return
-        world.terrainModel(b) // start loading the ground now
-        busy = "Preparing to land…"
-        bg.execute {
-            try {
-                // Wait (briefly) for the ground so we can pick a good spot.
-                val t0 = System.nanoTime()
-                while (world.terrainModel(b) == null && System.nanoTime() - t0 < 2_500_000_000L) Thread.sleep(50)
-                synchronized(camera) {
-                    val c = b.position(jd)
-                    var dir = (camera.position() - c).normalized()
-                    // Land below you, but on the day side: if that spot is in darkness, move towards the Sun.
-                    val star = when (b) { is PlanetBody -> b.star.pos; else -> UPos.ZERO }
-                    val toSun = (star - c).let { if (it.lengthSq() > 0) it.normalized() else dir }
-                    if (dir.dot(toSun) < 0.25) dir = (dir + toSun * 1.6).let { if (it.lengthSq() < 1e-9) toSun else it.normalized() }
-                    dir = solidGroundNear(b, dir)
-                    val up = Vec3d.perpendicular(dir)
-                    val endQ = com.emotionalleaves.universe.core.Quatd.lookRotation(-dir, up)
-                    val h = world.surfaceHeight(b, dir * b.radius).coerceAtLeast(0.0)
-                    camera.flyTo(b, c, b.radius + h + 2.0, nowSeconds(), endQ)
-                    landing = b
-                    landingDir = world.orientationOf(b, jd)?.conjugate()?.rotate(dir) ?: dir
-                }
-            } catch (e: Exception) {
-                ErrorLog.record("land", e)
-            } finally {
-                busy = ""
-            }
-        }
-    }
-
-    /** On worlds with seas, look around [dir] (up to ~50°) for dry land so you do not land on open water. */
-    private fun solidGroundNear(b: Body, dir: Vec3d): Vec3d {
-        if (world.surfaceHeight(b, dir * b.radius) > 5) return dir
-        val a = Vec3d.perpendicular(dir)
-        val c = dir.cross(a).normalized()
-        for (ring in 1..10) {
-            val ang = Math.toRadians(ring * 5.0)
-            for (k in 0 until 16) {
-                val az = k * Math.PI / 8
-                val d = (dir * kotlin.math.cos(ang) + (a * kotlin.math.cos(az) + c * kotlin.math.sin(az)) * kotlin.math.sin(ang)).normalized()
-                if (world.surfaceHeight(b, d * b.radius) > 5) return d
-            }
-        }
-        return dir
-    }
 
     /** The thing that contains [b]: moon → planet → star → galaxy → universe. */
     fun parentOf(b: Body?): Body? = when (b) {
@@ -420,7 +338,7 @@ class Engine(val context: Context) {
     }
 
     /** Picks a random generated rocky planet around a real star and flies there. */
-    fun surprise(land: Boolean) {
+    fun surprise(rocky: Boolean) {
         busy = "Picking a world…"
         bg.execute {
             try {
@@ -432,7 +350,7 @@ class Engine(val context: Context) {
                     val star = rs.bodyFrom(tile, rng.nextInt(tile.count))
                     if (world.exoRowsFor(star) != null) return@repeat
                     val sys = world.systemFor(star)
-                    val p = sys.planets.filter { if (land) it.solid else true }.randomOrNull() ?: return@repeat
+                    val p = sys.planets.filter { if (rocky) it.solid else true }.randomOrNull() ?: return@repeat
                     selected = p
                     world.rememberGenerated(p)
                     flyTo(p)
@@ -514,17 +432,33 @@ class Engine(val context: Context) {
 
     fun setFreeFlight(on: Boolean) {
         synchronized(camera) { if (on) camera.enterFreeFlight() else camera.leaveFreeFlight() }
+        speedRef = world.nearestDist.coerceAtLeast(1.0)
         if (!on) { thrust = 0; warp = 0 }
     }
 
+    /**
+     * Distance that sets the speed: drops at once when something comes close, but grows at most
+     * ~2.2× per second. Speed tied straight to "distance to the nearest thing" ran away
+     * exponentially at warp (out of the universe in seconds).
+     */
+    private var speedRef = 1e7
+
+    /** Room to fly: distance to the nearest thing, keeping out of a low orbit around worlds. */
+    private fun clearance(): Double {
+        val b = world.nearestBody
+        val margin = if (b != null && camera.minDistanceFor(b) > b.radius) camera.minDistanceFor(b) - b.radius else 0.0
+        return (world.nearestDist - margin).coerceAtLeast(1.0)
+    }
+
     /** Current free-flight speed (m/s): about the distance to the nearest thing per 1.5 s, times warp. */
-    fun flightSpeed(): Double = world.nearestDist / 1.5 * warpFactors[warp] * holdBoost()
+    fun flightSpeed(): Double = speedRef / 1.5 * warpFactors[warp] * holdBoost()
 
     private fun holdBoost(): Double = (1.0 + 0.6 * held * held).coerceAtMost(10.0)
 
     /** Pinch in free flight: a step forward or back scaled to what is nearby. */
     fun freeZoom(factor: Float) {
-        val step = world.nearestDist * 0.6 * kotlin.math.ln(factor.toDouble()) * 2.2 * warpFactors[warp]
+        val room = clearance()
+        val step = (room * 0.6 * kotlin.math.ln(factor.toDouble()) * 2.2 * warpFactors[warp]).coerceIn(-room * 50, room * 0.8)
         camera.moveForward(step)
         keepInsideUniverse()
     }
@@ -532,13 +466,24 @@ class Engine(val context: Context) {
     private fun freeFlightStep(dt: Double) {
         if (!camera.freeFlight) return
         held = if (thrust != 0) held + dt else 0.0
+        val room = clearance()
+        val ref = world.nearestDist.coerceAtLeast(1.0)
+        speedRef = if (ref < speedRef) ref else speedRef * kotlin.math.min(ref / speedRef, kotlin.math.exp(dt * 1.5))
         val targetV = thrust * flightSpeed()
         // Ease in and out so starting and stopping feel smooth.
         cruise += (targetV - cruise) * kotlin.math.min(1.0, dt * 4.0)
         if (kotlin.math.abs(cruise) > 1e-9) {
-            // Never fly into something: slow down to stop just short of the nearest surface.
-            val limit = world.nearestDist * 0.9
-            val step = (cruise * dt).coerceIn(-1e300, if (warp == 0) limit else 1e300)
+            // Never fly into (or through) something: when heading towards the nearest thing, no step
+            // longer than the room left; heading away, no limit.
+            val b = world.nearestBody
+            val dirMove = camera.forward() * kotlin.math.sign(cruise)
+            val towards = if (b != null) {
+                val to = b.position(jd) - camera.position()
+                val l = to.length()
+                if (l > 0) dirMove.dot(to / l) else 1.0
+            } else 1.0
+            val limit = if (towards > 0.05) room * 0.8 / towards else Double.MAX_VALUE
+            val step = (cruise * dt).coerceIn(-limit, limit)
             camera.moveForward(step)
         }
         keepInsideUniverse()
@@ -560,12 +505,18 @@ class Engine(val context: Context) {
 
     /** Zoom presets for the slider labels: height above the ground (or distance) in metres. */
     val zoomPresets = listOf(
-        "Ground" to 2.0, "Planet" to 3.0e7, "Solar system" to 1.5e13, "Nearby stars" to 2e17,
+        "Planet" to 3.0e7, "Solar system" to 1.5e13, "Nearby stars" to 2e17,
         "Milky Way" to 1.2e21, "Galaxy groups" to 3e23, "Universe" to 2.0e27, "Beyond" to 2e29,
     )
 
+    /** Lowest height the slider reaches: a low orbit over a world, or close to anything else. */
+    fun minZoomAltitude(): Double {
+        val t = camera.zoomTarget()
+        return (camera.minDistanceFor(t) - camera.surfaceOf(t)).coerceAtLeast(1.7)
+    }
+
     fun zoomFractionFor(alt: Double): Float {
-        val lo = kotlin.math.ln(1.7); val hi = kotlin.math.ln(camera.maxDistance())
+        val lo = kotlin.math.ln(minZoomAltitude()); val hi = kotlin.math.ln(camera.maxDistance())
         return ((kotlin.math.ln(alt) - lo) / (hi - lo)).toFloat().coerceIn(0f, 1f)
     }
 
@@ -583,13 +534,13 @@ class Engine(val context: Context) {
 
     /** Zoom slider on a log scale of height above the ground: 0 = standing, 1 = whole universe. */
     fun zoomFraction(): Float = synchronized(camera) {
-        val lo = ln(1.7); val hi = ln(camera.maxDistance())
+        val lo = ln(minZoomAltitude()); val hi = ln(camera.maxDistance())
         ((ln(camera.altitude().coerceAtLeast(1.7)) - lo) / (hi - lo)).toFloat().coerceIn(0f, 1f)
     }
 
     fun setZoomFraction(f: Float) {
         synchronized(camera) {
-            val lo = ln(1.7); val hi = ln(camera.maxDistance())
+            val lo = ln(minZoomAltitude()); val hi = ln(camera.maxDistance())
             retargetIfAdrift()
             camera.setDistance(camera.surfaceOf(camera.zoomTarget()) + exp(lo + (hi - lo) * f.coerceIn(0f, 1f)))
         }

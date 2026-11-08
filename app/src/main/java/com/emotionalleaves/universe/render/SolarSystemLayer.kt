@@ -73,7 +73,6 @@ class SolarSystemLayer : Layer {
             val dist = rel.length()
             val px = frame.pixelSize(b.radius, dist)
             if (px < 0.7) continue
-            if (rc.engine.world.terrainActiveFor(b)) continue // terrain layer draws it up close
             val light = if (b.kind == Kind.STAR) Vec3d.Z else (sunRel - rel)
             val mat = material(b, rc)
             val mesh = if (px < 40) rc.programs.lowSphereMesh else rc.programs.sphereMesh

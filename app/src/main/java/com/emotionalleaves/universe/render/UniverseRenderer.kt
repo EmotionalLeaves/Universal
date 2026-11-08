@@ -35,7 +35,6 @@ class UniverseRenderer(private val context: Context, private val engine: Engine)
     private val solarLayer = SolarSystemLayer()
     private val starLayer = StarLayer()
     private val systemLayer = SystemLayer()
-    private val terrainLayer = TerrainLayer()
     private val galaxyLayer = GalaxyLayer()
     private val deepSkyLayer = DeepSkyLayer()
     private val galaxyCatalogLayer = GalaxyCatalogLayer()
@@ -50,7 +49,7 @@ class UniverseRenderer(private val context: Context, private val engine: Engine)
     private val webLodLayer = WebLodLayer()
     private val layers: List<Layer> = listOf(
         cosmicLayer, hazeLayer, webLodLayer, exoticLayer, fieldLayer, galaxyCatalogLayer, galaxyLayer, deepSkyLayer, starLayer, remnantLayer, systemLayer, beltLayer, rockLayer,
-        solarLayer, smallBodyLayer, terrainLayer, testLayer,
+        solarLayer, smallBodyLayer, testLayer,
     )
 
     override fun onSurfaceCreated(gl: GL10?, config: EGLConfig?) {
@@ -100,41 +99,18 @@ class UniverseRenderer(private val context: Context, private val engine: Engine)
         }
         this.flyingTo = flyingTo
         val fovY = Math.toRadians(60.0)
-        // Near the ground, tilt the view up toward the horizon so you see the landscape.
-        var viewOrientation = orientation
-        // Also while descending onto a world, so the horizon tilts up smoothly instead of snapping.
-        val ground = if (target != null && engine.camera.isSolidTarget()) target else flyingTo?.takeIf { engine.canLand(it) }
-        if (ground != null) {
-            val alt = (ground.position(engine.jd) - camPos).length() - ground.radius
-            val f = 1.0 - com.emotionalleaves.universe.core.smoothstep(0.0003, 0.03, alt / ground.radius)
-            if (f > 0) viewOrientation = orientation * Quatd.axisAngle(com.emotionalleaves.universe.core.Vec3d.X, Math.toRadians(76.0) * f)
-        }
+        val viewOrientation = orientation
         val proj = Mat4.perspectiveInfinite(fovY, width.toDouble() / height, 0.05)
         val viewProj = Mat4.multiply(proj, Mat4.viewRotation(viewOrientation))
         val frame = Frame(camPos, viewOrientation, viewProj, width, height, fovY, engine.jd, t0, focusDist)
 
-        val sky = terrainLayer.skyColor
-        GLES30.glClearColor(sky[0], sky[1], sky[2], 1f)
+        GLES30.glClearColor(0f, 0f, 0f, 1f)
         GLES30.glClearDepthf(1f)
         GLES30.glDepthMask(true)
         GLES30.glClear(GLES30.GL_COLOR_BUFFER_BIT or GLES30.GL_DEPTH_BUFFER_BIT)
 
         testLayer.enabled = engine.settings.showTestObjects
-        starLayer.daylight = terrainLayer.daylight
-        galaxyLayer.daylight = terrainLayer.daylight
-        deepSkyLayer.daylight = terrainLayer.daylight
-        galaxyCatalogLayer.daylight = terrainLayer.daylight
-        cosmicLayer.daylight = terrainLayer.daylight
-        fieldLayer.daylight = terrainLayer.daylight
-        exoticLayer.daylight = terrainLayer.daylight
-        smallBodyLayer.daylight = terrainLayer.daylight
-        remnantLayer.daylight = terrainLayer.daylight
-        hazeLayer.daylight = terrainLayer.daylight
-        beltLayer.daylight = terrainLayer.daylight
-        rockLayer.daylight = terrainLayer.daylight
-        webLodLayer.daylight = terrainLayer.daylight
         galaxyLayer.particles = when (engine.settings.quality) { 0 -> 20_000; 2 -> 70_000; else -> 40_000 }
-        terrainLayer.splitFactor = when (engine.settings.quality) { 0 -> 1.5; 2 -> 3.0; else -> 2.2 }
         galaxyLayer.maxBlob = when (engine.settings.quality) { 0 -> 14f; 2 -> 28f; else -> 20f }
         solarLayer.showOrbits = engine.settings.showOrbits
         systemLayer.showOrbits = engine.settings.showOrbits
@@ -308,8 +284,8 @@ class UniverseRenderer(private val context: Context, private val engine: Engine)
             } else f
         }
         val altitude = if (target != null && engine.camera.isSolidTarget()) {
-            val d = (target.position(frame.jd) - frame.camPos).length() - target.radius
-            "Altitude ${Units.formatDistance(d)}"
+            val rel = frame.camPos - target.position(frame.jd)
+            "Altitude ${Units.formatDistance((rel.length() - target.radius).coerceAtLeast(0.0))}"
         } else ""
         // Scale bar: a round length close to 28% of the screen width at the focus distance.
         val metresPerPx = 2 * focusDist * tan(frame.fovY / 2) / frame.height
@@ -323,7 +299,6 @@ class UniverseRenderer(private val context: Context, private val engine: Engine)
         val rate = engine.rateLabel() + if (!engine.paused && engine.timeRate == 1.0 &&
             kotlin.math.abs(frame.jd - com.emotionalleaves.universe.core.Astro.julianDate(System.currentTimeMillis())) > 0.01) " · not now" else ""
         val crumb = engine.world.breadcrumb(frame.camPos, target)
-        val canLand = engine.canLand(sel)
         val w = engine.world
         val loading = when {
             engine.busy.isNotEmpty() -> engine.busy
@@ -333,7 +308,6 @@ class UniverseRenderer(private val context: Context, private val engine: Engine)
             else -> ""
         }
         Hud.post {
-            Hud.selectedCanLand = canLand
             Hud.breadcrumb = crumb
             Hud.dateText = date
             Hud.rateText = rate

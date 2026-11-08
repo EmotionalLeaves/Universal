@@ -40,8 +40,6 @@ class CameraController {
     private var zoomVel = 0.0
     private var flight: Flight? = null
 
-    /** Extra minimum distance from the target's centre (terrain height etc.). */
-    var surfaceExtra: Double = 0.0
 
     val isFlying get() = flight != null
 
@@ -60,22 +58,16 @@ class CameraController {
 
     fun isSolidTarget(): Boolean = target?.let { solid(it) } ?: false
 
-    fun minDistance(): Double {
-        val t = target ?: return 0.05
-        if (!solid(t)) return 0.05
-        return max(t.radius + surfaceExtra + 1.7, 0.05)
-    }
+    fun minDistance(): Double = minDistanceFor(target)
 
     /** Radius of the ground under the camera (0 when orbiting empty space or a point). */
-    fun surfaceRadius(): Double = target?.let { if (solid(it)) it.radius + surfaceExtra else 0.0 } ?: 0.0
+    fun surfaceRadius(): Double = target?.let { if (solid(it)) it.radius else 0.0 } ?: 0.0
 
     /** Height above the ground (or distance to the focus point). */
     fun altitude(): Double = distance - surfaceRadius()
 
     /** Rotation sensitivity near a surface (set every frame by the engine). */
     var rotateScale = 1.0
-    /** True when standing close to the ground: horizontal drag turns, vertical drag walks. */
-    var walkMode = false
 
     /** Applies the rotation of the body you are near, so you turn with it instead of sliding over it. */
     fun rotateFrame(delta: Quatd) {
@@ -91,14 +83,6 @@ class CameraController {
     fun rotate(dxPx: Float, dyPx: Float, viewHeightPx: Int) {
         cancelFlight()
         val k = 3.0 / max(viewHeightPx, 1)
-        if (walkMode) {
-            // Turn on the spot with horizontal drags, walk forward/back with vertical drags.
-            roll(dxPx * k * 0.9)
-            applyRotation(0.0, -dyPx * k * rotateScale)
-            pitchVel = -dyPx * k * rotateScale * 30
-            yawVel = 0.0
-            return
-        }
         applyRotation(-dxPx * k * rotateScale, -dyPx * k * rotateScale)
         yawVel = -dxPx * k * rotateScale * 30
         pitchVel = -dyPx * k * rotateScale * 30
@@ -146,8 +130,6 @@ class CameraController {
     fun enterFreeFlight() {
         cancelFlight()
         target = null
-        surfaceExtra = 0.0
-        walkMode = false
         freeFlight = true
         yawVel = 0.0; pitchVel = 0.0; zoomVel = 0.0
     }
@@ -179,8 +161,7 @@ class CameraController {
         if (target != null) {
             val keep = position()
             target = null
-            surfaceExtra = 0.0
-            focus = keep + forward() * distance
+                focus = keep + forward() * distance
         }
         focus = focus + move
     }
@@ -196,7 +177,6 @@ class CameraController {
         freeFlight = false
         flight = null
         target = body
-        surfaceExtra = 0.0
         focus = pos
         distance = clamp(dist, minDistance(), maxDistance())
     }
@@ -219,7 +199,6 @@ class CameraController {
         val f = flight ?: return
         val cam = position()
         flight = null
-        surfaceExtra = 0.0
         val body = f.body
         if (body == null) {
             target = null
@@ -313,9 +292,10 @@ class CameraController {
     fun zoomTarget(): Body? = flight?.body ?: target
 
     /** Surface radius of [b] if it has a surface (zoom and slider measure height above it). */
-    fun surfaceOf(b: Body?): Double = if (b != null && solid(b)) b.radius + (if (b == target) surfaceExtra else 0.0) else 0.0
+    fun surfaceOf(b: Body?): Double = if (b != null && solid(b)) b.radius else 0.0
 
-    private fun minDistanceFor(b: Body?): Double = if (b != null && solid(b)) b.radius + 1.7 else 0.05
+    /** A low orbit, not the ground: there is no landing. */
+    fun minDistanceFor(b: Body?): Double = if (b != null && solid(b)) b.radius * 1.04 + 2.0 else 0.05
 
     companion object {
         /** Each pinch is amplified so you can cross the universe in a handful of gestures. */

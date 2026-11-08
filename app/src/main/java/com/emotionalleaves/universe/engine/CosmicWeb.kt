@@ -319,8 +319,14 @@ object WebLod {
             val cx = ccx + dx; val cy = ccy + dy; val cz = ccz + dz
             val rng = Rng(Rng.hash(CosmicWeb.SEED, 0x10DL, level.toLong(), cx, cy, cz))
             val n = perCell.toInt() + if (rng.nextDouble() < perCell - perCell.toInt()) 1 else 0
+            // Galaxies come in groups and clusters a few Mpc across: most sit around a few centres per cell.
+            val groups = if (s <= 64) Array(1 + rng.nextInt(3)) { Vec3d((cx + rng.nextDouble()) * s, (cy + rng.nextDouble()) * s, (cz + rng.nextDouble()) * s) } else emptyArray()
+            val spread = kotlin.math.min(1.2, s * 0.07)
             for (k in 0 until n) {
-                val p = Vec3d((cx + rng.nextDouble()) * s, (cy + rng.nextDouble()) * s, (cz + rng.nextDouble()) * s)
+                val p = if (groups.isNotEmpty() && rng.nextDouble() < 0.7) {
+                    val g = groups[rng.nextInt(groups.size)]
+                    Vec3d(g.x + rng.gaussian() * spread, g.y + rng.gaussian() * spread, g.z + rng.gaussian() * spread)
+                } else Vec3d((cx + rng.nextDouble()) * s, (cy + rng.nextDouble()) * s, (cz + rng.nextDouble()) * s)
                 val r = p.length()
                 if (r < innerMpc || r > edge) continue
                 val w = noise.ridged(p.x / 160.0, p.y / 160.0, p.z / 160.0, 4)

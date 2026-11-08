@@ -368,3 +368,9 @@ How it was tested: an Android emulator on GitHub (ui-test.yml + tools/ui_test.sh
 - [x] Landed ground had no detail (photo maps are km per pixel): procedural soil/rock patches at ~2 km and ~150 m.
 - [x] GPU upload and per-layer GL errors are logged (UniverseProblem/UniverseDiag) and kept in the problem report.
 - [ ] Emulator showed rectangular holes in the ground just after landing (not reproduced on the headless renderer).
+
+## Pass 16: no landing, faster start
+- [x] Land removed (button, walk mode, ground tiles, height maps no longer bundled, "Ground" zoom label). Worlds stop at a low orbit (4% of their radius); the zoom scale starts there.
+- [x] Startup loads run on four threads side by side (stars, galaxies/nebulae, asteroids/quasars, cosmic web) instead of one queue; the generated cosmic web, haze and beyond-region clouds are saved to the cache after the first launch. Headless timing: everything loaded in 5.4 s before, 1.8 s on first launch and stars-limited after.
+- [x] Quasar and cluster facts built when a card opens, not for all 56,000 at startup (was 1.5 s).
+- [x] Free flight: speed can grow at most ~4.5× a second (it ran away exponentially at warp); steps towards the nearest thing never exceed the room left, so warp no longer jumps through planets; heading away is unlimited.

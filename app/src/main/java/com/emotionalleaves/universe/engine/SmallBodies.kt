@@ -159,7 +159,8 @@ class ExoticBody(
     override val kind: Kind,
     private val pos: UPos,
     override val radius: Double,
-    private val extra: List<Pair<String, String>>,
+    /** Built only when the card is opened: formatting 56,000 quasars' facts up front cost seconds. */
+    private val extra: () -> List<Pair<String, String>>,
     val about: String,
     override val color: Int,
 ) : Body() {
@@ -174,7 +175,7 @@ class ExoticBody(
     override fun facts(jd: Double): List<Pair<String, String>> {
         val out = ArrayList<Pair<String, String>>()
         out.add("Distance" to Units.formatDistance((pos - UPos.ZERO).length()))
-        out.addAll(extra)
+        out.addAll(extra())
         return out
     }
 }
@@ -202,14 +203,14 @@ class ExoticCatalog(
                 val de = p[2].toDoubleOrNull() ?: return@mapNotNull null
                 val kpc = p[3].toDoubleOrNull() ?: return@mapNotNull null
                 val period = p[4].toDoubleOrNull() ?: 0.0
-                val spin = when {
+                val spin = { when {
                     period <= 0 -> "unknown"
                     period < 0.1 -> String.format(Locale.US, "%,.0f times a second", 1 / period)
                     else -> String.format(Locale.US, "once every %.2f s", period)
-                }
+                } }
                 ExoticBody(
                     "psr:${p[0]}", p[0], Kind.PULSAR, UPos.ZERO + Vec3d.fromRaDec(ra, de) * (kpc * 1000 * Units.PC), 12_000.0,
-                    listOf("Spins" to spin, "Size" to "about 24 km across, heavier than the Sun", "Data" to "ATNF Pulsar Catalogue"),
+                    { listOf("Spins" to spin(), "Size" to "about 24 km across, heavier than the Sun", "Data" to "ATNF Pulsar Catalogue") },
                     "A pulsar: a spinning neutron star, the crushed core of a star that exploded. It sweeps beams of radio waves across space like a lighthouse.",
                     0x9FD8FF,
                 )
@@ -223,12 +224,12 @@ class ExoticCatalog(
                 val mag = p[5].toDoubleOrNull() ?: 18.0
                 ExoticBody(
                     "qso:${p[0]}", p[0].ifBlank { "Quasar" }, Kind.QUASAR, UPos.ZERO + Vec3d.fromRaDec(ra, de) * (mpc * Units.MPC), 3e15,
-                    listOf(
+                    { listOf(
                         "Redshift" to String.format(Locale.US, "z = %.3f", z),
                         "Seen as it was" to lookback(z),
                         "Brightness from Earth" to String.format(Locale.US, "magnitude %.1f", mag),
                         "Data" to "Million Quasars catalogue (Milliquas)",
-                    ),
+                    ) },
                     "A quasar: the blazing centre of a far-away galaxy, where gas spirals into a supermassive black hole and shines brighter than all the galaxy's stars together.",
                     0xC8D8FF,
                 ).also { it.mag = mag; it.z = z }
@@ -242,12 +243,12 @@ class ExoticCatalog(
                 val rich = p[5].toIntOrNull() ?: 1
                 ExoticBody(
                     "gcl:${p[0]}", p[0], Kind.GALAXY_CLUSTER, UPos.ZERO + Vec3d.fromRaDec(ra, de) * (mpc * Units.MPC), 1.5 * Units.MPC,
-                    listOf(
+                    { listOf(
                         "Galaxies" to when (rich) { 0 -> "30–49 bright ones"; 1 -> "50–79 bright ones"; 2 -> "80–129 bright ones"; 3 -> "130–199 bright ones"; else -> "200 or more bright ones" } + " (plus many fainter)",
                         "Redshift" to String.format(Locale.US, "z = %.3f%s", z, if (p[6] == "G") " (estimated)" else ""),
                         "Seen as it was" to lookback(z),
                         "Data" to "Abell catalogue of rich clusters",
-                    ),
+                    ) },
                     "A galaxy cluster: hundreds to thousands of galaxies held together by gravity, bathed in hot gas. Fly in to see its member galaxies.",
                     0xFFD8A8,
                 ).also { it.richness = rich; it.z = z }

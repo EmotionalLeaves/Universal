@@ -153,7 +153,7 @@ class World(private val engine: Engine) {
         if (key == fieldCell) return
         fieldCell = key
         fieldBusy = true
-        loader.execute {
+        fieldExec.execute {
             try { field = GalaxyField.generate(cam) } catch (e: Throwable) { ErrorLog.record("generating galaxies", e) } finally { fieldBusy = false }
         }
     }
@@ -191,8 +191,11 @@ class World(private val engine: Engine) {
         synchronized(engine.camera) { engine.camera.maxFactor = if (on) CosmicWeb.BEYOND_FACTOR else 3.0 }
         if (!on) { outerWeb = null; return }
         if (outerWeb != null) return
-        loader.execute {
-            try { outerWeb = CosmicWeb.generateOuter() } catch (e: Throwable) { ErrorLog.record("beyond", e) }
+        webExec.execute {
+            try {
+                val o = outerWeb ?: CosmicWebData(CosmicWeb.EDGE_MPC, cachedFloats("outer_v${CosmicWeb.VERSION}") { CosmicWeb.generateOuter().data }, "out")
+                outerWeb = if (engine.settings.showBeyond && engine.settings.showGenerated) o else null
+            } catch (e: Throwable) { ErrorLog.record("beyond", e) }
         }
     }
 
@@ -234,7 +237,7 @@ class World(private val engine: Engine) {
 
     /** (Re)loads the GLADE+ pack and regenerates the cosmic web beyond whatever real data we have. */
     fun reloadLargeScale() {
-        loader.execute {
+        webExec.execute {
             val maxPts = when (engine.settings.quality) { 0 -> 400_000; 2 -> 3_000_000; else -> 1_200_000 }
             glade = GladePack.load(engine.context, maxPts)
             // With millions of real galaxies installed, generated ones must be fainter (rule 2).
@@ -242,8 +245,9 @@ class World(private val engine: Engine) {
             fieldCell = null
             val inner = glade?.let { maxOf(it.maxMpc, 300.0) } ?: 300.0
             if (cosmicWeb?.innerMpc != inner) {
-                cosmicWeb = CosmicWeb.generate(inner)
-                haze = try { CosmicHaze.generate(inner) } catch (e: Throwable) { ErrorLog.record("haze", e); null }
+                val key = "v${CosmicWeb.VERSION}_${inner.toLong()}"
+                cosmicWeb = CosmicWebData(inner, cachedFloats("web_$key") { CosmicWeb.generate(inner).data })
+                haze = try { cachedFloats("haze_$key") { CosmicHaze.generate(inner) } } catch (e: Throwable) { ErrorLog.record("haze", e); null }
             }
         }
     }
@@ -397,6 +401,38 @@ class World(private val engine: Engine) {
     private val byId = HashMap<String, Body>()
     private val byIdConcurrent = java.util.concurrent.ConcurrentHashMap<String, Body>()
     private val loader = java.util.concurrent.Executors.newSingleThreadExecutor()
+    /** Startup loads run side by side (stars, galaxies, small bodies, cosmic web) instead of one after another. */
+    private val loader2 = java.util.concurrent.Executors.newSingleThreadExecutor()
+    private val loader3 = java.util.concurrent.Executors.newSingleThreadExecutor()
+    private val webExec = java.util.concurrent.Executors.newSingleThreadExecutor()
+    private val fieldExec = java.util.concurrent.Executors.newSingleThreadExecutor()
+
+    /**
+     * Generated point clouds are the same on every launch, so they are kept on disk after the first
+     * build: reading 6 MB is much faster than regenerating it.
+     */
+    private fun cachedFloats(name: String, build: () -> FloatArray): FloatArray {
+        val f = java.io.File(engine.context.cacheDir, "gen/$name.bin")
+        try {
+            if (f.exists() && f.length() >= 4 && f.length() % 4 == 0L) {
+                val bytes = f.readBytes()
+                val fb = java.nio.ByteBuffer.wrap(bytes).order(java.nio.ByteOrder.LITTLE_ENDIAN).asFloatBuffer()
+                return FloatArray(fb.remaining()).also { fb.get(it) }
+            }
+        } catch (_: Throwable) {
+        }
+        val data = build()
+        try {
+            f.parentFile?.mkdirs()
+            val bb = java.nio.ByteBuffer.allocate(data.size * 4).order(java.nio.ByteOrder.LITTLE_ENDIAN)
+            bb.asFloatBuffer().put(data)
+            val tmp = java.io.File(f.parentFile, f.name + ".tmp")
+            tmp.writeBytes(bb.array())
+            tmp.renameTo(f)
+        } catch (_: Throwable) {
+        }
+        return data
+    }
 
     /** Real star catalogues; null until loaded (or if the data is missing). */
     @Volatile var realStars: RealStars? = null
@@ -438,14 +474,17 @@ class World(private val engine: Engine) {
             } catch (e: Throwable) {
                 ErrorLog.record("loading exoplanets", e)
             }
+        }
+        // Star packs (queued behind the stars on [loader]) and the cosmic web (its own thread).
+        packsChanged()
+        refreshBeyond()
+        loader2.execute {
             try {
                 registerGalaxies(GalaxyCatalog.load(engine.context))
                 searchStale = true
             } catch (e: Throwable) {
                 ErrorLog.record("loading galaxies", e)
             }
-            packsChanged()
-            refreshBeyond()
             try {
                 val list = DsoBody.load(engine.context)
                 for (d in list) byIdConcurrent[d.id] = d
@@ -454,12 +493,14 @@ class World(private val engine: Engine) {
             } catch (e: Throwable) {
                 ErrorLog.record("loading nebulae", e)
             }
+            try { Describe.load(engine.context) } catch (e: Throwable) { ErrorLog.record("loading descriptions", e) }
+        }
+        loader3.execute {
             try {
-                smallBodies = SmallBodies.load(engine.context)
                 exotic = ExoticCatalog.load(engine.context)
                 GalaxyField.clusters = exotic.clusters
-                Describe.load(engine.context)
                 fieldCell = null
+                smallBodies = SmallBodies.load(engine.context)
                 searchStale = true
             } catch (e: Throwable) {
                 ErrorLog.record("loading asteroids, quasars and clusters", e)
@@ -692,48 +733,12 @@ class World(private val engine: Engine) {
         return out
     }
 
-    // ------------------------------------------------------------------ terrain
-
-    private val terrainModels = java.util.concurrent.ConcurrentHashMap<String, TerrainModel>()
-    /** Ground loading gets its own thread so it never waits behind big catalogue loads. */
-    private val terrainExec = java.util.concurrent.Executors.newSingleThreadExecutor()
-    private val noTerrain = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
-    private val terrainLoading = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
-
-    /** Terrain model for a solid world; null while loading or for gas giants. */
-    fun terrainModel(body: Body): TerrainModel? {
-        terrainModels[body.id]?.let { return it }
-        if (body.id in noTerrain) return null
-        if (terrainLoading.add(body.id)) {
-            terrainExec.execute {
-                val m = try { TerrainModel.forBody(engine.context, body) } catch (_: Throwable) { null }
-                if (m != null) terrainModels[body.id] = m else noTerrain.add(body.id)
-                terrainLoading.remove(body.id)
-            }
-        }
-        return null
-    }
-
     /** Body orientation (body frame -> world), for bodies that spin. */
     fun orientationOf(body: Body, jd: Double): com.emotionalleaves.universe.core.Quatd? = when (body) {
         is SolarBody -> body.orientation(jd)
         is PlanetBody -> body.spin(jd)
         else -> null
     }
-
-    /** Terrain height above the body's radius in direction [fromCentre] (world frame). */
-    fun surfaceHeight(body: Body, fromCentre: Vec3d): Double {
-        val m = terrainModels[body.id] ?: return 0.0
-        val q = orientationOf(body, engine.jd) ?: return 0.0
-        val local = q.conjugate().rotate(fromCentre).normalized()
-        return m.height(local)
-    }
-
-    /** Set by the terrain layer: the body whose ground is drawn as terrain tiles. */
-    @Volatile var terrainBodyId: String? = null
-
-    /** True when the terrain layer is drawing [body] instead of the plain sphere. */
-    fun terrainActiveFor(body: Body): Boolean = terrainBodyId == body.id
 
     fun testBodies(): List<Body> = listOf(testPlanet, testCube, farMarker)
 

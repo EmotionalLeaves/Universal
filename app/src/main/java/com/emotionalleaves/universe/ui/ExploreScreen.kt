@@ -35,10 +35,10 @@ private fun p(label: String, hint: String, query: String = label) = Place(label,
 
 private val CATEGORIES = listOf(
     Category(
-        G.SUN, "star", "Solar system", "Our Sun, its planets and their moons. Rocky ones can be landed on.",
+        G.SUN, "star", "Solar system", "Our Sun, its planets and their moons.",
         listOf(
             p("Sun", "Our star"), p("Mercury", "Smallest planet"), p("Venus", "Hottest planet"),
-            p("Earth", "Home"), p("Moon", "Walk on real lunar terrain"), p("Mars", "Real terrain from MOLA"),
+            p("Earth", "Home"), p("Moon", "Our natural satellite"), p("Mars", "The red planet"),
             p("Jupiter", "Largest planet"), p("Io", "Volcanic moon of Jupiter"), p("Europa", "Icy moon of Jupiter"),
             p("Saturn", "Rings"), p("Titan", "Hazy moon of Saturn"), p("Uranus", "Tilted on its side"),
             p("Neptune", "Farthest planet"), p("Pluto", "Dwarf planet"),
@@ -145,8 +145,8 @@ fun ExploreScreen(engine: Engine) {
         Text("Famous places, sorted by type. One tap flies you there.", style = Type.BodyDim, modifier = Modifier.padding(top = 12.dp))
         Overline("Surprise me", Modifier.padding(top = 18.dp, bottom = 8.dp))
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            SurpriseTile(G.PLANET, "Alien world", "land on one", kindColor("planet"), Modifier.weight(1f)) { engine.surprise(land = true); Nav.screen = Screen.NONE }
-            SurpriseTile(G.SUN, "Any planet", "around a real star", kindColor("star"), Modifier.weight(1f)) { engine.surprise(land = false); Nav.screen = Screen.NONE }
+            SurpriseTile(G.PLANET, "Rocky world", "around a real star", kindColor("planet"), Modifier.weight(1f)) { engine.surprise(rocky = true); Nav.screen = Screen.NONE }
+            SurpriseTile(G.SUN, "Any planet", "gas giants too", kindColor("star"), Modifier.weight(1f)) { engine.surprise(rocky = false); Nav.screen = Screen.NONE }
             SurpriseTile(G.GALAXY, "Galaxy", "far, far away", kindColor("galaxy"), Modifier.weight(1f)) { engine.surpriseGalaxy(); Nav.screen = Screen.NONE }
         }
         Row(Modifier.fillMaxWidth().padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {

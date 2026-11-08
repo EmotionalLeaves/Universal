@@ -47,7 +47,7 @@ class WebLodLayer : Layer {
             (1.0 - smoothstep(1.5 * Units.GLY * 3.26, 4 * Units.GLY * 3.26, frame.focusDistance)) * day).toFloat()
         if (vis < 0.01f) return
         rc.drawer.beginAdditive()
-        rc.drawer.points(frame, b, Exposure.of(frame), 2.2f, 0.9f * vis, minSize = 1.3f, maxSize = 5f)
+        rc.drawer.points(frame, b, Exposure.of(frame) + 1.5f, 2.4f, 0.9f * vis, minSize = 1.4f, maxSize = 6f)
         rc.drawer.end()
     }
 }

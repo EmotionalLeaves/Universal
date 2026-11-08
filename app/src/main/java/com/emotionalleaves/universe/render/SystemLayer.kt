@@ -69,7 +69,6 @@ class SystemLayer : Layer {
                 if (spx < 40) rc.programs.lowSphereMesh else rc.programs.sphereMesh)
         }
         for (p in bodies(sys)) {
-            if (rc.engine.world.terrainActiveFor(p)) continue
             val rel = frame.rel(p.position(frame.jd))
             val px = frame.pixelSize(p.radius, rel.length())
             if (px < 0.7) continue
