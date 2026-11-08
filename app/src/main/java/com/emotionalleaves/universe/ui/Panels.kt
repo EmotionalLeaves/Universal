@@ -116,7 +116,8 @@ fun ZoomSlider(engine: Engine, modifier: Modifier = Modifier) {
     val density = LocalDensity.current
     // Shorter on small or landscape screens so it never runs into the top bar or the info card.
     val trackDp = (LocalConfiguration.current.screenHeightDp * 0.42f).coerceIn(160f, 300f).dp
-    val presets = remember { engine.zoomPresets.map { (n, alt) -> n to engine.zoomFractionFor(alt) } }
+    // Recomputed each time: the zoom range grows when "beyond the observable universe" is on.
+    val presets = engine.zoomPresets.map { (n, alt) -> n to engine.zoomFractionFor(alt) }
     Row(modifier.height(trackDp)) {
         // Scale labels, each placed at its height on the track.
         Box(Modifier.width(92.dp).height(trackDp)) {

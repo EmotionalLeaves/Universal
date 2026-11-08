@@ -83,7 +83,9 @@ class CameraController {
         orientation = (delta * orientation).normalized()
     }
 
-    fun maxDistance() = Units.UNIVERSE_RADIUS * 3.0
+    /** How far out you can zoom, in observable-universe radii (larger when "beyond" is on). */
+    @Volatile var maxFactor = 3.0
+    fun maxDistance() = Units.UNIVERSE_RADIUS * maxFactor
 
     /** Drag with one finger: orbit around the focus. Pixels -> radians. */
     fun rotate(dxPx: Float, dyPx: Float, viewHeightPx: Int) {

@@ -325,6 +325,11 @@ fun SettingsScreen(engine: Engine) {
         ToggleRow("Generated objects", "Fill gaps in real data with generated stars, planets and galaxies", s.showGenerated) {
             s.showGenerated = it
             engine.world.clearSystems()
+            engine.world.refreshBeyond()
+        }
+        ToggleRow("Beyond the observable universe", "Speculative: let the cosmic web continue past the edge we can see (12 times further)", s.showBeyond) {
+            s.showBeyond = it
+            engine.world.refreshBeyond()
         }
         Text("Star brightness", color = TextMain, fontSize = 15.sp, modifier = Modifier.padding(top = 8.dp))
         var b by androidx.compose.runtime.remember { mutableStateOf(s.starBrightness) }

@@ -128,6 +128,9 @@ object Story {
             is PlanetBody -> planet(b)
             is GalaxyBody -> galaxy(b)
             is SmallBody -> small(b, jd)
+            is BeltBody -> "A ${if (b.belt.icy) "lump of ice and rock" else "rock"} about ${sig(b.radius * 2 / 1000)} km across — as wide as ${widthLike(b.radius * 2 / 1000)} — " +
+                "one of countless bodies in ${b.belt.star.name}'s ${b.belt.label}, leftovers from when its planets formed. " +
+                "From here, ${b.belt.star.name} shines ${colourWord(b.belt.star.teff)}, ${sig(b.belt.localAu(b.index).length())} AU away."
             is RemnantBody -> remnant(b)
             is ExoticBody -> exotic(b)
             is DsoBody -> dso(b)
@@ -293,6 +296,14 @@ object Story {
     }
 
     private fun remnant(b: RemnantBody): String = when (b.kind) {
+        Kind.CLUSTER -> {
+            val n = b.facts(0.0).firstOrNull { it.first == "Stars" }?.second ?: "hundreds of"
+            "A family of $n stars born together from the same cloud, ${f0(b.radius * 2 / Units.LY)} light years across. " +
+                "Seen from a planet inside it, the night sky would blaze with dozens of stars brighter than Venus. " +
+                "Over a few hundred million years the galaxy's tides will scatter them."
+        }
+        Kind.NEBULA -> "A cloud of hydrogen ${f0(b.radius * 2 / Units.LY)} light years across, glowing red where newborn stars light it up. " +
+            "Inside, gravity is pulling clumps of gas together into the next generation of suns and planets."
         Kind.BLACK_HOLE -> {
             val mass = b.facts(0.0).firstOrNull { it.first == "Mass" }?.second ?: "several × Sun"
             "Nothing escapes from here — not even light. ${mass.replace(" × Sun", " times the Sun's mass")} is packed inside an event horizon only ${f0(b.radius * 2 / 1000)} km across, " +

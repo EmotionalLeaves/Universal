@@ -120,7 +120,7 @@ private val CATEGORIES = listOf(
     ),
     Category(
         G.UNIVERSE, "galaxy cluster", "The biggest scale", "The cosmic web and the edge of what we can see.",
-        listOf(p("Observable universe", "Everything, out to the CMB")),
+        listOf(p("Observable universe", "Everything, out to the CMB"), p("Beyond the edge", "Speculative: the universe we can never see", "@beyond")),
     ),
 )
 
@@ -172,7 +172,10 @@ fun ExploreScreen(engine: Engine) {
                 Column(Modifier.fillMaxWidth().padding(bottom = 6.dp).glass(16.dp, raised = true).padding(horizontal = 14.dp, vertical = 2.dp)) {
                     for ((k, pl) in c.places.withIndex()) {
                         if (k > 0) Hairline()
-                        ListRow(pl.label, pl.hint, trailing = "Fly") { engine.goToName(pl.query); Nav.screen = Screen.NONE }
+                        ListRow(pl.label, pl.hint, trailing = "Fly") {
+                            if (pl.query == "@beyond") engine.goBeyond() else engine.goToName(pl.query)
+                            Nav.screen = Screen.NONE
+                        }
                     }
                 }
             }
@@ -222,10 +225,14 @@ fun CensusScreen(engine: Engine) {
         "Rogue planets" to "maybe as many as stars",
         "Neutron stars" to "about 10²¹",
         "Black holes (star-sized)" to "about 10²⁰",
+        "Star clusters and nebulae" to "billions",
+        "Beyond what we can see" to "unknown, perhaps infinite (optional in Settings)",
     )
     val near = listOf(
         "Generated stars" to n(w.generated?.count ?: 0),
-        "Black holes, neutron stars, rogue planets" to n(w.remnants?.bodies?.size ?: 0),
+        "Black holes, neutron stars, rogue planets, clusters, nebulae" to n(w.remnants?.bodies?.size ?: 0),
+        "Asteroids in this star system's belts" to n(w.activeSystem?.let { s -> com.emotionalleaves.universe.engine.Belts.forSystem(s).sumOf { it.count } } ?: 0),
+        "Galaxies beyond the observable universe" to n(w.outerWeb?.count ?: 0),
         "Generated galaxies" to n(w.field?.count ?: 0),
         "Distant galaxies (cosmic web)" to n(w.cosmicWeb?.count ?: 0),
     )

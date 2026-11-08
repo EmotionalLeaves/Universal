@@ -330,3 +330,10 @@ Phone checklist:
 - [x] Terrain on tiny moons had hills a sixth of their radius.
 - [x] Pulsars had no close-up look and could be flown through.
 - [x] Wikipedia rate limits: retried gently (1,257 summaries).
+
+## Round 19: Land fix, glowing zoom-out, more of everything
+- [x] Land: smooth turn (no camera jump), lands on the day side, ground loads on its own thread and starts loading during the descent; horizon tilts up smoothly.
+- [x] Zoomed-out views glow: HazeLayer (soft blobs around 62,000 real galaxies + 140,000 generated filament blobs beyond the catalogues), brighter and larger galaxy points.
+- [x] Generated star clusters and star-forming nebulae inside every galaxy (none within 1.5 kpc of the Sun, where catalogues cover them).
+- [x] Generated asteroid belts and outer icy belts around other stars; every rock tappable (ids <star>/belt<k>/<i>).
+- [x] Optional "Beyond the observable universe" (Settings, or Explore → Beyond the edge): 200,000 speculative galaxies out to 12× the observable radius, zoom range extended, CMB becomes a see-through bubble from outside.

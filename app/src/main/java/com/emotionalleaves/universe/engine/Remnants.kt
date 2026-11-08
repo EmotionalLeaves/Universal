@@ -17,7 +17,9 @@ import kotlin.math.pow
  */
 object Remnants {
     const val VERSION = 1
-    private val CELL = doubleArrayOf(20.0, 3.0)    // pc
+    private val CELL = doubleArrayOf(20.0, 3.0, 300.0)    // pc: remnants, rogue planets, clusters and nebulae
+    private const val P_OPEN = 5e-7       // open star clusters per star
+    private const val P_NEBULA = 6e-8     // glowing star-forming nebulae per star
     private const val RADIUS = 2
     private const val P_BH = 5e-4
     private const val P_NS = 5e-3
@@ -29,16 +31,21 @@ object Remnants {
         val size = CELL[tier]
         val c = Vec3d((cx + 0.5) * size, (cy + 0.5) * size, (cz + 0.5) * size)
         val stars = g.model.density(c.x, c.y, c.z) * size * size * size
-        val mean = stars * if (tier == 0) P_BH + P_NS else P_ROGUE
+        val mean = stars * when (tier) { 0 -> P_BH + P_NS; 1 -> P_ROGUE; else -> P_OPEN + P_NEBULA }
         val rng = Rng(Rng.hash(g.seed, 0x7E3AL, VERSION.toLong(), tier.toLong(), cx.toLong(), cy.toLong(), cz.toLong()))
         val n = rng.poisson(mean).coerceAtMost(300)
         val sun = if (g.isMilkyWay) g.toLocal(UPos.ZERO) else null
         for (i in 0 until n) {
             val local = Vec3d((cx + rng.nextDouble()) * size, (cy + rng.nextDouble()) * size, (cz + rng.nextDouble()) * size)
-            val kind = if (tier == 1) Kind.ROGUE_PLANET else if (rng.nextDouble() < P_BH / (P_BH + P_NS)) Kind.BLACK_HOLE else Kind.NEUTRON_STAR
+            val kind = when (tier) {
+                1 -> Kind.ROGUE_PLANET
+                2 -> if (rng.nextDouble() < P_NEBULA / (P_NEBULA + P_OPEN)) Kind.NEBULA else Kind.CLUSTER
+                else -> if (rng.nextDouble() < P_BH / (P_BH + P_NS)) Kind.BLACK_HOLE else Kind.NEUTRON_STAR
+            }
             val u = rng.nextDouble()
             val seed = rng.nextLong()
-            if (sun != null && (local - sun).length() < if (tier == 1) 8.0 else 150.0) continue
+            // Real catalogues win: the Sun's surroundings are mapped (OpenNGC within ~1.5 kpc for clusters and nebulae).
+            if (sun != null && (local - sun).length() < when (tier) { 1 -> 8.0; 2 -> 1500.0; else -> 150.0 }) continue
             emit(i, make(g, tier, cx, cy, cz, i, local, kind, u, seed))
         }
     }
@@ -68,6 +75,24 @@ object Remnants {
                     "Data" to "Generated (about 1 per 200 stars)",
                 ), "A neutron star: what is left when a giant star explodes. More than the Sun's mass crushed into a ball the size of a city; a teaspoon of it weighs as much as a mountain.")
             }
+            Kind.CLUSTER -> {
+                val n = (80 + 2000 * u.pow(2.5)).toInt()
+                val rPc = 1.5 + 6.0 * u
+                RemnantBody(id, "OC $code-$i", kind, pos, rPc * Units.PC, 0xA8C8FF, listOf(
+                    "Stars" to String.format(Locale.US, "about %,d", n),
+                    "Size" to String.format(Locale.US, "%.0f light years across", rPc * 2 * 3.26),
+                    "Age" to String.format(Locale.US, "about %,.0f million years", 10.0.pow(1 + 2.5 * u)),
+                    "Data" to "Generated (open clusters: roughly 1 per 2 million stars)",
+                ), "An open star cluster: a family of stars born together from one gas cloud, slowly drifting apart.")
+            }
+            Kind.NEBULA -> {
+                val rPc = 8.0 + 60.0 * u
+                RemnantBody(id, "HII $code-$i", kind, pos, rPc * Units.PC, 0xFF7FA8, listOf(
+                    "Size" to String.format(Locale.US, "%.0f light years across", rPc * 2 * 3.26),
+                    "Glow" to "Hydrogen lit up red by hot young stars inside",
+                    "Data" to "Generated (star-forming nebulae along the spiral arms)",
+                ), "A star-forming nebula: a giant cloud of hydrogen glowing red, lit by the hot young stars being born inside it.")
+            }
             else -> {
                 val re = 0.3 + 3.0 * u.pow(2.0)
                 RemnantBody(id, "Rogue $code-$i", Kind.ROGUE_PLANET, pos, re * Units.R_EARTH, 0x4A3A36, listOf(
@@ -82,7 +107,7 @@ object Remnants {
 
     fun generate(g: GalaxyBody, camLocal: Vec3d): Generated {
         val out = ArrayList<RemnantBody>()
-        for (tier in 0..1) {
+        for (tier in 0..2) {
             val s = CELL[tier]
             val ccx = floor(camLocal.x / s).toInt(); val ccy = floor(camLocal.y / s).toInt(); val ccz = floor(camLocal.z / s).toInt()
             for (dx in -RADIUS..RADIUS) for (dy in -RADIUS..RADIUS) for (dz in -RADIUS..RADIUS) {
@@ -97,7 +122,7 @@ object Remnants {
         val p = id.removePrefix("rem:").split(":")
         if (p.size < 5) return null
         val g = galaxyById(p[0] + ":" + p[1]) ?: return null
-        val tier = p[2].toIntOrNull()?.takeIf { it in 0..1 } ?: return null
+        val tier = p[2].toIntOrNull()?.takeIf { it in 0..2 } ?: return null
         val c = p[3].split(",").mapNotNull { it.toIntOrNull() }
         val want = p[4].toIntOrNull() ?: return null
         if (c.size != 3) return null

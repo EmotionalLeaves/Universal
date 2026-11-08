@@ -127,8 +127,8 @@ class GalaxyCatalogLayer : Layer {
         if (day < 0.03f) return
         val exp = exposure(frame)
         rc.drawer.beginAdditive()
-        rc.drawer.points(frame, b, exp, 2.4f, 0.85f * day, minSize = 1.2f, maxSize = 6f)
-        extraBatch?.let { rc.drawer.points(frame, it, exp, 2.4f, 0.85f * day, minSize = 1.2f, maxSize = 6f) }
+        rc.drawer.points(frame, b, exp + 1f, 2.6f, 0.9f * day, minSize = 1.4f, maxSize = 7f)
+        extraBatch?.let { rc.drawer.points(frame, it, exp + 1f, 2.6f, 0.9f * day, minSize = 1.4f, maxSize = 7f) }
         val near = rc.engine.world.nearGalaxies
         val camRight = frame.orientation.rotate(Vec3d.X)
         val camUp = frame.orientation.rotate(Vec3d.Y)

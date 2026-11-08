@@ -24,6 +24,8 @@ class CosmicWebData(
     val innerMpc: Double,
     /** 7 floats per point in Mpc (x, y, z, r, g, b, absMag). */
     val data: FloatArray,
+    /** "web" for the observable universe, "out" for the speculative region beyond it. */
+    val prefix: String = "web",
 ) {
     val count get() = data.size / 7
 
@@ -31,7 +33,7 @@ class CosmicWebData(
 
     /** An enterable galaxy for generated point [i] (rules 1, 4 and 6). */
     fun galaxy(i: Int): GalaxyBody {
-        val seed = Rng.hash(CosmicWeb.SEED, i.toLong(), innerMpc.toLong())
+        val seed = if (prefix == "web") Rng.hash(CosmicWeb.SEED, i.toLong(), innerMpc.toLong()) else Rng.hash(CosmicWeb.SEED, 0x0D7L, i.toLong())
         val rng = Rng(seed)
         val p = positionMpc(i)
         val center = UPos.ZERO + p * Units.MPC
@@ -41,11 +43,15 @@ class CosmicWebData(
         val n = rng.unitVector()
         val x = Vec3d.perpendicular(n)
         val frame = Quatd.fromBasis(x, n.cross(x).normalized(), n)
-        val name = String.format(Locale.US, "GX-%04X-%04d", (seed ushr 48).toInt() and 0xFFFF, i % 10000)
+        val beyond = prefix == "out"
+        val name = String.format(Locale.US, if (beyond) "BX-%04X-%04d" else "GX-%04X-%04d", (seed ushr 48).toInt() and 0xFFFF, i % 10000)
         return GalaxyBody(
-            "gal:web$i", name, center, frame, GalaxyModel.forGalaxy(type, radiusKpc, seed), radiusKpc * 1000,
+            "gal:$prefix$i", name, center, frame, GalaxyModel.forGalaxy(type, radiusKpc, seed), radiusKpc * 1000,
             p.length() * 3.2616, Source.GENERATED,
-            listOf(
+            if (beyond) listOf(
+                "Where" to "Beyond the observable universe: its light can never reach Earth",
+                "Data" to "Speculative: the universe probably continues far beyond what we can see; this is imagined to match",
+            ) else listOf(
                 "Data" to "Generated beyond the catalogues (cosmic web v${CosmicWeb.VERSION})",
                 "Light travel" to "Seen as it was long ago; positions are today's (comoving)",
             ),
@@ -84,6 +90,36 @@ object CosmicWeb {
             k++
         }
         return CosmicWebData(innerMpc, if (k == COUNT) data else data.copyOf(k * 7))
+    }
+
+    /** How far the speculative "beyond" region reaches, in radii of the observable universe. */
+    const val BEYOND_FACTOR = 12.0
+    const val OUTER_COUNT = 200_000
+
+    /** Galaxies beyond the edge of the observable universe (optional, speculative). */
+    fun generateOuter(): CosmicWebData {
+        val rng = Rng(Rng.hash(SEED, 0x0D7L, VERSION.toLong()))
+        val noise = Noise3(SEED)
+        val data = FloatArray(OUTER_COUNT * 7)
+        val r0 = EDGE_MPC
+        val r1 = EDGE_MPC * BEYOND_FACTOR
+        var k = 0
+        var guard = 0
+        while (k < OUTER_COUNT && guard < OUTER_COUNT * 40) {
+            guard++
+            val r = sqrt(rng.nextDouble() * (r1 * r1 - r0 * r0) + r0 * r0)
+            val p = rng.unitVector() * r
+            val s = 1.0 / 160.0
+            val web = noise.ridged(p.x * s, p.y * s, p.z * s, 4)
+            if (rng.nextDouble() > web * web * web * 1.6) continue
+            val warm = rng.nextDouble().toFloat()
+            data[k * 7] = p.x.toFloat(); data[k * 7 + 1] = p.y.toFloat(); data[k * 7 + 2] = p.z.toFloat()
+            // A slightly different tint marks the speculative region.
+            data[k * 7 + 3] = 0.75f + 0.2f * warm; data[k * 7 + 4] = 0.7f; data[k * 7 + 5] = 1.0f
+            data[k * 7 + 6] = (-21.0 - 2.5 * log10(r / r0) * 1.4).toFloat()
+            k++
+        }
+        return CosmicWebData(r0, if (k == OUTER_COUNT) data else data.copyOf(k * 7), "out")
     }
 }
 
@@ -141,5 +177,43 @@ class UniverseBody : Body() {
         "Stars" to "roughly 10²² to 10²⁴ — every one can be visited here",
         "Edge" to "Cosmic microwave background, Planck satellite map",
         "Data" to "Nearby galaxies real; distant structure generated",
+        "Beyond" to "Unknown: at least hundreds of times larger, maybe infinite (turn on \"Beyond the observable universe\" in Settings)",
     )
+}
+
+/**
+ * Unresolved light of the large-scale structure: soft blobs along the same filament field as the
+ * cosmic web, so walls, filaments and clusters glow when you zoom out (each blob stands for many
+ * galaxies too faint to draw one by one). Purely visual: nothing here can be tapped.
+ */
+object CosmicHaze {
+    const val COUNT = 140_000
+
+    /** 7 floats per blob (Mpc from the Sun): x, y, z, r, g, b, weight 0..1. */
+    /** Starts at [innerMpc]: closer in, the real galaxy catalogues provide the glow instead. */
+    fun generate(innerMpc: Double): FloatArray {
+        val rng = Rng(Rng.hash(CosmicWeb.SEED, 0x4A2EL))
+        val noise = Noise3(CosmicWeb.SEED)
+        val out = FloatArray(COUNT * 7)
+        val r0 = innerMpc
+        val r1 = CosmicWeb.EDGE_MPC
+        var k = 0
+        var guard = 0
+        while (k < COUNT && guard < COUNT * 60) {
+            guard++
+            val r = sqrt(rng.nextDouble() * (r1 * r1 - r0 * r0) + r0 * r0)
+            val p = rng.unitVector() * r
+            val s = 1.0 / 160.0
+            val web = noise.ridged(p.x * s, p.y * s, p.z * s, 4)
+            if (rng.nextDouble() > web * web * web * web * 2.2) continue
+            val node = ((web - 0.55) / 0.4).coerceIn(0.0, 1.0)   // dense knots look warmer (old galaxies)
+            out[k * 7] = p.x.toFloat(); out[k * 7 + 1] = p.y.toFloat(); out[k * 7 + 2] = p.z.toFloat()
+            out[k * 7 + 3] = (0.55 + 0.45 * node).toFloat()
+            out[k * 7 + 4] = (0.62 + 0.2 * node).toFloat()
+            out[k * 7 + 5] = (1.0 - 0.35 * node).toFloat()
+            out[k * 7 + 6] = (0.35 + 0.65 * web).toFloat()
+            k++
+        }
+        return if (k == COUNT) out else out.copyOf(k * 7)
+    }
 }

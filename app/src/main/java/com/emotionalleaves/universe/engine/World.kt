@@ -102,6 +102,22 @@ class World(private val engine: Engine) {
 
     /** Generated large-scale structure beyond the catalogues. */
     @Volatile var cosmicWeb: CosmicWebData? = null
+    /** Speculative galaxies beyond the observable universe (only when that setting is on). */
+    @Volatile var outerWeb: CosmicWebData? = null
+
+    /** Builds or drops the "beyond the observable universe" region to match the setting. */
+    fun refreshBeyond() {
+        val on = engine.settings.showBeyond && engine.settings.showGenerated
+        synchronized(engine.camera) { engine.camera.maxFactor = if (on) CosmicWeb.BEYOND_FACTOR * 1.5 else 3.0 }
+        if (!on) { outerWeb = null; return }
+        if (outerWeb != null) return
+        loader.execute {
+            try { outerWeb = CosmicWeb.generateOuter() } catch (e: Throwable) { ErrorLog.record("beyond", e) }
+        }
+    }
+
+    /** Glow of the unresolved large-scale structure (see [CosmicHaze]); Mpc, 7 floats per blob. */
+    @Volatile var haze: FloatArray? = null
         private set
     /** Optional GLADE+ pack (millions of real galaxies). */
     @Volatile var glade: GladePack? = null
@@ -145,7 +161,10 @@ class World(private val engine: Engine) {
             GalaxyField.catalogLimit = if (glade != null) 17.0 else 14.0
             fieldCell = null
             val inner = glade?.let { maxOf(it.maxMpc, 300.0) } ?: 300.0
-            if (cosmicWeb?.innerMpc != inner) cosmicWeb = CosmicWeb.generate(inner)
+            if (cosmicWeb?.innerMpc != inner) {
+                cosmicWeb = CosmicWeb.generate(inner)
+                haze = try { CosmicHaze.generate(inner) } catch (e: Throwable) { ErrorLog.record("haze", e); null }
+            }
         }
     }
 
@@ -346,6 +365,7 @@ class World(private val engine: Engine) {
                 ErrorLog.record("loading galaxies", e)
             }
             packsChanged()
+            refreshBeyond()
             try {
                 val list = DsoBody.load(engine.context)
                 for (d in list) byIdConcurrent[d.id] = d
@@ -436,6 +456,7 @@ class World(private val engine: Engine) {
     /** "Universe › Milky Way › Sun › Earth" for where the camera is. */
     fun breadcrumb(cam: UPos, target: Body?): String {
         val parts = ArrayList<String>()
+        if ((cam - UPos.ZERO).length() > Units.UNIVERSE_RADIUS) return "Beyond the observable universe"
         parts.add("Universe")
         val g = galaxyContaining(cam)
         if (g != null) parts.add(g.name) else if ((cam - UPos.ZERO).length() < 4 * Units.MLY) parts.add("Local Group")
@@ -522,6 +543,13 @@ class World(private val engine: Engine) {
     fun find(id: String): Body? {
         byId[id]?.let { return it }
         byIdConcurrent[id]?.let { return it }
+        if (id.startsWith("gal:out")) {
+            galaxyIndex[id]?.let { return it }
+            val i = id.removePrefix("gal:out").toIntOrNull() ?: return null
+            val web = outerWeb ?: return null
+            if (i !in 0 until web.count) return null
+            return web.galaxy(i).also { registerExtraGalaxy(it) }
+        }
         if (id.startsWith("gal:web")) {
             galaxyIndex[id]?.let { return it }
             val i = id.removePrefix("gal:web").toIntOrNull() ?: return null
@@ -542,6 +570,7 @@ class World(private val engine: Engine) {
         if (id.startsWith("gal:")) return galaxyIndex[id]
         if (id.startsWith("gs:") && !id.contains("/")) return StarField.fromId(id) { galaxyById(it) }
         if (id.startsWith("hyg:") && !id.contains("/")) return id.removePrefix("hyg:").toIntOrNull()?.let { realStars?.body(it) }
+        if (id.contains("/belt")) return Belts.fromId(id, { find(it) }, { systemFor(it) })
         if (id.contains("/")) {
             return when (val parent = find(id.substringBeforeLast("/"))) {
                 is StarBody -> systemFor(parent).planets.firstOrNull { it.id == id }
@@ -583,6 +612,8 @@ class World(private val engine: Engine) {
     // ------------------------------------------------------------------ terrain
 
     private val terrainModels = java.util.concurrent.ConcurrentHashMap<String, TerrainModel>()
+    /** Ground loading gets its own thread so it never waits behind big catalogue loads. */
+    private val terrainExec = java.util.concurrent.Executors.newSingleThreadExecutor()
     private val noTerrain = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
     private val terrainLoading = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
 
@@ -591,7 +622,7 @@ class World(private val engine: Engine) {
         terrainModels[body.id]?.let { return it }
         if (body.id in noTerrain) return null
         if (terrainLoading.add(body.id)) {
-            loader.execute {
+            terrainExec.execute {
                 val m = try { TerrainModel.forBody(engine.context, body) } catch (_: Throwable) { null }
                 if (m != null) terrainModels[body.id] = m else noTerrain.add(body.id)
                 terrainLoading.remove(body.id)

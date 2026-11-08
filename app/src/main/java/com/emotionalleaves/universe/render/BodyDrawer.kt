@@ -190,6 +190,24 @@ class BodyDrawer(private val programs: Programs) {
     }
 
     /** Points batch with brightness from absolute magnitude and distance. */
+    /** Soft additive blobs of [worldSize] metres (large-scale structure haze). */
+    fun haze(frame: Frame, batch: PointBatch, worldSize: Double, alpha: Float, near: Double, minSize: Float = 2f, maxSize: Float = 48f) {
+        val p = programs.haze
+        p.use()
+        p.setMat4("uViewProj", frame.viewProj)
+        p.set1f("uLogF", frame.logF)
+        val off = frame.rel(batch.anchor)
+        p.set3f("uOffset", off.x.toFloat(), off.y.toFloat(), off.z.toFloat())
+        p.set1f("uScale", batch.unit.toFloat())
+        p.set1f("uWorldSize", worldSize.toFloat())
+        p.set1f("uPxPerRad", (frame.height / frame.fovY).toFloat())
+        p.set1f("uMinSize", minSize)
+        p.set1f("uMaxSize", maxSize)
+        p.set1f("uAlpha", alpha)
+        p.set1f("uNear", near.toFloat())
+        batch.draw()
+    }
+
     fun points(
         frame: Frame, batch: PointBatch, magLimit: Float, sizeScale: Float, alpha: Float,
         fadeNear: Double = 0.0, fadeFar: Double = 0.0, minSize: Float = 1.2f, maxSize: Float = 14f, hide: Int = -1,

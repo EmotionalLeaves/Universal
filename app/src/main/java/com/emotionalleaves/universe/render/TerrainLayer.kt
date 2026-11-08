@@ -62,7 +62,8 @@ class TerrainLayer : Layer {
 
     /** Which solid body the camera is close enough to walk on (its target, if any). */
     private fun candidate(frame: Frame, rc: RenderContext): Body? {
-        val t = rc.engine.camera.target ?: return null
+        // While landing, prepare the ground of the world being flown to.
+        val t = synchronized(rc.engine.camera) { rc.engine.camera.zoomTarget() } ?: return null
         if (t !is SolarBody && t !is PlanetBody) return null
         val d = (t.position(frame.jd) - frame.camPos).length()
         return if (d < t.radius * 2.5) t else null

@@ -322,27 +322,38 @@ class RemnantLayer : Layer {
     /** The ones close enough to show, nearest first (at most [MAX] per frame). */
     private var near: List<Pair<RemnantBody, Double>> = emptyList()
 
-    private fun reach(b: RemnantBody) = when (b.kind) { Kind.BLACK_HOLE -> 25 * Units.PC; Kind.NEUTRON_STAR -> 40 * Units.PC; else -> 0.6 * Units.PC }
+    private fun reach(b: RemnantBody) = when (b.kind) {
+        Kind.BLACK_HOLE -> 25 * Units.PC
+        Kind.NEUTRON_STAR -> 40 * Units.PC
+        Kind.CLUSTER, Kind.NEBULA -> 900 * Units.PC
+        else -> 0.6 * Units.PC
+    }
 
     override fun update(frame: Frame, rc: RenderContext) {
         val bodies = rc.engine.world.remnants?.bodies ?: emptyList()
         val sel = rc.engine.selected
         val out = ArrayList<Pair<RemnantBody, Double>>()
-        // Markers are a travel aid between the stars; inside a star system only nearby ones show.
+        // Black hole and neutron star markers are a travel aid between the stars; inside a star system
+        // only nearby ones show. Clusters and nebulae are visible light, so they always show.
         val interstellar = frame.focusDistance > 0.02 * Units.LY
         for (b in bodies) {
             val d = (b.pos - frame.camPos).length()
-            val r = if (interstellar) reach(b) else minOf(reach(b), 0.05 * Units.LY)
+            val visible = b.kind == Kind.CLUSTER || b.kind == Kind.NEBULA
+            val r = if (interstellar || visible) reach(b) else minOf(reach(b), 0.05 * Units.LY)
             if (d < r || b == sel) out.add(b to d)
         }
         out.sortBy { it.second }
-        near = if (out.size > MAX) out.subList(0, MAX) else out
+        // Clusters and nebulae always make the list; the dark ones fill what is left, nearest first.
+        val bright = out.filter { it.first.kind == Kind.CLUSTER || it.first.kind == Kind.NEBULA }
+        val dark = out.filter { it.first.kind != Kind.CLUSTER && it.first.kind != Kind.NEBULA }
+        near = bright + dark.take(MAX)
     }
 
     override fun drawOpaque(frame: Frame, rc: RenderContext) {
         if (near.isEmpty()) return
         rc.drawer.beginOpaque()
         for ((b, _) in near) {
+            if (b.kind == Kind.CLUSTER || b.kind == Kind.NEBULA) continue
             val rel = frame.rel(b.pos)
             val px = frame.pixelSize(b.radius, rel.length())
             if (px < 0.7) continue
@@ -368,6 +379,9 @@ class RemnantLayer : Layer {
                     else rc.drawer.glow(frame, rel, 0.0, floatArrayOf(0.62f, 0.45f, 1f), 0.45f, minPixels = 4.0)
                 }
                 Kind.NEUTRON_STAR -> rc.drawer.glow(frame, rel, b.radius * 6, floatArrayOf(0.7f, 0.85f, 1f), 0.55f, minPixels = 3.0)
+                // Clusters sparkle blue-white, nebulae glow pink-red; both fade as you fly inside.
+                Kind.CLUSTER -> rc.drawer.glow(frame, rel, b.radius * 1.4, floatArrayOf(0.66f, 0.78f, 1f), (0.5 * kotlin.math.min(1.0, d / (b.radius * 2))).toFloat(), minPixels = 3.0)
+                Kind.NEBULA -> rc.drawer.glow(frame, rel, b.radius * 1.6, floatArrayOf(1f, 0.45f, 0.62f), (0.45 * kotlin.math.min(1.0, d / (b.radius * 2))).toFloat(), minPixels = 4.0)
                 else -> rc.drawer.glow(frame, rel, 0.0, floatArrayOf(0.7f, 0.42f, 0.38f), 0.35f, minPixels = 2.5)
             }
         }
@@ -382,11 +396,86 @@ class RemnantLayer : Layer {
             val label = b == sel || i < 6
             val px = frame.pixelSize(b.radius, d).toFloat()
             out.add(Pickable(b, s.first, s.second, max(px, 6f), if (b == sel) 6f else 2f, label,
-                when (b.kind) { Kind.BLACK_HOLE -> 0xFFC8A8FF.toInt(); Kind.NEUTRON_STAR -> 0xFFBFD8FF.toInt(); else -> 0xFFD8B8B0.toInt() }))
+                when (b.kind) {
+                    Kind.BLACK_HOLE -> 0xFFC8A8FF.toInt(); Kind.NEUTRON_STAR -> 0xFFBFD8FF.toInt()
+                    Kind.CLUSTER -> 0xFFB8CCFF.toInt(); Kind.NEBULA -> 0xFFFFA8C0.toInt(); else -> 0xFFD8B8B0.toInt()
+                }))
         }
     }
 
     companion object {
-        const val MAX = 80
+        const val MAX = 140
+    }
+}
+
+/** Asteroid belts and icy outer belts of the star system you are in (generated, tappable). */
+class BeltLayer : Layer {
+    private var forStar: String? = null
+    private var belts: List<com.emotionalleaves.universe.engine.Belt> = emptyList()
+    private val batches = ArrayList<PointBatch>()
+    var daylight = 0f
+    private var zoomOut = 0f
+
+    override fun init(rc: RenderContext) { forStar = null; belts = emptyList(); batches.clear() }
+
+    override fun update(frame: Frame, rc: RenderContext) {
+        zoomOut = smoothstep(2e9, 6e10, frame.focusDistance).toFloat()
+        val sys = rc.engine.world.activeSystem
+        val id = sys?.star?.id
+        if (id == forStar) return
+        forStar = id
+        for (b in batches) b.release()
+        batches.clear()
+        belts = if (sys != null && rc.engine.settings.showGenerated) com.emotionalleaves.universe.engine.Belts.forSystem(sys) else emptyList()
+        for (b in belts) batches.add(PointBatch.upload(b.star.pos, Units.AU, b.data))
+    }
+
+    private fun limit(rc: RenderContext) = 7.2f + 6.3f * zoomOut + rc.engine.settings.starBrightness - daylight * 9f
+
+    override fun drawTransparent(frame: Frame, rc: RenderContext) {
+        if (batches.isEmpty()) return
+        rc.drawer.beginAdditive()
+        for (b in batches) rc.drawer.points(frame, b, limit(rc), 2.0f, 0.85f * (1f - daylight), minSize = 1.1f, maxSize = 4f)
+        rc.drawer.end()
+    }
+
+    override fun drawOpaque(frame: Frame, rc: RenderContext) {
+        val sel = rc.engine.selected as? com.emotionalleaves.universe.engine.BeltBody ?: return
+        val rel = frame.rel(sel.position(frame.jd))
+        val px = frame.pixelSize(sel.radius, rel.length())
+        if (px < 0.7) return
+        val star = frame.rel(sel.belt.star.pos)
+        val m = Material(if (sel.belt.icy) Material.ICE else Material.ROCKY, floatArrayOf(0.5f, 0.46f, 0.42f), floatArrayOf(0.32f, 0.3f, 0.28f),
+            floatArrayOf(0.62f, 0.58f, 0.52f), seed = (sel.index % 997) / 9f, ambient = 0.03f)
+        rc.drawer.beginOpaque()
+        rc.drawer.sphere(frame, rel, sel.radius, Quatd.IDENTITY, m, star - rel, if (px < 40) rc.programs.lowSphereMesh else rc.programs.sphereMesh)
+        rc.drawer.end()
+    }
+
+    override fun pickAt(frame: Frame, rc: RenderContext, x: Float, y: Float, reach: Float): Body? {
+        val lim = limit(rc)
+        var best: Pair<com.emotionalleaves.universe.engine.Belt, Int>? = null
+        var bestScore = Double.MAX_VALUE
+        for (b in belts) {
+            val d = b.data
+            for (i in 0 until b.count) {
+                val p = b.star.pos + Vec3d(d[i * 7].toDouble(), d[i * 7 + 1].toDouble(), d[i * 7 + 2].toDouble()) * Units.AU
+                val rel = frame.rel(p)
+                val dist = rel.length()
+                val m = d[i * 7 + 6] + 5 * log10(max(dist / Units.PC, 1e-12)) - 5
+                if (m > lim + 0.5) continue
+                val s = frame.project(rel) ?: continue
+                val px = hypot((s.first - x).toDouble(), (s.second - y).toDouble())
+                if (px > reach) continue
+                val score = px + m
+                if (score < bestScore) { bestScore = score; best = b to i }
+            }
+        }
+        return best?.let { it.first.body(it.second) }
+    }
+
+    override fun collect(frame: Frame, rc: RenderContext, out: MutableList<Pickable>) {
+        val sel = rc.engine.selected as? com.emotionalleaves.universe.engine.BeltBody ?: return
+        frame.project(frame.rel(sel.position(frame.jd)))?.let { out.add(Pickable(sel, it.first, it.second, 6f, 6f, true, 0xFFE8D8C0.toInt())) }
     }
 }

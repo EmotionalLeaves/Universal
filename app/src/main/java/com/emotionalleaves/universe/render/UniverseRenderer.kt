@@ -44,8 +44,10 @@ class UniverseRenderer(private val context: Context, private val engine: Engine)
     private val exoticLayer = ExoticLayer()
     private val smallBodyLayer = SmallBodyLayer()
     private val remnantLayer = RemnantLayer()
+    private val hazeLayer = HazeLayer()
+    private val beltLayer = BeltLayer()
     private val layers: List<Layer> = listOf(
-        cosmicLayer, exoticLayer, fieldLayer, galaxyCatalogLayer, galaxyLayer, deepSkyLayer, starLayer, remnantLayer, systemLayer,
+        cosmicLayer, hazeLayer, exoticLayer, fieldLayer, galaxyCatalogLayer, galaxyLayer, deepSkyLayer, starLayer, remnantLayer, systemLayer, beltLayer,
         solarLayer, smallBodyLayer, terrainLayer, testLayer,
     )
 
@@ -94,9 +96,11 @@ class UniverseRenderer(private val context: Context, private val engine: Engine)
         val fovY = Math.toRadians(60.0)
         // Near the ground, tilt the view up toward the horizon so you see the landscape.
         var viewOrientation = orientation
-        if (target != null && engine.camera.isSolidTarget()) {
-            val alt = (target.position(engine.jd) - camPos).length() - target.radius
-            val f = 1.0 - com.emotionalleaves.universe.core.smoothstep(0.0003, 0.03, alt / target.radius)
+        // Also while descending onto a world, so the horizon tilts up smoothly instead of snapping.
+        val ground = if (target != null && engine.camera.isSolidTarget()) target else flyingTo?.takeIf { engine.canLand(it) }
+        if (ground != null) {
+            val alt = (ground.position(engine.jd) - camPos).length() - ground.radius
+            val f = 1.0 - com.emotionalleaves.universe.core.smoothstep(0.0003, 0.03, alt / ground.radius)
             if (f > 0) viewOrientation = orientation * Quatd.axisAngle(com.emotionalleaves.universe.core.Vec3d.X, Math.toRadians(76.0) * f)
         }
         val proj = Mat4.perspectiveInfinite(fovY, width.toDouble() / height, 0.05)
@@ -119,6 +123,8 @@ class UniverseRenderer(private val context: Context, private val engine: Engine)
         exoticLayer.daylight = terrainLayer.daylight
         smallBodyLayer.daylight = terrainLayer.daylight
         remnantLayer.daylight = terrainLayer.daylight
+        hazeLayer.daylight = terrainLayer.daylight
+        beltLayer.daylight = terrainLayer.daylight
         galaxyLayer.particles = when (engine.settings.quality) { 0 -> 20_000; 2 -> 70_000; else -> 40_000 }
         terrainLayer.splitFactor = when (engine.settings.quality) { 0 -> 1.5; 2 -> 3.0; else -> 2.2 }
         galaxyLayer.maxBlob = when (engine.settings.quality) { 0 -> 14f; 2 -> 28f; else -> 20f }

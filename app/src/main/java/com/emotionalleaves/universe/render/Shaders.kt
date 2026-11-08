@@ -96,6 +96,48 @@ void main() {
 }
 """
 
+    /** Soft glowing blobs for the large-scale structure (filaments, clusters) seen from afar. */
+    val HAZE_VS = HEADER + LOG_DEPTH_VS + """
+layout(location = 0) in vec3 aPos;
+layout(location = 1) in vec4 aColor;
+layout(location = 2) in float aWeight;
+uniform mat4 uViewProj;
+uniform vec3 uOffset;
+uniform float uScale;
+uniform float uWorldSize;  // blob diameter in metres
+uniform float uPxPerRad;
+uniform float uMinSize;
+uniform float uMaxSize;
+uniform float uAlpha;
+uniform float uNear;       // metres: hide blobs closer than this
+out vec4 vColor;
+void main() {
+    vec3 p = aPos * uScale + uOffset;
+    float d = max(length(p), 1.0);
+    float size = uWorldSize / d * uPxPerRad;
+    float s = clamp(size, uMinSize, uMaxSize);
+    // Keep the light of each blob constant: tiny blobs dim, huge (close) blobs spread thin.
+    float a = uAlpha * aWeight * min(1.0, size / uMinSize) * min(1.0, (uMaxSize * uMaxSize) / (size * size));
+    a *= smoothstep(uNear * 0.5, uNear, d);
+    vColor = vec4(aColor.rgb, a);
+    gl_PointSize = s;
+    gl_Position = logDepth(uViewProj * vec4(p, 1.0));
+    if (a < 0.002) gl_Position = vec4(2.0, 2.0, 2.0, 1.0);
+}
+"""
+
+    val HAZE_FS = HEADER + """
+in vec4 vColor;
+out vec4 oColor;
+void main() {
+    vec2 c = gl_PointCoord * 2.0 - 1.0;
+    float r2 = dot(c, c);
+    if (r2 > 1.0) discard;
+    float g = exp(-r2 * 3.2) * (1.0 - r2);
+    oColor = vec4(vColor.rgb * vColor.a * g, 1.0);
+}
+"""
+
     val POINTS_FS = HEADER + """
 in vec4 vColor;
 in float vSize;

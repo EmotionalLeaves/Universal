@@ -21,12 +21,14 @@ class CosmicLayer : Layer {
     private var web: CosmicWebData? = null
     private var webBatch: PointBatch? = null
     private var glade: GladePack? = null
+    private var outer: CosmicWebData? = null
+    private var outerBatch: PointBatch? = null
     private var gladeBatch: PointBatch? = null
     var daylight = 0f
     var drawFraction = 1.0
 
     override fun init(rc: RenderContext) {
-        web = null; webBatch = null; glade = null; gladeBatch = null
+        web = null; webBatch = null; glade = null; gladeBatch = null; outer = null; outerBatch = null
     }
 
     fun exposure(frame: Frame): Float = (7.2 + 5 * log10(max(1.0, frame.focusDistance / (0.3 * Units.MPC)))).toFloat()
@@ -37,6 +39,12 @@ class CosmicLayer : Layer {
             webBatch?.release()
             webBatch = w?.let { PointBatch.upload(UPos.ZERO, Units.MPC, it.data) }
             web = w
+        }
+        val o = rc.engine.world.outerWeb
+        if (o !== outer) {
+            outerBatch?.release()
+            outerBatch = o?.let { PointBatch.upload(UPos.ZERO, Units.MPC, it.data) }
+            outer = o
         }
         val g = rc.engine.world.glade
         if (g !== glade) {
@@ -67,7 +75,8 @@ class CosmicLayer : Layer {
         GLES30.glEnable(GLES30.GL_CULL_FACE)
         GLES30.glCullFace(if (inside) GLES30.GL_FRONT else GLES30.GL_BACK)
         val m = Material(Material.SKY, floatArrayOf(0.95f, 0.6f, 0.25f), floatArrayOf(0.2f, 0.4f, 0.9f), texture = tex, ambient = 1f)
-        rc.drawer.sphere(frame, rel, Units.UNIVERSE_RADIUS, Quatd.IDENTITY, m, Vec3d.Z, opacity = (vis * 0.85).toFloat())
+        // From outside (only possible with "beyond" on) it is a see-through bubble, so the inner universe still shows.
+        rc.drawer.sphere(frame, rel, Units.UNIVERSE_RADIUS, Quatd.IDENTITY, m, Vec3d.Z, opacity = (vis * if (inside) 0.85 else 0.3).toFloat())
         GLES30.glDisable(GLES30.GL_CULL_FACE)
         GLES30.glDisable(GLES30.GL_BLEND)
         GLES30.glDepthMask(true)
@@ -81,13 +90,17 @@ class CosmicLayer : Layer {
         val fromEarth = (frame.camPos - UPos.ZERO).length()
         if (frame.focusDistance < 2 * Units.MPC && fromEarth < 20 * Units.MPC) return
         rc.drawer.beginAdditive()
-        gladeBatch?.let { rc.drawer.points(frame, it, exp, 2.0f, 0.8f * day, minSize = 1.0f, maxSize = 4f) }
-        webBatch?.let { rc.drawer.points(frame, it, exp, 2.0f, 0.9f * day, minSize = 1.0f, maxSize = 4f) }
+        gladeBatch?.let { rc.drawer.points(frame, it, exp + 1.5f, 2.2f, 0.85f * day, minSize = 1.3f, maxSize = 5f) }
+        webBatch?.let { rc.drawer.points(frame, it, exp + 1.5f, 2.2f, 0.95f * day, minSize = 1.3f, maxSize = 5f) }
+        outerBatch?.let { rc.drawer.points(frame, it, exp + 1.5f, 2.2f, 0.9f * day, minSize = 1.3f, maxSize = 5f) }
         rc.drawer.end()
     }
 
-    override fun pickAt(frame: Frame, rc: RenderContext, x: Float, y: Float, reach: Float): Body? {
-        val w = web ?: return null
+    override fun pickAt(frame: Frame, rc: RenderContext, x: Float, y: Float, reach: Float): Body? =
+        pickIn(web, frame, rc, x, y, reach) ?: pickIn(outer, frame, rc, x, y, reach)
+
+    private fun pickIn(w: CosmicWebData?, frame: Frame, rc: RenderContext, x: Float, y: Float, reach: Float): Body? {
+        w ?: return null
         val exp = exposure(frame)
         val cam = (frame.camPos - UPos.ZERO) / Units.MPC
         var best = -1

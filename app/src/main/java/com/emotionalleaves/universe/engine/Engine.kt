@@ -309,11 +309,17 @@ class Engine(val context: Context) {
     fun landOnSelected() {
         val b = selected ?: return
         if (!canLand(b)) return
+        world.terrainModel(b) // start loading the ground now, not after touchdown
         synchronized(camera) {
             val c = b.position(jd)
-            val dir = (camera.position() - c).normalized()
-            camera.flyTo(b, c, b.radius + 2.0, nowSeconds())
-            camera.lookFrom(dir, Vec3d.perpendicular(dir))
+            var dir = (camera.position() - c).normalized()
+            // Land below you, but on the day side: if that spot is in darkness, move towards the Sun.
+            val star = when (b) { is PlanetBody -> b.star.pos; else -> UPos.ZERO }
+            val toSun = (star - c).let { if (it.lengthSq() > 0) it.normalized() else dir }
+            if (dir.dot(toSun) < 0.25) dir = (dir + toSun * 1.6).let { if (it.lengthSq() < 1e-9) toSun else it.normalized() }
+            val up = Vec3d.perpendicular(dir)
+            val endQ = com.emotionalleaves.universe.core.Quatd.lookRotation(-dir, up)
+            camera.flyTo(b, c, b.radius + 2.0, nowSeconds(), endQ)
         }
     }
 
@@ -327,6 +333,7 @@ class Engine(val context: Context) {
         is GalaxyBody -> world.universe
         is UniverseBody -> null
         is SmallBody -> world.solar.first()
+        is BeltBody -> b.belt.star
         is RemnantBody -> world.galaxyContaining(b.pos) ?: world.milkyWay
         is ExoticBody -> if (b.kind == Kind.PULSAR) world.milkyWay else world.universe
         else -> world.milkyWay
@@ -431,6 +438,16 @@ class Engine(val context: Context) {
             } finally {
                 busy = ""
             }
+        }
+    }
+
+    /** Turns on the speculative region beyond the observable universe and flies out to see it. */
+    fun goBeyond() {
+        settings.showBeyond = true
+        world.refreshBeyond()
+        selected = world.universe
+        synchronized(camera) {
+            camera.flyTo(world.universe, UPos.ZERO, Units.UNIVERSE_RADIUS * 7, nowSeconds())
         }
     }
 

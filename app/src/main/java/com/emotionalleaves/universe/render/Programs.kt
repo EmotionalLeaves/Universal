@@ -3,6 +3,7 @@ package com.emotionalleaves.universe.render
 /** All shader programs and shared meshes, created on the GL thread. */
 class Programs {
     val points = Program(Shaders.POINTS_VS, Shaders.POINTS_FS)
+    val haze = Program(Shaders.HAZE_VS, Shaders.HAZE_FS)
     val sphere = Program(Shaders.SPHERE_VS, Shaders.SPHERE_FS)
     val atmosphere = Program(Shaders.SPHERE_VS, Shaders.ATMO_FS)
     val line = Program(Shaders.LINE_VS, Shaders.LINE_FS)

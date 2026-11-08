@@ -210,7 +210,11 @@ object Describe {
                     "Stars" to Units.bigCount(10.0.pow(-0.4 * (b.absMag + 21.0)) * 1.0e11).replace(" billion", " bn").replace(" million", " m"),
                 )
                 is SmallBody -> listOf("Width" to String.format(Locale.US, "%,.1f km", b.radius * 2 / 1000), "Type" to b.kind.label)
-                is RemnantBody -> listOf("Type" to b.kind.label, "Width" to km(b.radius * 2))
+                is BeltBody -> listOf("Width" to String.format(Locale.US, "%,.1f km", b.radius * 2 / 1000), "Belt" to (if (b.belt.icy) "Outer icy" else "Asteroid"))
+                is RemnantBody -> listOf(
+                    "Type" to b.kind.label,
+                    "Width" to if (b.radius > Units.LY * 0.01) String.format(Locale.US, "%,.0f ly", b.radius * 2 / Units.LY) else km(b.radius * 2),
+                )
                 is ExoticBody -> listOf("Type" to b.kind.label, (b.facts(jd).getOrNull(1) ?: ("" to "")).let { it.first to it.second.substringBefore(" (") })
                 is DsoBody -> listOf("Type" to DsoBody.typeLabel(b.type), "Width" to String.format(Locale.US, "%,.0f ly", b.radius * 2 / Units.LY))
                 else -> emptyList()
