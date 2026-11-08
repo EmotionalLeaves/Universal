@@ -23,11 +23,24 @@ object Units {
 
     /** "1.2 billion", "350 million", "4,500" — for counts of stars, planets, galaxies. */
     fun bigCount(n: Double): String = when {
+        n >= 1e27 -> sci(n)
+        n >= 1e24 -> String.format(Locale.US, "%.1f septillion", n / 1e24)
+        n >= 1e21 -> String.format(Locale.US, "%.1f sextillion", n / 1e21)
+        n >= 1e18 -> String.format(Locale.US, "%.1f quintillion", n / 1e18)
         n >= 1e15 -> String.format(Locale.US, "%.1f quadrillion", n / 1e15)
         n >= 1e12 -> String.format(Locale.US, "%.1f trillion", n / 1e12)
         n >= 1e9 -> String.format(Locale.US, "%.1f billion", n / 1e9)
         n >= 1e6 -> String.format(Locale.US, "%.0f million", n / 1e6)
         else -> String.format(Locale.US, "%,.0f", n)
+    }
+
+    /** "2.3 × 10⁵⁴" with superscript digits. */
+    fun sci(n: Double): String {
+        if (n <= 0) return "0"
+        val e = kotlin.math.floor(kotlin.math.log10(n)).toInt()
+        val m = n / 10.0.pow(e)
+        val sup = e.toString().map { "⁰¹²³⁴⁵⁶⁷⁸⁹"[it - '0'] }.joinToString("")
+        return String.format(Locale.US, "%.1f × 10", m) + sup
     }
 
     /** Human-readable distance that switches units with scale: m, km, AU, ly, Mly, Gly. */

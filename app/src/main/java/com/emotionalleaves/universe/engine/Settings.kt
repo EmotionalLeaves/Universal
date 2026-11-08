@@ -13,7 +13,7 @@ class Settings(context: Context) {
     @Volatile var showGenerated = prefs.getBoolean("generated", true)
         set(v) { field = v; prefs.edit().putBoolean("generated", v).apply() }
     /** Show a speculative, generated universe beyond the edge of the observable one. */
-    @Volatile var showBeyond = prefs.getBoolean("beyond", false)
+    @Volatile var showBeyond = prefs.getBoolean("beyond", true)
         set(v) { field = v; prefs.edit().putBoolean("beyond", v).apply() }
     @Volatile var showConstellations = prefs.getBoolean("constellations", false)
         set(v) { field = v; prefs.edit().putBoolean("constellations", v).apply() }

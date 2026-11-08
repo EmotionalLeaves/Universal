@@ -337,3 +337,8 @@ Phone checklist:
 - [x] Generated star clusters and star-forming nebulae inside every galaxy (none within 1.5 kpc of the Sun, where catalogues cover them).
 - [x] Generated asteroid belts and outer icy belts around other stars; every rock tappable (ids <star>/belt<k>/<i>).
 - [x] Optional "Beyond the observable universe" (Settings, or Explore → Beyond the edge): 200,000 speculative galaxies out to 12× the observable radius, zoom range extended, CMB becomes a see-through bubble from outside.
+
+## Round 20: 10^50+ things
+- [x] RockField: belts and comet clouds of every star (and the Sun's main belt below the catalogue limit, Kuiper belt and Oort cloud) fill in around the camera in 7 size levels down to 1 m boulders (N ∝ D^-2.5), ~1.6 × 10^19 bodies per star, all tappable with stable ids (rock|…).
+- [x] Beyond region extended to 9,000 × the observable radius (64-bit cells stay exact), on by default; field galaxies use unpacked cell ids; depth range 1e33 m; deep haze keeps the structure visible at any zoom.
+- [x] Census headline: ≈ 3 × 10^42 things in the observable universe, ≈ 2 × 10^54 with the beyond region.

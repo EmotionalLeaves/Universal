@@ -46,8 +46,9 @@ class UniverseRenderer(private val context: Context, private val engine: Engine)
     private val remnantLayer = RemnantLayer()
     private val hazeLayer = HazeLayer()
     private val beltLayer = BeltLayer()
+    private val rockLayer = RockLayer()
     private val layers: List<Layer> = listOf(
-        cosmicLayer, hazeLayer, exoticLayer, fieldLayer, galaxyCatalogLayer, galaxyLayer, deepSkyLayer, starLayer, remnantLayer, systemLayer, beltLayer,
+        cosmicLayer, hazeLayer, exoticLayer, fieldLayer, galaxyCatalogLayer, galaxyLayer, deepSkyLayer, starLayer, remnantLayer, systemLayer, beltLayer, rockLayer,
         solarLayer, smallBodyLayer, terrainLayer, testLayer,
     )
 
@@ -125,6 +126,7 @@ class UniverseRenderer(private val context: Context, private val engine: Engine)
         remnantLayer.daylight = terrainLayer.daylight
         hazeLayer.daylight = terrainLayer.daylight
         beltLayer.daylight = terrainLayer.daylight
+        rockLayer.daylight = terrainLayer.daylight
         galaxyLayer.particles = when (engine.settings.quality) { 0 -> 20_000; 2 -> 70_000; else -> 40_000 }
         terrainLayer.splitFactor = when (engine.settings.quality) { 0 -> 1.5; 2 -> 3.0; else -> 2.2 }
         galaxyLayer.maxBlob = when (engine.settings.quality) { 0 -> 14f; 2 -> 28f; else -> 20f }

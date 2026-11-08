@@ -92,8 +92,13 @@ object CosmicWeb {
         return CosmicWebData(innerMpc, if (k == COUNT) data else data.copyOf(k * 7))
     }
 
-    /** How far the speculative "beyond" region reaches, in radii of the observable universe. */
-    const val BEYOND_FACTOR = 12.0
+    /**
+     * How far the speculative "beyond" region reaches, in radii of the observable universe. Galaxies
+     * are generated around you anywhere inside it; 9,000 keeps every position exact (64-bit cells).
+     */
+    const val BEYOND_FACTOR = 9000.0
+    /** Tappable sample galaxies drawn out to this many radii (further out, the deep haze shows structure). */
+    const val OUTER_POINTS_FACTOR = 12.0
     const val OUTER_COUNT = 200_000
 
     /** Galaxies beyond the edge of the observable universe (optional, speculative). */
@@ -102,7 +107,7 @@ object CosmicWeb {
         val noise = Noise3(SEED)
         val data = FloatArray(OUTER_COUNT * 7)
         val r0 = EDGE_MPC
-        val r1 = EDGE_MPC * BEYOND_FACTOR
+        val r1 = EDGE_MPC * OUTER_POINTS_FACTOR
         var k = 0
         var guard = 0
         while (k < OUTER_COUNT && guard < OUTER_COUNT * 40) {
@@ -215,5 +220,57 @@ object CosmicHaze {
             k++
         }
         return if (k == COUNT) out else out.copyOf(k * 7)
+    }
+}
+
+/**
+ * Structure of the speculative region beyond the observable universe at every zoom level: cells
+ * sized to the current view around the camera, each with a few deterministic glowing blobs
+ * (same place, same blobs, every time). Visual only; tappable galaxies come from [GalaxyField].
+ */
+object DeepHaze {
+    class Result(val level: Int, val ccx: Long, val ccy: Long, val ccz: Long, val anchor: UPos, val data: FloatArray, val blobMpc: Double)
+
+    private const val RADIUS = 4
+    private const val PER_CELL = 60
+    private val noise = Noise3(CosmicWeb.SEED xor 0x7EE9L)
+
+    fun levelFor(viewMetres: Double): Int {
+        val gpc = Units.MPC * 1000
+        return kotlin.math.floor(kotlin.math.ln(kotlin.math.max(viewMetres / gpc, 1.0)) / kotlin.math.ln(2.0)).toInt().coerceIn(0, 40)
+    }
+
+    fun cellMpc(level: Int) = 4000.0 * Math.pow(2.0, level.toDouble())
+
+    fun cellOf(cam: UPos, level: Int): Triple<Long, Long, Long> {
+        val c = (cam - UPos.ZERO) / Units.MPC
+        val s = cellMpc(level)
+        return Triple(kotlin.math.floor(c.x / s).toLong(), kotlin.math.floor(c.y / s).toLong(), kotlin.math.floor(c.z / s).toLong())
+    }
+
+    fun generate(level: Int, cell: Triple<Long, Long, Long>): Result {
+        val s = cellMpc(level)
+        val (ccx, ccy, ccz) = cell
+        val anchorMpc = Vec3d(ccx * s, ccy * s, ccz * s)
+        val anchor = UPos.ZERO + anchorMpc * Units.MPC
+        val edge = CosmicWeb.EDGE_MPC
+        val limit = edge * CosmicWeb.BEYOND_FACTOR
+        val out = ArrayList<Float>(729 * PER_CELL * 7 / 2)
+        for (dx in -RADIUS..RADIUS) for (dy in -RADIUS..RADIUS) for (dz in -RADIUS..RADIUS) {
+            val cx = ccx + dx; val cy = ccy + dy; val cz = ccz + dz
+            val rng = Rng(Rng.hash(CosmicWeb.SEED, 0xDEE9L, level.toLong(), cx, cy, cz))
+            for (k in 0 until PER_CELL) {
+                val p = Vec3d((cx + rng.nextDouble()) * s, (cy + rng.nextDouble()) * s, (cz + rng.nextDouble()) * s)
+                val r = p.length()
+                if (r < edge || r > limit) continue   // inside: the real/observable universe; outside: the end of the model
+                val f = 1.0 / (s * 0.6)
+                val w = noise.ridged(p.x * f, p.y * f, p.z * f, 3)
+                if (rng.nextDouble() > w * w * 1.4) continue
+                val rel = p - anchorMpc
+                out.add(rel.x.toFloat()); out.add(rel.y.toFloat()); out.add(rel.z.toFloat())
+                out.add((0.6 + 0.3 * w).toFloat()); out.add(0.62f); out.add(1f); out.add((0.3 + 0.7 * w).toFloat())
+            }
+        }
+        return Result(level, ccx, ccy, ccz, anchor, out.toFloatArray(), s * 0.7)
     }
 }

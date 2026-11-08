@@ -19,10 +19,38 @@ class HazeLayer : Layer {
     private var localFor: GalaxyBody? = null
     private var local: PointBatch? = null
     var daylight = 0f
+    private var deep: com.emotionalleaves.universe.engine.DeepHaze.Result? = null
+    private var deepBatch: PointBatch? = null
+    @Volatile private var deepPending: com.emotionalleaves.universe.engine.DeepHaze.Result? = null
+    @Volatile private var deepBusy = false
+    private var deepWant: Pair<Int, Triple<Long, Long, Long>>? = null
+    private val worker = java.util.concurrent.Executors.newSingleThreadExecutor()
 
-    override fun init(rc: RenderContext) { farSrc = null; far = null; localFor = null; local = null }
+    override fun init(rc: RenderContext) { farSrc = null; far = null; localFor = null; local = null; deep = null; deepBatch = null }
+
+    /** Keeps the deep haze matched to the zoom level and camera cell (only with "beyond" on). */
+    private fun updateDeep(frame: Frame, rc: RenderContext) {
+        deepPending?.let { r ->
+            deepBatch?.release()
+            deepBatch = if (r.data.isNotEmpty()) PointBatch.upload(r.anchor, Units.MPC, r.data) else null
+            deep = r
+            deepPending = null
+        }
+        if (rc.engine.world.outerWeb == null) { deepBatch?.release(); deepBatch = null; deep = null; deepWant = null; return }
+        if (frame.focusDistance < 2 * Units.GLY) return
+        val level = com.emotionalleaves.universe.engine.DeepHaze.levelFor(frame.focusDistance)
+        val cell = com.emotionalleaves.universe.engine.DeepHaze.cellOf(frame.camPos, level)
+        val want = level to cell
+        if (want == deepWant || deepBusy) return
+        deepWant = want
+        deepBusy = true
+        worker.execute {
+            try { deepPending = com.emotionalleaves.universe.engine.DeepHaze.generate(level, cell) } catch (_: Throwable) {} finally { deepBusy = false }
+        }
+    }
 
     override fun update(frame: Frame, rc: RenderContext) {
+        updateDeep(frame, rc)
         val w = rc.engine.world
         val h = w.haze
         if (h !== farSrc) {
@@ -59,6 +87,9 @@ class HazeLayer : Layer {
         rc.drawer.beginAdditive()
         local?.let { rc.drawer.haze(frame, it, 1.6 * Units.MPC, 0.30f * vis, 1.5 * Units.MPC, minSize = 2f, maxSize = 36f) }
         far?.let { rc.drawer.haze(frame, it, 22 * Units.MPC, 0.11f * vis, 25 * Units.MPC, minSize = 2.5f, maxSize = 48f) }
+        val d = deep
+        val db = deepBatch
+        if (d != null && db != null) rc.drawer.haze(frame, db, d.blobMpc * Units.MPC, 0.09f * vis, 0.0, minSize = 2.5f, maxSize = 56f)
         rc.drawer.end()
     }
 }

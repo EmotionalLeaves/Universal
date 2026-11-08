@@ -42,6 +42,46 @@ class World(private val engine: Engine) {
     @Volatile var galaxies: List<GalaxyBody> = listOf(milkyWay)
     private val galaxyIndex = java.util.concurrent.ConcurrentHashMap<String, GalaxyBody>().also { it[milkyWay.id] = milkyWay }
 
+    /** Rocks, boulders and comet nuclei generated around the camera in belts and clouds. */
+    @Volatile var rocks: RockField.Generated? = null
+    private val rockExec = java.util.concurrent.Executors.newSingleThreadExecutor()
+    @Volatile private var rockBusy = false
+    private var rockAt: UPos? = null
+    private var rockZonesKey: String? = null
+    private var rockTimer = 0.0
+    private val zoneCache = java.util.concurrent.ConcurrentHashMap<String, List<RockField.Zone>>()
+
+    fun zonesForKey(key: String): List<RockField.Zone>? {
+        if (key == "sun") return RockField.solarZones
+        zoneCache[key]?.let { return it }
+        val star = find(key) as? StarBody ?: return null
+        return RockField.zonesFor(systemFor(star)).also { zoneCache[key] = it }
+    }
+
+    private fun updateRocks(cam: UPos, dt: Double) {
+        rockTimer += dt
+        if (rockTimer < 0.25 || rockBusy) return
+        rockTimer = 0.0
+        if (!engine.settings.showGenerated) { rocks = null; rockAt = null; return }
+        val sysKey = activeSystem?.star?.id
+        val zones = RockField.solarZones + (sysKey?.let { zonesForKey(it) } ?: emptyList())
+        val key = sysKey ?: "sun"
+        val last = rockAt
+        if (last != null && key == rockZonesKey) {
+            val moved = (cam - last).length() / Units.AU
+            val finest = RockField.finestCellAu(zones, cam)
+            // Outside every belt nothing is generated, so checking again is cheap.
+            if (finest != Double.MAX_VALUE && moved < 0.4 * finest) return
+            if (finest == Double.MAX_VALUE && rocks?.bodies.isNullOrEmpty() && moved < 0.01) return
+        }
+        rockAt = cam
+        rockZonesKey = key
+        rockBusy = true
+        rockExec.execute {
+            try { rocks = RockField.generate(zones, cam) } catch (e: Throwable) { ErrorLog.record("generating rocks", e) } finally { rockBusy = false }
+        }
+    }
+
     /** Black holes, neutron stars and rogue planets generated around the camera. */
     @Volatile var remnants: Remnants.Generated? = null
 
@@ -108,7 +148,7 @@ class World(private val engine: Engine) {
     /** Builds or drops the "beyond the observable universe" region to match the setting. */
     fun refreshBeyond() {
         val on = engine.settings.showBeyond && engine.settings.showGenerated
-        synchronized(engine.camera) { engine.camera.maxFactor = if (on) CosmicWeb.BEYOND_FACTOR * 1.5 else 3.0 }
+        synchronized(engine.camera) { engine.camera.maxFactor = if (on) CosmicWeb.BEYOND_FACTOR else 3.0 }
         if (!on) { outerWeb = null; return }
         if (outerWeb != null) return
         loader.execute {
@@ -533,6 +573,7 @@ class World(private val engine: Engine) {
         val cam = synchronized(engine.camera) { engine.camera.position() }
         updateNearGalaxies(cam, dt)
         updateGenerated(cam, dt)
+        updateRocks(cam, dt)
         systemTimer += dt
         if (systemTimer > 0.25) {
             systemTimer = 0.0
@@ -570,6 +611,7 @@ class World(private val engine: Engine) {
         if (id.startsWith("gal:")) return galaxyIndex[id]
         if (id.startsWith("gs:") && !id.contains("/")) return StarField.fromId(id) { galaxyById(it) }
         if (id.startsWith("hyg:") && !id.contains("/")) return id.removePrefix("hyg:").toIntOrNull()?.let { realStars?.body(it) }
+        if (id.startsWith("rock|")) return RockField.fromId(id) { zonesForKey(it) }
         if (id.contains("/belt")) return Belts.fromId(id, { find(it) }, { systemFor(it) })
         if (id.contains("/")) {
             return when (val parent = find(id.substringBeforeLast("/"))) {

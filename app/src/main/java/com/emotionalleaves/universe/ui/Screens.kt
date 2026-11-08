@@ -327,7 +327,7 @@ fun SettingsScreen(engine: Engine) {
             engine.world.clearSystems()
             engine.world.refreshBeyond()
         }
-        ToggleRow("Beyond the observable universe", "Speculative: let the cosmic web continue past the edge we can see (12 times further)", s.showBeyond) {
+        ToggleRow("Beyond the observable universe", "Speculative: the universe continues past the edge we can see, out to 9,000 times further", s.showBeyond) {
             s.showBeyond = it
             engine.world.refreshBeyond()
         }

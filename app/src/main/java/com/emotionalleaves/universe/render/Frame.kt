@@ -52,6 +52,6 @@ class Frame(
     }
 
     companion object {
-        const val FAR = 1.0e30
+        const val FAR = 1.0e33   // beyond the edge of the speculative outer universe (~4e30 m)
     }
 }

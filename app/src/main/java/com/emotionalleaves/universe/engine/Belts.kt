@@ -18,7 +18,7 @@ import kotlin.math.sqrt
  * Generated asteroid belts and icy outer belts (like our Kuiper belt) around other stars.
  * Each belt is a ring of rocks in the plane of the system's planets; every rock can be tapped.
  */
-class Belt(val star: StarBody, val index: Int, val innerAu: Double, val outerAu: Double, val icy: Boolean, val count: Int, private val frame: Quatd, private val seed: Long) {
+class Belt(val star: StarBody, val index: Int, val innerAu: Double, val outerAu: Double, val icy: Boolean, val count: Int, val frame: Quatd, private val seed: Long) {
     /** Points relative to the star, in AU: x, y, z, r, g, b, absMag-for-display (7 floats each). */
     val data: FloatArray by lazy { build() }
     private val hs = FloatArray(count)

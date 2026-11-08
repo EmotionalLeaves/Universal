@@ -334,6 +334,7 @@ class Engine(val context: Context) {
         is UniverseBody -> null
         is SmallBody -> world.solar.first()
         is BeltBody -> b.belt.star
+        is RockBody -> if (b.zone.key == "sun") world.solar.first() else (world.find(b.zone.key) ?: world.milkyWay)
         is RemnantBody -> world.galaxyContaining(b.pos) ?: world.milkyWay
         is ExoticBody -> if (b.kind == Kind.PULSAR) world.milkyWay else world.universe
         else -> world.milkyWay
@@ -454,7 +455,7 @@ class Engine(val context: Context) {
     /** Zoom presets for the slider labels: height above the ground (or distance) in metres. */
     val zoomPresets = listOf(
         "Ground" to 2.0, "Planet" to 3.0e7, "Solar system" to 1.5e13, "Nearby stars" to 2e17,
-        "Milky Way" to 1.2e21, "Galaxy groups" to 3e23, "Universe" to 1.2e27,
+        "Milky Way" to 1.2e21, "Galaxy groups" to 3e23, "Universe" to 1.2e27, "Beyond" to 2e29,
     )
 
     fun zoomFractionFor(alt: Double): Float {

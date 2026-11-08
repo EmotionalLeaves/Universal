@@ -210,6 +210,7 @@ object Describe {
                     "Stars" to Units.bigCount(10.0.pow(-0.4 * (b.absMag + 21.0)) * 1.0e11).replace(" billion", " bn").replace(" million", " m"),
                 )
                 is SmallBody -> listOf("Width" to String.format(Locale.US, "%,.1f km", b.radius * 2 / 1000), "Type" to b.kind.label)
+                is RockBody -> listOf("Width" to if (b.km >= 1) String.format(Locale.US, "%,.1f km", b.km) else String.format(Locale.US, "%,.0f m", b.km * 1000), "From star" to String.format(Locale.US, "%,.2f AU", b.distanceAu))
                 is BeltBody -> listOf("Width" to String.format(Locale.US, "%,.1f km", b.radius * 2 / 1000), "Belt" to (if (b.belt.icy) "Outer icy" else "Asteroid"))
                 is RemnantBody -> listOf(
                     "Type" to b.kind.label,

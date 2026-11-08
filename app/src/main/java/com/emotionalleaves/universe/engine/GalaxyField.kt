@@ -30,12 +30,13 @@ class FieldGalaxies(
     val data: FloatArray,
     val radiusPc: FloatArray,
     val tiers: ByteArray,
-    val cells: LongArray,
+    /** Cell coordinates (3 ints per galaxy): no packing, so ids stay valid however far out you go. */
+    val cells: IntArray,
     val index: ShortArray,
 ) {
     val count get() = tiers.size
 
-    fun id(i: Int): String = GalaxyField.idFor(tiers[i].toInt(), cells[i], index[i].toInt())
+    fun id(i: Int): String = GalaxyField.idFor(tiers[i].toInt(), cells[i * 3], cells[i * 3 + 1], cells[i * 3 + 2], index[i].toInt())
 
     fun position(i: Int): UPos = anchor + Vec3d(data[i * 7].toDouble(), data[i * 7 + 1].toDouble(), data[i * 7 + 2].toDouble()) * Units.MPC
 }
@@ -81,12 +82,7 @@ object GalaxyField {
         return 0.05 + 4.0 * w * w * w
     }
 
-    fun cellKey(cx: Int, cy: Int, cz: Int) = StarField.cellKey(cx, cy, cz)
-
-    fun idFor(tier: Int, cell: Long, i: Int): String {
-        val (cx, cy, cz) = StarField.unpackCell(cell)
-        return "gal:f${tier}x${cx}y${cy}z${cz}n$i"
-    }
+    fun idFor(tier: Int, cx: Int, cy: Int, cz: Int, i: Int): String = "gal:f${tier}x${cx}y${cy}z${cz}n$i"
 
     private class Raw(val pMpc: Vec3d, val absMag: Double, val seed: Long)
 
@@ -120,7 +116,7 @@ object GalaxyField {
         val data = ArrayList<Float>(8000)
         val rad = ArrayList<Float>(1200)
         val tiers = ArrayList<Byte>(1200)
-        val cells = ArrayList<Long>(1200)
+        val cells = ArrayList<Int>(3600)
         val idx = ArrayList<Short>(1200)
         for (tier in 0..1) {
             val size = CELL[tier]
@@ -140,7 +136,7 @@ object GalaxyField {
                     data.add(rel.x.toFloat()); data.add(rel.y.toFloat()); data.add(rel.z.toFloat())
                     data.add(col[0]); data.add(col[1]); data.add(col[2]); data.add(r.absMag.toFloat())
                     rad.add(radiusKpc(r.absMag, r.seed).toFloat() * 1000f)
-                    tiers.add(tier.toByte()); cells.add(cellKey(cx, cy, cz)); idx.add(i.toShort())
+                    tiers.add(tier.toByte()); cells.add(cx); cells.add(cy); cells.add(cz); idx.add(i.toShort())
                 }
             }
         }
@@ -154,10 +150,10 @@ object GalaxyField {
                 data.add(rel.x.toFloat()); data.add(rel.y.toFloat()); data.add(rel.z.toFloat())
                 data.add(col[0]); data.add(col[1]); data.add(col[2]); data.add(r.absMag.toFloat())
                 rad.add(radiusKpc(r.absMag, r.seed).toFloat() * 1000f)
-                tiers.add(2.toByte()); cells.add(cellKey(ci, 0, 0)); idx.add(i.toShort())
+                tiers.add(2.toByte()); cells.add(ci); cells.add(0); cells.add(0); idx.add(i.toShort())
             }
         }
-        return FieldGalaxies(anchor, data.toFloatArray(), rad.toFloatArray(), tiers.toByteArray(), cells.toLongArray(), idx.toShortArray())
+        return FieldGalaxies(anchor, data.toFloatArray(), rad.toFloatArray(), tiers.toByteArray(), cells.toIntArray(), idx.toShortArray())
     }
 
     private fun typeFor(tier: Int, seed: Long): GalaxyType {
@@ -183,7 +179,7 @@ object GalaxyField {
         val name = String.format(Locale.US, "%s-%04X-%d", prefix, (seed ushr 48).toInt() and 0xFFFF, i)
         val stars = 10.0.pow(-0.4 * (raw.absMag + 21.0)) * 1.0e11
         return GalaxyBody(
-            idFor(tier, cellKey(cx, cy, cz), i), name, UPos.ZERO + raw.pMpc * Units.MPC, frame,
+            idFor(tier, cx, cy, cz, i), name, UPos.ZERO + raw.pMpc * Units.MPC, frame,
             GalaxyModel.forGalaxy(type, radiusKpc, seed), radiusKpc * 1000, raw.pMpc.length() * 3.2616, Source.GENERATED,
             listOf(
                 "Stars" to "about ${Units.bigCount(stars)}",

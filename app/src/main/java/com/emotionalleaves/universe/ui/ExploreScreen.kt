@@ -226,6 +226,7 @@ fun CensusScreen(engine: Engine) {
         "Neutron stars" to "about 10²¹",
         "Black holes (star-sized)" to "about 10²⁰",
         "Star clusters and nebulae" to "billions",
+        "Asteroids, comets and boulders over 1 m" to "about ${com.emotionalleaves.universe.core.Units.sci(2e23 * com.emotionalleaves.universe.engine.RockField.rocksPerStar())}",
         "Beyond what we can see" to "unknown, perhaps infinite (optional in Settings)",
     )
     val near = listOf(
@@ -234,9 +235,27 @@ fun CensusScreen(engine: Engine) {
         "Asteroids in this star system's belts" to n(w.activeSystem?.let { s -> com.emotionalleaves.universe.engine.Belts.forSystem(s).sumOf { it.count } } ?: 0),
         "Galaxies beyond the observable universe" to n(w.outerWeb?.count ?: 0),
         "Generated galaxies" to n(w.field?.count ?: 0),
+        "Rocks and boulders around you" to n(w.rocks?.bodies?.size ?: 0),
         "Distant galaxies (cosmic web)" to n(w.cosmicWeb?.count ?: 0),
     )
+    // Everything the generators can produce, counted the way they make it.
+    val stars = 2e23
+    val perStar = 1 + 2.0 + 2.0 * 0.11 + 0.0055 + 1.0 + com.emotionalleaves.universe.engine.RockField.rocksPerStar()  // star, planets, moons, remnants, rogue planets, rocks
+    val observable = stars * perStar
+    val beyondOn = w.outerWeb != null
+    val f = com.emotionalleaves.universe.engine.CosmicWeb.BEYOND_FACTOR
+    val total = if (beyondOn) observable * f * f * f else observable
     Panel("What's in the universe", { Nav.screen = Screen.NONE }) {
+        Column(Modifier.fillMaxWidth().glass(18.dp, raised = true).padding(16.dp)) {
+            Overline("Things you can visit in this app", color = Accent)
+            Text(com.emotionalleaves.universe.core.Units.sci(total), style = Type.Title.copy(fontSize = 34.sp, color = Accent))
+            Text(
+                (if (beyondOn) "Including the speculative universe beyond the edge (9,000 times further out). " else "In the observable universe. Turn on \"Beyond the observable universe\" in Settings for about ${com.emotionalleaves.universe.core.Units.sci(observable * f * f * f)}. ") +
+                    "Counted: every star (2 × 10²³), its planets and moons, black holes, neutron stars, rogue planets, and every asteroid, comet and boulder down to 1 m in its belts and comet cloud (about ${com.emotionalleaves.universe.core.Units.sci(com.emotionalleaves.universe.engine.RockField.rocksPerStar())} per star). " +
+                    "Each one is built the moment you get close, and is the same every time.",
+                style = Type.Caption, modifier = Modifier.padding(top = 6.dp),
+            )
+        }
         Text(
             "No phone can store the whole universe, so the app keeps every real catalogue it can fit and builds " +
                 "everything else the moment you get close. Generated objects follow real statistics and come out the same every time, " +

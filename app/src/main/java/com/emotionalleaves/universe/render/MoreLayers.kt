@@ -479,3 +479,94 @@ class BeltLayer : Layer {
         frame.project(frame.rel(sel.position(frame.jd)))?.let { out.add(Pickable(sel, it.first, it.second, 6f, 6f, true, 0xFFE8D8C0.toInt())) }
     }
 }
+
+/** Generated rocks, boulders and comet nuclei near the camera (belts and clouds, down to 1 m). */
+class RockLayer : Layer {
+    private var src: com.emotionalleaves.universe.engine.RockField.Generated? = null
+    private var batch: PointBatch? = null
+    var daylight = 0f
+    private val pcAu = (5 * log10(Units.PC / Units.AU) + 5).toFloat()
+
+    override fun init(rc: RenderContext) { src = null; batch = null }
+
+    override fun update(frame: Frame, rc: RenderContext) {
+        val g = rc.engine.world.rocks
+        if (g === src) return
+        src = g
+        batch?.release(); batch = null
+        if (g == null || g.bodies.isEmpty()) return
+        val d = FloatArray(g.bodies.size * 7)
+        for ((i, b) in g.bodies.withIndex()) {
+            val rel = (b.pos - g.anchor) / Units.AU
+            d[i * 7] = rel.x.toFloat(); d[i * 7 + 1] = rel.y.toFloat(); d[i * 7 + 2] = rel.z.toFloat()
+            if (b.zone.icy) { d[i * 7 + 3] = 0.78f; d[i * 7 + 4] = 0.84f; d[i * 7 + 5] = 1f } else { d[i * 7 + 3] = 0.86f; d[i * 7 + 4] = 0.78f; d[i * 7 + 5] = 0.66f }
+            val h = 5 * log10(1329.0 / (b.km * 0.316))
+            d[i * 7 + 6] = (h + 5 * log10(max(b.distanceAu, 0.05))).toFloat() + pcAu
+        }
+        batch = PointBatch.upload(g.anchor, Units.AU, d)
+    }
+
+    override fun drawOpaque(frame: Frame, rc: RenderContext) {
+        val g = src ?: return
+        var drawn = 0
+        rc.drawer.beginOpaque()
+        for (b in g.bodies) {
+            val rel = frame.rel(b.pos)
+            val px = frame.pixelSize(b.radius, rel.length())
+            if (px < 0.7) continue
+            val star = frame.rel(b.zone.center)
+            val m = Material(if (b.zone.icy) Material.ICE else Material.ROCKY,
+                if (b.zone.icy) floatArrayOf(0.62f, 0.64f, 0.7f) else floatArrayOf(0.48f, 0.44f, 0.4f),
+                floatArrayOf(0.3f, 0.28f, 0.27f), floatArrayOf(0.6f, 0.57f, 0.52f), seed = (b.id.hashCode() % 997) / 9f, ambient = 0.04f)
+            rc.drawer.sphere(frame, rel, b.radius, Quatd.IDENTITY, m, star - rel, if (px < 40) rc.programs.lowSphereMesh else rc.programs.sphereMesh)
+            if (++drawn > 60) break
+        }
+        rc.drawer.end()
+    }
+
+    override fun drawTransparent(frame: Frame, rc: RenderContext) {
+        val b = batch ?: return
+        rc.drawer.beginAdditive()
+        rc.drawer.points(frame, b, 7.2f + rc.engine.settings.starBrightness - daylight * 9f, 2.0f, 0.85f * (1f - daylight), minSize = 1.1f, maxSize = 4f)
+        rc.drawer.end()
+    }
+
+    override fun pickAt(frame: Frame, rc: RenderContext, x: Float, y: Float, reach: Float): Body? {
+        val g = src ?: return null
+        var best: Body? = null
+        var bestScore = Double.MAX_VALUE
+        val lim = 7.7 + rc.engine.settings.starBrightness
+        for (b in g.bodies) {
+            val rel = frame.rel(b.pos)
+            val dAu = rel.length() / Units.AU
+            val m = 5 * log10(1329.0 / (b.km * 0.316)) + 5 * log10(max(b.distanceAu, 0.05)) + 5 * log10(max(dAu, 1e-12))
+            val px = frame.pixelSize(b.radius, rel.length())
+            if (m > lim && px < 2) continue
+            val s = frame.project(rel) ?: continue
+            val dpx = hypot((s.first - x).toDouble(), (s.second - y).toDouble()) - px
+            if (dpx > reach) continue
+            val score = dpx + m
+            if (score < bestScore) { bestScore = score; best = b }
+        }
+        return best
+    }
+
+    override fun collect(frame: Frame, rc: RenderContext, out: MutableList<Pickable>) {
+        val g = src ?: return
+        val sel = rc.engine.selected
+        if (sel is com.emotionalleaves.universe.engine.RockBody) {
+            frame.project(frame.rel(sel.pos))?.let { out.add(Pickable(sel, it.first, it.second, 6f, 6f, true, 0xFFE8D8C0.toInt())) }
+        }
+        // Name the few rocks big enough on screen to see as more than a dot.
+        var n = 0
+        for (b in g.bodies) {
+            if (b == sel) continue
+            val rel = frame.rel(b.pos)
+            val px = frame.pixelSize(b.radius, rel.length()).toFloat()
+            if (px < 3f) continue
+            val s = frame.project(rel) ?: continue
+            out.add(Pickable(b, s.first, s.second, px, 3f, n < 4, 0xFFD8CCB8.toInt()))
+            if (++n >= 20) break
+        }
+    }
+}
