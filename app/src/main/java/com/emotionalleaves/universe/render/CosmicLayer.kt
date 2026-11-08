@@ -68,9 +68,11 @@ class CosmicLayer : Layer {
         val tex = rc.textures.get("cmb/planck.jpg")
         val rel = frame.rel(UPos.ZERO)
         val inside = rel.length() < Units.UNIVERSE_RADIUS
-        // From outside (beyond the edge) the shell is huge and thin on screen and breaks up into
-        // triangles; the cosmic web shows where the observable universe is instead.
-        if (!inside) return
+        // Only a faint backdrop while you are well inside the bubble: near its edge (or flying
+        // freely out there) the map filled the whole screen with orange and blue blotches.
+        if (!inside || rc.engine.freeFlight) return
+        val centred = 1.0 - smoothstep(0.35 * Units.UNIVERSE_RADIUS, 0.6 * Units.UNIVERSE_RADIUS, rel.length())
+        if (centred < 0.01) return
         GLES30.glEnable(GLES30.GL_DEPTH_TEST)
         GLES30.glDepthMask(false)
         GLES30.glEnable(GLES30.GL_BLEND)
@@ -79,7 +81,7 @@ class CosmicLayer : Layer {
         GLES30.glCullFace(if (inside) GLES30.GL_FRONT else GLES30.GL_BACK)
         val m = Material(Material.SKY, floatArrayOf(0.95f, 0.6f, 0.25f), floatArrayOf(0.2f, 0.4f, 0.9f), texture = tex, ambient = 1f)
         // From outside (only possible with "beyond" on) it is a see-through bubble, so the inner universe still shows.
-        rc.drawer.sphere(frame, rel, Units.UNIVERSE_RADIUS, Quatd.IDENTITY, m, Vec3d.Z, opacity = (vis * if (inside) 0.85 else 0.3).toFloat())
+        rc.drawer.sphere(frame, rel, Units.UNIVERSE_RADIUS, Quatd.IDENTITY, m, Vec3d.Z, opacity = (vis * centred * 0.3).toFloat())
         GLES30.glDisable(GLES30.GL_CULL_FACE)
         GLES30.glDisable(GLES30.GL_BLEND)
         GLES30.glDepthMask(true)

@@ -98,7 +98,9 @@ class UniverseRenderer(private val context: Context, private val engine: Engine)
         synchronized(cam) {
             camPos = cam.position()
             orientation = cam.orientation
-            focusDist = cam.distance
+            // Free flight has no target to zoom on: expose for the space around you instead (it used
+            // the leftover orbit distance, so far from home everything was too dim to see).
+            focusDist = if (cam.freeFlight) kotlin.math.max(cam.distance, engine.world.nearestDist * 12) else cam.distance
             target = cam.target
             flyingTo = if (cam.isFlying) cam.zoomTarget() else null
         }

@@ -398,3 +398,10 @@ How it was tested: an Android emulator on GitHub (ui-test.yml + tools/ui_test.sh
 - [x] Search: matches ignore spaces and punctuation ("ton618", "TON-618"), tolerate typos ("betelguese", "andromida"), know nicknames (Pillars of Creation, Sag A*, Whirlpool Galaxy) and Messier/NGC/IC numbers of galaxies (M31, NGC 224). Empty search shows recent searches and popular picks; a clearer "nothing found" message.
 - [x] Sizes compared: a ladder from a person to the observable universe (Everest, Earth, the Sun, UY Scuti, the Solar System, TON 618's horizon, the Milky Way, Laniakea…) with the selected object slotted in and compared ("≈ 18 × the Solar System", "1,600 Suns wide"). From the card's ruler button, the menu, or tapping the scale bar; the scale bar also says what it is about as long as ("≈ 3 × Earth").
 - [x] Galactic-centre nebula glows limited to the nearest 40 (they piled into a pink fog).
+
+## Pass 21: fixes from the build-65 screen recording
+- [x] Zooming out from the Milky Way was black between ~50,000 and 100,000 light years: the Milky Way's "seen from the Sun" dust was applied whenever the camera was within 1.3 radii of its centre. Now only near the Sun (within 3 kpc); elsewhere it is a normal spiral with a dust lane.
+- [x] 1–4 billion light years out the screen went solid white: exposure now holds back where catalogue, near web and zoom-level web pile up (dip centred on ~500 Mpc).
+- [x] The CMB map filled the screen with orange/blue blotches when zoomed far out or flying freely near the edge: now only a faint (30%) backdrop while you are well inside the bubble, never in free flight.
+- [x] Free flight far from home was black: it exposed for the leftover orbit distance (20,000 km). Now exposes for the space around you (12× the distance to the nearest thing).
+- [x] Distant galaxies' sprites capped well below white (with bloom they burned into white blobs with dark streaks).

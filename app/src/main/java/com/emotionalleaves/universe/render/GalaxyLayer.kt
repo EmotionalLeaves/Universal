@@ -95,7 +95,8 @@ class GalaxyLayer : Layer {
         }
         // The Milky Way's dust is laid out as seen from the Sun; seen from outside it is rebuilt without it.
         world.galaxies.firstOrNull { it.isMilkyWay }?.let { mw ->
-            insideMw = (frame.camPos - mw.center).length() < mw.radius * 1.3
+            // The dust seen "through the disk" only makes sense from near the Sun.
+            insideMw = (frame.camPos - UPos.ZERO).length() < 3000 * Units.PC
             val gl = glows[mw.id]
             if (gl != null && gl.inside != insideMw && !building.contains(mw.id)) { gl.batch.release(); glows.remove(mw.id) }
         }
