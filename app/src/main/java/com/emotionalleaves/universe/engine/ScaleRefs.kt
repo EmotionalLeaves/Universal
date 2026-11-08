@@ -39,9 +39,9 @@ object ScaleRefs {
     ).sortedBy { it.metres }
 
     /** "≈ 3 × Earth" style comparison for a width, using the closest familiar thing. */
-    fun like(metres: Double): String {
+    fun like(metres: Double, excludeId: String? = null): String {
         if (metres <= 0) return ""
-        val r = ladder.minByOrNull { kotlin.math.abs(kotlin.math.ln(metres / it.metres)) } ?: return ""
+        val r = ladder.filter { excludeId == null || it.bodyId != excludeId }.minByOrNull { kotlin.math.abs(kotlin.math.ln(metres / it.metres)) } ?: return ""
         val k = metres / r.metres
         val name = r.name.replaceFirst("The ", "the ").replaceFirst("A person", "a person")
         return when {

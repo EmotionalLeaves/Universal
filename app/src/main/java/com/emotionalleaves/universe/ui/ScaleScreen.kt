@@ -59,7 +59,7 @@ fun ScaleScreen(engine: Engine) {
                 val earth = 12_742_000.0
                 val sun = 1_392_700_000.0
                 val lines = ArrayList<String>()
-                lines.add(ScaleRefs.like(m).removePrefix("≈ ").replaceFirstChar { it.uppercase() })
+                lines.add(ScaleRefs.like(m, focus.third).removePrefix("≈ ").replaceFirstChar { it.uppercase() })
                 if (m > earth * 0.02) lines.add(if (m >= earth) "${ratio(m / earth)} Earths wide" else "1/${ratio(earth / m)} of Earth's width")
                 if (m > sun * 0.5) lines.add("${ratio(m / sun)} Suns wide")
                 if (m > 9e12) lines.add("Light takes ${Units.lightTime(m)} to cross it")
@@ -71,7 +71,7 @@ fun ScaleScreen(engine: Engine) {
             Spacer(Modifier.height(12.dp))
         }
         val rows = ArrayList<Pair<ScaleRefs.Ref, Boolean>>()
-        for (r in ScaleRefs.ladder) rows.add(r to false)
+        for (r in ScaleRefs.ladder) if (focus == null || r.bodyId != focus.third) rows.add(r to false)
         if (focus != null) rows.add(ScaleRefs.Ref(focus.first, focus.second, "you are here", focus.third) to true)
         rows.sortBy { it.first.metres }
         val lo = log10(1.0)
