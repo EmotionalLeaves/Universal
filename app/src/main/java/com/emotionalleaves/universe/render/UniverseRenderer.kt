@@ -199,17 +199,27 @@ class UniverseRenderer(private val context: Context, private val engine: Engine)
      * anything farther away whose point falls on its disc (Rosette Nebula was labelled on Mars).
      */
     private fun hideBehindWorlds(frame: Frame, picks: ArrayList<Pickable>) {
-        val walls = picks.filter { it.pixelRadius >= 8f && it.body.kind in solidKinds }.distinctBy { it.body.id }
+        // Worlds big enough on screen to hide things, plus the one you are orbiting or standing on.
+        val walls = LinkedHashMap<String, Body>()
+        for (p in picks) if (p.pixelRadius >= 8f && p.body.kind in solidKinds) walls[p.body.id] = p.body
+        engine.camera.target?.let { if (it.kind in solidKinds) walls[it.id] = it }
         if (walls.isEmpty()) return
-        val wallDist = walls.map { (it.body.position(frame.jd) - frame.camPos).length() }
-        val dist = HashMap<String, Double>()
+        val centres = walls.values.map { it to (it.position(frame.jd) - frame.camPos) }
+        val hidden = HashMap<String, Boolean>()
         picks.removeAll { p ->
-            walls.indices.any { i ->
-                val w = walls[i]
-                if (w.body.id == p.body.id) return@any false
-                if (kotlin.math.hypot((p.x - w.x).toDouble(), (p.y - w.y).toDouble()) > w.pixelRadius * 0.97) return@any false
-                val d = dist.getOrPut(p.body.id) { (p.body.position(frame.jd) - frame.camPos).length() }
-                d > wallDist[i]
+            hidden.getOrPut(p.body.id) {
+                val rel = p.body.position(frame.jd) - frame.camPos
+                val dist = rel.length()
+                if (dist <= 0) return@getOrPut false
+                val dir = rel / dist
+                centres.any { (w, c) ->
+                    if (w.id == p.body.id) return@any false
+                    // Does the line of sight pass through the world before reaching the object?
+                    val t = c.dot(dir)
+                    if (t <= 0 || t >= dist) return@any false
+                    val miss2 = c.lengthSq() - t * t
+                    miss2 < w.radius * w.radius * 0.998
+                }
             }
         }
     }

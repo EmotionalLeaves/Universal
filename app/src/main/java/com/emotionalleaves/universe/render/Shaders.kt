@@ -507,6 +507,15 @@ void main() {
         float slope = 1.0 - clamp(dot(n, up), 0.0, 1.0);
         col *= 0.82 + 0.36 * detail;
         col = mix(col, col * vec3(0.75, 0.72, 0.7), smoothstep(0.25, 0.6, slope));
+        // Ground detail the photo maps cannot have (they are km per pixel): patches of soil,
+        // rock and vegetation at ~2 km and ~150 m, faded with distance so it never shimmers.
+        float near = safeLength(vWorld);
+        float big = fbm(d * 3000.0 + uSeed);
+        float small = vnoise(d * 40000.0 + uSeed) * 0.6 + vnoise(d * 160000.0) * 0.4;
+        float k1 = 1.0 - smoothstep(20000.0, 120000.0, near);
+        float k2 = 1.0 - smoothstep(1500.0, 9000.0, near);
+        col *= mix(1.0, 0.7 + 0.6 * big, k1) * mix(1.0, 0.8 + 0.4 * small, k2);
+        col = mix(col, col.grb * 0.9 + 0.05, 0.12 * k1 * smoothstep(0.55, 0.8, big));
     }
     vec3 l = safeNormalize(uLightDir);
     float diff = max(dot(n, l), 0.0);
