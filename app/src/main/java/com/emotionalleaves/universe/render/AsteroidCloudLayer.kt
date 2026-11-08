@@ -138,7 +138,17 @@ class AsteroidCloudLayer : Layer {
         val db = db ?: return
         val vis = visibility(frame)
         if (vis <= 0 || vao == 0 || uploadedFloats < 8) return
-        val n = minOf(drawCount(rc, db), uploadedFloats / 8)
+        val all = minOf(drawCount(rc, db), uploadedFloats / 8)
+        // Zoomed out, every asteroid adds a little light so the belt reads as a haze. Each dot needs at
+        // least ~1/255 of light to register, so when the belt is small on screen only the brightest
+        // part of the list is drawn (it is sorted brightest first) to keep the haze from burning white.
+        val sunDist = (frame.camPos - UPos.ZERO).length()
+        val beltPx = if (sunDist < 4 * Units.AU) 1e5 else frame.pixelSize(3.0 * Units.AU, sunDist)
+        val area = minOf(Math.PI * beltPx * beltPx * 0.6, frame.width.toDouble() * frame.height)
+        val target = 0.3 * zoomOut
+        val minAlpha = 0.006
+        val n = if (zoomOut <= 0f) all else minOf(all.toDouble(), maxOf(60_000.0, target * area / minAlpha)).toInt()
+        val floor = if (zoomOut <= 0f) 0f else (target * area / n).coerceIn(minAlpha, 0.1).toFloat()
         val p = rc.programs.kepler
         rc.drawer.beginAdditive()
         p.use()
@@ -152,8 +162,6 @@ class AsteroidCloudLayer : Layer {
         p.set1f("uMinSize", 1.1f)
         p.set1f("uMaxSize", 5f)
         p.set1f("uAlpha", (0.9 * vis).toFloat())
-        // Zoomed out, every asteroid adds a little light: the belt reads as a haze of 1.5 million.
-        val floor = 0.08f * zoomOut * (1_000_000f / n.coerceAtLeast(1)).coerceIn(0.25f, 1.5f)
         p.set1f("uFloor", floor)
         p.set1f("uFadeNearAu", 0.002f)
         GLES30.glBindVertexArray(vao)

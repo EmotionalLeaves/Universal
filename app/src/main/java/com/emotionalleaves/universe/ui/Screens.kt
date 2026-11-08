@@ -257,6 +257,9 @@ object SearchUi {
 fun SearchScreen(engine: Engine) {
     SearchUi.load(engine)
     androidx.compose.runtime.LaunchedEffect(Unit) {
+        // A fresh search each time (recent searches are listed below the field).
+        SearchUi.query = ""
+        SearchUi.results = emptyList()
         engine.prepareSearch {
             SearchUi.ready = true
             engine.searchAsync(SearchUi.query) { SearchUi.results = it }
