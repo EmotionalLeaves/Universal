@@ -248,6 +248,7 @@ class World(private val engine: Engine) {
                 val key = "v${CosmicWeb.VERSION}_${inner.toLong()}"
                 cosmicWeb = CosmicWebData(inner, cachedFloats("web_$key") { CosmicWeb.generate(inner).data })
                 haze = try { cachedFloats("haze_$key") { CosmicHaze.generate(inner) } } catch (e: Throwable) { ErrorLog.record("haze", e); null }
+                loaded("cosmic web")
             }
         }
     }
@@ -403,8 +404,10 @@ class World(private val engine: Engine) {
     private val loader = java.util.concurrent.Executors.newSingleThreadExecutor()
     /** Startup loads run side by side (stars, galaxies, small bodies, cosmic web) instead of one after another. */
     private val loader2 = java.util.concurrent.Executors.newSingleThreadExecutor()
-    private val loader3 = java.util.concurrent.Executors.newSingleThreadExecutor()
-    private val webExec = java.util.concurrent.Executors.newSingleThreadExecutor()
+    /** What you see first (stars, galaxies) gets the CPU first on phones with few cores. */
+    private val background = java.util.concurrent.ThreadFactory { r -> Thread(r).apply { priority = Thread.MIN_PRIORITY + 1; isDaemon = true } }
+    private val loader3 = java.util.concurrent.Executors.newSingleThreadExecutor(background)
+    private val webExec = java.util.concurrent.Executors.newSingleThreadExecutor(background)
     private val fieldExec = java.util.concurrent.Executors.newSingleThreadExecutor()
 
     /**
@@ -454,6 +457,12 @@ class World(private val engine: Engine) {
     }
     private var systemTimer = 0.0
 
+    private val startNanos = System.nanoTime()
+    /** Startup timing in the log (UniverseDiag), so slow loads on a phone can be found. */
+    private fun loaded(what: String) {
+        try { android.util.Log.i("UniverseDiag", "loaded $what at %.1f s".format((System.nanoTime() - startNanos) / 1e9)) } catch (_: Throwable) {}
+    }
+
     fun start() {
         extraStarNear = { cam -> nearestGenerated(cam, 0.1) }
         for (b in solar) byId[b.id] = b
@@ -468,6 +477,7 @@ class World(private val engine: Engine) {
                 ErrorLog.record("loading stars", e)
             }
             if (realStars == null) starsFailed = true
+            loaded("stars")
             try {
                 loadExoplanets()
                 searchStale = true
@@ -482,6 +492,7 @@ class World(private val engine: Engine) {
             try {
                 registerGalaxies(GalaxyCatalog.load(engine.context))
                 searchStale = true
+                loaded("galaxies")
             } catch (e: Throwable) {
                 ErrorLog.record("loading galaxies", e)
             }
@@ -502,6 +513,7 @@ class World(private val engine: Engine) {
                 fieldCell = null
                 smallBodies = SmallBodies.load(engine.context)
                 searchStale = true
+                loaded("asteroids, quasars, clusters")
             } catch (e: Throwable) {
                 ErrorLog.record("loading asteroids, quasars and clusters", e)
             }

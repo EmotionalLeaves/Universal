@@ -27,12 +27,19 @@ class GalaxyLayer : Layer {
 
     override fun init(rc: RenderContext) {
         glows.clear()
+        ready.clear()
+        building.clear()
         genBatch = null
         genSource = null
     }
 
-    /** Builds the glow particle cloud for a galaxy (world orientation, pc relative to its centre). */
-    private fun buildGlow(g: GalaxyBody): Glow {
+    /** Particle clouds are computed on a worker (tens of thousands of samples) and uploaded here. */
+    private val worker = java.util.concurrent.Executors.newSingleThreadExecutor()
+    private val ready = java.util.concurrent.ConcurrentLinkedQueue<Pair<GalaxyBody, FloatArray>>()
+    private val building = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
+
+    /** Builds the glow particle data for a galaxy (world orientation, pc relative to its centre). */
+    private fun glowData(g: GalaxyBody, particles: Int): FloatArray {
         val n = if (g.isMilkyWay) particles else particles / 3
         val rng = Rng(g.seed * 31 + 5)
         val data = FloatArray(n * 7)
@@ -48,18 +55,24 @@ class GalaxyLayer : Layer {
         }
         val mag = (g.absMag + 2.5 * log10(n.toDouble())).toFloat()
         for (i in 0 until n) data[i * 7 + 6] = mag
-        return Glow(g, PointBatch.upload(g.center, Units.PC, data), mag)
+        return data
     }
 
     override fun update(frame: Frame, rc: RenderContext) {
         val world = rc.engine.world
         // Keep glow clouds for galaxies within ~40 radii of the camera (at most a few).
         val near = world.nearGalaxies.map { it to 0.0 }
-        var built = 0
+        while (true) {
+            val (g, data) = ready.poll() ?: break
+            building.remove(g.id)
+            if (!glows.containsKey(g.id)) glows[g.id] = Glow(g, PointBatch.upload(g.center, Units.PC, data), data[6])
+        }
         for ((g, _) in near) {
-            if (!glows.containsKey(g.id) && built == 0) {
-                glows[g.id] = buildGlow(g)
-                built++
+            if (!glows.containsKey(g.id) && building.add(g.id)) {
+                val n = particles
+                worker.execute {
+                    try { ready.add(g to glowData(g, n)) } catch (_: Throwable) { building.remove(g.id) }
+                }
             }
         }
         val keep = near.map { it.first.id }.toSet()
@@ -85,7 +98,7 @@ class GalaxyLayer : Layer {
             if (fade <= 0.01f) continue
             // Looking through the disk from inside piles up many blobs; from outside far fewer
             // overlap, so boost the gain with distance to keep the galaxy visible as a whole.
-            val boost = ((dist / (0.5 * g.radius)) * (dist / (0.5 * g.radius))).coerceIn(1.0, 40.0)
+            val boost = ((dist / (0.5 * g.radius)) * (dist / (0.5 * g.radius))).coerceIn(1.0, 12.0)
             rc.drawer.points(
                 frame, glow.batch, magLimit, 3f, fade * day, fadeNear = 700 * Units.PC,
                 minSize = 1.5f, maxSize = maxBlob, worldSize = g.radius * 0.012, glowGain = (2.2 * boost).toFloat(),

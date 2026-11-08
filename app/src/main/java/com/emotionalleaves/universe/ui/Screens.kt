@@ -231,7 +231,7 @@ fun SearchScreen(engine: Engine) {
             ),
         )
         Spacer(Modifier.height(8.dp))
-        if (!SearchUi.ready) Text("Building the index…", color = TextDim, fontSize = 13.sp)
+        if (!SearchUi.ready && SearchUi.results.isEmpty()) Text("Building the index…", color = TextDim, fontSize = 13.sp)
         if (SearchUi.query.isBlank()) {
             Text("Don't know what to look for?", style = Type.BodyDim, modifier = Modifier.padding(top = 8.dp))
             Button("Browse famous places", Modifier.padding(top = 8.dp), glyph = G.COMPASS, primary = true) { Nav.screen = Screen.EXPLORE }

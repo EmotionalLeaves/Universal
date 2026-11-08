@@ -287,8 +287,8 @@ object WebLod {
 
     const val RADIUS = 3
     /** Galaxies per cubic Mpc brighter than about the Milky Way's magnitude. */
-    private const val DENSITY = 0.012
-    private const val ACCEPT = 0.12
+    private const val DENSITY = 0.04
+    private const val ACCEPT = 0.15
     private val noise = Noise3(CosmicWeb.SEED)
 
     /** Cell edge 2^level Mpc; level 3 = 8 Mpc. */
@@ -332,12 +332,12 @@ object WebLod {
                 val w = noise.ridged(p.x / 160.0, p.y / 160.0, p.z / 160.0, 4)
                 // Mostly along filaments and in the knots where they meet; voids stay nearly empty.
                 val f = kotlin.math.max(0.0, w - 0.48) / 0.32
-                if (rng.nextDouble() > 0.012 + f * f) continue
+                if (rng.nextDouble() > 0.05 + f * f) continue
                 val warm = rng.nextDouble().toFloat()
                 val rel = p - anchorMpc
                 out.add(rel.x.toFloat()); out.add(rel.y.toFloat()); out.add(rel.z.toFloat())
                 out.add(0.85f + 0.15f * warm); out.add(0.85f); out.add(1.0f - 0.2f * warm)
-                out.add((-20.3 + rng.gaussian() * 0.9 - 2.5 * log10(represents) - 1.5 * w).toFloat())
+                out.add((-19.2 + rng.gaussian() * 1.2 - 2.5 * log10(represents) - 1.5 * w).toFloat())
             }
         }
         return Result(level, ccx, ccy, ccz, UPos.ZERO + anchorMpc * Units.MPC, out.toFloatArray())

@@ -25,7 +25,7 @@ class WebLodLayer : Layer {
             batch = if (r.data.isNotEmpty()) PointBatch.upload(r.anchor, Units.MPC, r.data) else null
             pending = null
         }
-        if (frame.focusDistance < 4 * Units.MPC || frame.focusDistance > 4 * Units.GLY * 3.26) return
+        if (frame.focusDistance < 0.25 * Units.MPC || frame.focusDistance > 4 * Units.GLY * 3.26) return
         val focus = frame.camPos + frame.orientation.rotate(Vec3d(0.0, 0.0, -1.0)) * frame.focusDistance
         val level = WebLod.levelFor(frame.focusDistance)
         val cell = WebLod.cellOf(focus, level)
@@ -43,7 +43,7 @@ class WebLodLayer : Layer {
         val b = batch ?: return
         val day = 1f - daylight
         // Hand over to field galaxies close up and to the whole-universe web far out.
-        val vis = (smoothstep(4 * Units.MPC, 12 * Units.MPC, frame.focusDistance) *
+        val vis = (smoothstep(0.25 * Units.MPC, 0.9 * Units.MPC, frame.focusDistance) *
             (1.0 - smoothstep(1.5 * Units.GLY * 3.26, 4 * Units.GLY * 3.26, frame.focusDistance)) * day).toFloat()
         if (vis < 0.01f) return
         rc.drawer.beginAdditive()
