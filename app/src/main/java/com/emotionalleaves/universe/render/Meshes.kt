@@ -27,7 +27,7 @@ class Mesh(val vao: Int, val vbo: Int, val ibo: Int, val indexCount: Int, val mo
             val ibo = Gl.genBuffer()
             GLES30.glBindVertexArray(vao)
             GLES30.glBindBuffer(GLES30.GL_ARRAY_BUFFER, vbo)
-            GLES30.glBufferData(GLES30.GL_ARRAY_BUFFER, vertices.size * 4, Gl.floatBuffer(vertices), GLES30.GL_STATIC_DRAW)
+            Gl.bufferData(GLES30.GL_ARRAY_BUFFER, vertices.size * 4, Gl.floatBuffer(vertices), GLES30.GL_STATIC_DRAW)
             val stride = layout.sum() * 4
             var offset = 0
             for ((loc, n) in layout.withIndex()) {
@@ -36,7 +36,7 @@ class Mesh(val vao: Int, val vbo: Int, val ibo: Int, val indexCount: Int, val mo
                 offset += n * 4
             }
             GLES30.glBindBuffer(GLES30.GL_ELEMENT_ARRAY_BUFFER, ibo)
-            GLES30.glBufferData(GLES30.GL_ELEMENT_ARRAY_BUFFER, indices.size * 4, Gl.intBuffer(indices), GLES30.GL_STATIC_DRAW)
+            Gl.bufferData(GLES30.GL_ELEMENT_ARRAY_BUFFER, indices.size * 4, Gl.intBuffer(indices), GLES30.GL_STATIC_DRAW)
             GLES30.glBindVertexArray(0)
             return Mesh(vao, vbo, ibo, indices.size, mode)
         }
@@ -149,7 +149,7 @@ class PointBatch(
             val vbo = Gl.genBuffer()
             GLES30.glBindVertexArray(vao)
             GLES30.glBindBuffer(GLES30.GL_ARRAY_BUFFER, vbo)
-            GLES30.glBufferData(GLES30.GL_ARRAY_BUFFER, data.size * 4, Gl.floatBuffer(data), GLES30.GL_STATIC_DRAW)
+            Gl.bufferData(GLES30.GL_ARRAY_BUFFER, data.size * 4, Gl.floatBuffer(data), GLES30.GL_STATIC_DRAW)
             val stride = 7 * 4
             GLES30.glEnableVertexAttribArray(0)
             GLES30.glVertexAttribPointer(0, 3, GLES30.GL_FLOAT, false, stride, 0)
@@ -182,7 +182,7 @@ class LineMesh(val count: Int, private val vao: Int, private val vbo: Int, val m
             val vbo = Gl.genBuffer()
             GLES30.glBindVertexArray(vao)
             GLES30.glBindBuffer(GLES30.GL_ARRAY_BUFFER, vbo)
-            GLES30.glBufferData(GLES30.GL_ARRAY_BUFFER, points.size * 4, Gl.floatBuffer(points), GLES30.GL_STATIC_DRAW)
+            Gl.bufferData(GLES30.GL_ARRAY_BUFFER, points.size * 4, Gl.floatBuffer(points), GLES30.GL_STATIC_DRAW)
             GLES30.glEnableVertexAttribArray(0)
             GLES30.glVertexAttribPointer(0, 3, GLES30.GL_FLOAT, false, 12, 0)
             GLES30.glBindVertexArray(0)

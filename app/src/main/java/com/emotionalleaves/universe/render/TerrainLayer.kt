@@ -53,7 +53,7 @@ class TerrainLayer : Layer {
         val idx = TileBuilder.indices()
         ibo = Gl.genBuffer()
         GLES30.glBindBuffer(GLES30.GL_ELEMENT_ARRAY_BUFFER, ibo)
-        GLES30.glBufferData(GLES30.GL_ELEMENT_ARRAY_BUFFER, idx.size * 4, Gl.intBuffer(idx), GLES30.GL_STATIC_DRAW)
+        Gl.bufferData(GLES30.GL_ELEMENT_ARRAY_BUFFER, idx.size * 4, Gl.intBuffer(idx), GLES30.GL_STATIC_DRAW)
         GLES30.glBindBuffer(GLES30.GL_ELEMENT_ARRAY_BUFFER, 0)
         indexCount = idx.size
         bodyId = null
@@ -136,7 +136,7 @@ class TerrainLayer : Layer {
         val vbo = Gl.genBuffer()
         GLES30.glBindVertexArray(vao)
         GLES30.glBindBuffer(GLES30.GL_ARRAY_BUFFER, vbo)
-        GLES30.glBufferData(GLES30.GL_ARRAY_BUFFER, t.vertices.size * 4, Gl.floatBuffer(t.vertices), GLES30.GL_STATIC_DRAW)
+        Gl.bufferData(GLES30.GL_ARRAY_BUFFER, t.vertices.size * 4, Gl.floatBuffer(t.vertices), GLES30.GL_STATIC_DRAW)
         val stride = 8 * 4
         GLES30.glEnableVertexAttribArray(0)
         GLES30.glVertexAttribPointer(0, 3, GLES30.GL_FLOAT, false, stride, 0)

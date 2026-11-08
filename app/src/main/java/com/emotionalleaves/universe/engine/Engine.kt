@@ -503,9 +503,11 @@ class Engine(val context: Context) {
 
     /** -1 back, 0 coast, +1 forward (held buttons). */
     @Volatile var thrust = 0
-    /** Speed multiplier steps (×1, ×100, ×10,000, ×1,000,000). */
+    /** Speed multiplier steps (×1, ×10, ×100, ×1000). Bigger jumps flung you out of the universe in a second. */
     @Volatile var warp = 0
-    val warpFactors = doubleArrayOf(1.0, 100.0, 1e4, 1e6)
+    val warpFactors = doubleArrayOf(1.0, 10.0, 100.0, 1000.0)
+    /** Seconds Forward/Back has been held: holding longer speeds you up gently (up to ×10). */
+    private var held = 0.0
     private var cruise = 0.0
 
     val freeFlight: Boolean get() = camera.freeFlight
@@ -516,7 +518,9 @@ class Engine(val context: Context) {
     }
 
     /** Current free-flight speed (m/s): about the distance to the nearest thing per 1.5 s, times warp. */
-    fun flightSpeed(): Double = world.nearestDist / 1.5 * warpFactors[warp]
+    fun flightSpeed(): Double = world.nearestDist / 1.5 * warpFactors[warp] * holdBoost()
+
+    private fun holdBoost(): Double = (1.0 + 0.6 * held * held).coerceAtMost(10.0)
 
     /** Pinch in free flight: a step forward or back scaled to what is nearby. */
     fun freeZoom(factor: Float) {
@@ -527,6 +531,7 @@ class Engine(val context: Context) {
 
     private fun freeFlightStep(dt: Double) {
         if (!camera.freeFlight) return
+        held = if (thrust != 0) held + dt else 0.0
         val targetV = thrust * flightSpeed()
         // Ease in and out so starting and stopping feel smooth.
         cruise += (targetV - cruise) * kotlin.math.min(1.0, dt * 4.0)
@@ -556,7 +561,7 @@ class Engine(val context: Context) {
     /** Zoom presets for the slider labels: height above the ground (or distance) in metres. */
     val zoomPresets = listOf(
         "Ground" to 2.0, "Planet" to 3.0e7, "Solar system" to 1.5e13, "Nearby stars" to 2e17,
-        "Milky Way" to 1.2e21, "Galaxy groups" to 3e23, "Universe" to 1.2e27, "Beyond" to 2e29,
+        "Milky Way" to 1.2e21, "Galaxy groups" to 3e23, "Universe" to 2.0e27, "Beyond" to 2e29,
     )
 
     fun zoomFractionFor(alt: Double): Float {

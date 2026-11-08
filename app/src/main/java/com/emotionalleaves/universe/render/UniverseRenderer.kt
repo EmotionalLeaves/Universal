@@ -47,8 +47,9 @@ class UniverseRenderer(private val context: Context, private val engine: Engine)
     private val hazeLayer = HazeLayer()
     private val beltLayer = BeltLayer()
     private val rockLayer = RockLayer()
+    private val webLodLayer = WebLodLayer()
     private val layers: List<Layer> = listOf(
-        cosmicLayer, hazeLayer, exoticLayer, fieldLayer, galaxyCatalogLayer, galaxyLayer, deepSkyLayer, starLayer, remnantLayer, systemLayer, beltLayer, rockLayer,
+        cosmicLayer, hazeLayer, webLodLayer, exoticLayer, fieldLayer, galaxyCatalogLayer, galaxyLayer, deepSkyLayer, starLayer, remnantLayer, systemLayer, beltLayer, rockLayer,
         solarLayer, smallBodyLayer, terrainLayer, testLayer,
     )
 
@@ -127,19 +128,29 @@ class UniverseRenderer(private val context: Context, private val engine: Engine)
         hazeLayer.daylight = terrainLayer.daylight
         beltLayer.daylight = terrainLayer.daylight
         rockLayer.daylight = terrainLayer.daylight
+        webLodLayer.daylight = terrainLayer.daylight
         galaxyLayer.particles = when (engine.settings.quality) { 0 -> 20_000; 2 -> 70_000; else -> 40_000 }
         terrainLayer.splitFactor = when (engine.settings.quality) { 0 -> 1.5; 2 -> 3.0; else -> 2.2 }
         galaxyLayer.maxBlob = when (engine.settings.quality) { 0 -> 14f; 2 -> 28f; else -> 20f }
         solarLayer.showOrbits = engine.settings.showOrbits
         systemLayer.showOrbits = engine.settings.showOrbits
         for (l in layers) safely(l, "update") { l.update(frame, ctx) }
-        for (l in layers) safely(l, "drawOpaque") { l.drawOpaque(frame, ctx) }
-        for (l in layers) safely(l, "drawTransparent") { l.drawTransparent(frame, ctx) }
+        diagTimer += dt
+        val diag = diagTimer >= 3.0
+        if (diag) { diagTimer = 0.0; GLES30.glGetError() }
+        for (l in layers) safely(l, "drawOpaque") { l.drawOpaque(frame, ctx); if (diag) glCheck(l, "drawOpaque") }
+        for (l in layers) safely(l, "drawTransparent") { l.drawTransparent(frame, ctx); if (diag) glCheck(l, "drawTransparent") }
+        if (diag) {
+            android.util.Log.i("UniverseDiag", "dist=%.3e target=%s fps=%d gpuMB=%.1f lastErr=0x%x galaxies=%d near=%s".format(
+                focusDist, target?.name, Hud.fps, Gl.uploadedBytes / 1e6, Gl.lastGlError, engine.world.galaxies.size,
+                engine.world.nearGalaxies.joinToString(",") { it.name }))
+        }
 
         lastFrame = frame
         // Tap targets and labels
         val picks = ArrayList<Pickable>(256)
         for (l in layers) safely(l, "collect") { l.collect(frame, ctx, picks) }
+        hideBehindWorlds(frame, picks)
         engine.pickables = picks
         engine.takeTap()?.let { tap ->
             var body = engine.pick(tap.x, tap.y)?.body
@@ -177,6 +188,32 @@ class UniverseRenderer(private val context: Context, private val engine: Engine)
         }
     }
 
+    private val solidKinds = setOf(
+        com.emotionalleaves.universe.engine.Kind.STAR, com.emotionalleaves.universe.engine.Kind.PLANET,
+        com.emotionalleaves.universe.engine.Kind.DWARF_PLANET, com.emotionalleaves.universe.engine.Kind.MOON,
+        com.emotionalleaves.universe.engine.Kind.ASTEROID, com.emotionalleaves.universe.engine.Kind.COMET,
+    )
+
+    /**
+     * A planet filling the view hides what is behind it: drop the labels and tap targets of
+     * anything farther away whose point falls on its disc (Rosette Nebula was labelled on Mars).
+     */
+    private fun hideBehindWorlds(frame: Frame, picks: ArrayList<Pickable>) {
+        val walls = picks.filter { it.pixelRadius >= 8f && it.body.kind in solidKinds }.distinctBy { it.body.id }
+        if (walls.isEmpty()) return
+        val wallDist = walls.map { (it.body.position(frame.jd) - frame.camPos).length() }
+        val dist = HashMap<String, Double>()
+        picks.removeAll { p ->
+            walls.indices.any { i ->
+                val w = walls[i]
+                if (w.body.id == p.body.id) return@any false
+                if (kotlin.math.hypot((p.x - w.x).toDouble(), (p.y - w.y).toDouble()) > w.pixelRadius * 0.97) return@any false
+                val d = dist.getOrPut(p.body.id) { (p.body.position(frame.jd) - frame.camPos).length() }
+                d > wallDist[i]
+            }
+        }
+    }
+
     private fun publishLabels(picks: List<Pickable>) {
         val overlay = labelOverlay ?: return
         if (!engine.settings.showLabels) {
@@ -193,6 +230,7 @@ class UniverseRenderer(private val context: Context, private val engine: Engine)
         val taken = ArrayList<FloatArray>()
         val named = HashSet<String>()
         val density = context.resources.displayMetrics.density
+        val sliderBox = floatArrayOf(width - 150 * density, height / 2f - 175 * density, width.toFloat(), height / 2f + 175 * density)
         for (p in sorted) {
             if (out.size >= 40) break
             // Several layers may offer the same object (e.g. the selection): label it once.
@@ -202,6 +240,8 @@ class UniverseRenderer(private val context: Context, private val engine: Engine)
             val text = p.labelText ?: p.body.name
             val box = floatArrayOf(p.x, p.y - 16 * density, p.x + text.length * 7.5f * density, p.y)
             if (!sel && taken.any { overlaps(it, box) }) continue
+            // Keep the zoom scale on the right readable (and its labels tappable).
+            if (!sel && overlaps(sliderBox, box)) continue
             taken.add(box)
             out.add(Label(p.x, p.y, text, if (sel) 0xFFFFD27A.toInt() else p.labelColor, sel, p.pixelRadius.coerceAtMost(200f)))
         }
@@ -324,6 +364,16 @@ class UniverseRenderer(private val context: Context, private val engine: Engine)
         } catch (e: Exception) {
             com.emotionalleaves.universe.engine.ErrorLog.record("${l.javaClass.simpleName}.$what", e)
             rc?.drawer?.end()
+        }
+    }
+
+    private var diagTimer = 0.0
+
+    private fun glCheck(l: Layer, what: String) {
+        val e = GLES30.glGetError()
+        if (e != GLES30.GL_NO_ERROR) {
+            Gl.lastGlError = e
+            com.emotionalleaves.universe.engine.ErrorLog.record("${l.javaClass.simpleName}.$what", RuntimeException("GL error 0x${Integer.toHexString(e)}"))
         }
     }
 

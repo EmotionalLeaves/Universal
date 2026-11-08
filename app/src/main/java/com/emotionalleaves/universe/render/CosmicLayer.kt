@@ -31,7 +31,7 @@ class CosmicLayer : Layer {
         web = null; webBatch = null; glade = null; gladeBatch = null; outer = null; outerBatch = null
     }
 
-    fun exposure(frame: Frame): Float = (7.2 + 5 * log10(max(1.0, frame.focusDistance / (0.3 * Units.MPC)))).toFloat()
+    fun exposure(frame: Frame): Float = Exposure.of(frame)
 
     override fun update(frame: Frame, rc: RenderContext) {
         val w = rc.engine.world.cosmicWeb

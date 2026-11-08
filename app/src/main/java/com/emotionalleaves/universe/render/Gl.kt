@@ -27,6 +27,22 @@ object Gl {
             put(data); position(0)
         }
 
+    /** Bytes of vertex data uploaded so far (for diagnostics). */
+    @Volatile var uploadedBytes = 0L
+    @Volatile var lastGlError = 0
+
+    /** glBufferData plus a check: a phone that runs out of GPU memory just draws nothing, so log it. */
+    fun bufferData(target: Int, size: Int, data: java.nio.Buffer, usage: Int) {
+        GLES30.glBufferData(target, size, data, usage)
+        uploadedBytes += size
+        val e = GLES30.glGetError()
+        if (e != GLES30.GL_NO_ERROR) {
+            lastGlError = e
+            Log.w(TAG, "glBufferData of $size bytes failed: 0x${Integer.toHexString(e)}")
+            com.emotionalleaves.universe.engine.ErrorLog.record("GPU upload ($size bytes)", RuntimeException("GL error 0x${Integer.toHexString(e)}"))
+        }
+    }
+
     fun genBuffer(): Int {
         val ids = IntArray(1)
         GLES30.glGenBuffers(1, ids, 0)

@@ -217,6 +217,11 @@ fun SearchScreen(engine: Engine) {
             },
             modifier = Modifier.fillMaxWidth().focusRequester(focus),
             singleLine = true,
+            // The keyboard's search key goes to the best match.
+            keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(imeAction = androidx.compose.ui.text.input.ImeAction.Search),
+            keyboardActions = androidx.compose.foundation.text.KeyboardActions(onSearch = {
+                SearchUi.results.firstOrNull()?.let { h -> Nav.screen = Screen.NONE; keyboard?.hide(); engine.goTo(h.id) }
+            }),
             shape = RoundedCornerShape(14.dp),
             leadingIcon = { Glyph(G.SEARCH, size = 18.dp, color = TextDim) },
             placeholder = { Text("Mars, Sirius, Kepler-22 b, Orion Nebula, M31, HIP 32349…", color = TextDim, fontSize = 13.sp) },
@@ -383,7 +388,7 @@ fun HelpScreen() {
             "How much is here?" to "Menu → What's in the universe counts the real objects in the app and what is generated as you travel.",
             "Everything is there" to "Tap anywhere on the glow of a galaxy (even the Milky Way band) to pick an actual star at that spot. Fly to it: it has planets, and rocky ones can be landed on. Between galaxies, millions of dwarf and distant galaxies appear around you as you travel.",
             "Move sideways" to "Slide two fingers together. Twist two fingers to roll.",
-            "Free flight" to "Tap the paper-plane button (next to Explore) to roam anywhere: drag to look around, hold Forward or Back to fly, pinch for a quick hop. Speed adjusts to what is nearby; the ×1 button warps up to a million times faster. Tap a planet's Fly to (or the button again) to go back to orbiting.",
+            "Free flight" to "Tap the paper-plane button (next to Explore) to roam anywhere: drag to look around, hold Forward or Back to fly, pinch for a quick hop. Speed adjusts to what is nearby and grows the longer you hold; the ×1 button goes up to a thousand times faster. Tap a planet's Fly to (or the button again) to go back to orbiting.",
             "On the ground" to "Zoom all the way into a rocky planet or moon. Drag up/down to walk, left/right to turn.",
             "Time" to "Use the rewind, pause and fast-forward buttons at the bottom to change how fast time runs. Now goes back to the present.",
             "Real or generated" to "Every card shows a green Real badge (from scientific catalogues) or a purple Generated badge (made up by rules, the same every time).",

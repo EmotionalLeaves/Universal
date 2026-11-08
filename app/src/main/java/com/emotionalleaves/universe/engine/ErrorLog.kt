@@ -24,6 +24,7 @@ object ErrorLog {
     fun record(where: String, e: Throwable) {
         val key = where + (e.javaClass.name) + (e.message ?: "")
         if (!seen.add(key)) return
+        try { android.util.Log.w("UniverseProblem", "$where: $e") } catch (_: Throwable) {}
         val trace = StringWriter().also { e.printStackTrace(PrintWriter(it)) }.toString()
         val time = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US).format(Date())
         try {

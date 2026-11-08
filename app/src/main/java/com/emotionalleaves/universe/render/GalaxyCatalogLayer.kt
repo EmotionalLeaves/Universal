@@ -34,7 +34,7 @@ class GalaxyCatalogLayer : Layer {
     }
 
     /** Limiting magnitude grows as you zoom out so distant galaxies stay visible. */
-    fun exposure(frame: Frame): Float = (7.2 + 5 * log10(max(1.0, frame.focusDistance / (0.3 * Units.MPC)))).toFloat()
+    fun exposure(frame: Frame): Float = Exposure.of(frame)
 
     /** Galaxies added after the big catalogue (field galaxies you approach) go in a small second batch. */
     private var mainCount = 0

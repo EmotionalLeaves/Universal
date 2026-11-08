@@ -227,11 +227,15 @@ fun InfoCard(engine: Engine, modifier: Modifier = Modifier) {
     var mini by remember(Hud.selectedName) { mutableStateOf(false) }
     // Get out of the way while you fly, land, roam freely or move the view; tap to bring it back.
     val firstTick = remember(Hud.selectedName) { Hud.dragTick }
+    // After a "Fly to" the card comes back on arrival (that is when you want Land and the facts);
+    // after Land, a drag or free flight it stays small until you ask for it.
+    var restoreOnArrival by remember(Hud.selectedName) { mutableStateOf(true) }
     androidx.compose.runtime.LaunchedEffect(Hud.flying, Hud.freeFlight) {
         if (Hud.flying || Hud.freeFlight) { mini = true; expanded = false }
+        else if (mini && restoreOnArrival) { mini = false; restoreOnArrival = false }
     }
     androidx.compose.runtime.LaunchedEffect(Hud.dragTick) {
-        if (Hud.dragTick != firstTick) { mini = true; expanded = false }
+        if (Hud.dragTick != firstTick) { mini = true; expanded = false; restoreOnArrival = false }
     }
     if (mini) {
         Row(
@@ -245,7 +249,7 @@ fun InfoCard(engine: Engine, modifier: Modifier = Modifier) {
                 Text(Hud.selectedName, style = Type.Body.copy(fontWeight = FontWeight.SemiBold), maxLines = 1, overflow = TextOverflow.Ellipsis)
                 if (Hud.selectedDistance.isNotEmpty()) Text("${Hud.selectedDistance} away", style = Type.Caption.copy(fontSize = 11.sp), maxLines = 1)
             }
-            if (!Hud.flying) IconButton(G.FLY, size = 36.dp, label = "Fly to") { engine.flyToSelected() }
+            if (!Hud.flying) IconButton(G.FLY, size = 36.dp, label = "Fly to") { restoreOnArrival = true; engine.flyToSelected() }
             Spacer(Modifier.width(6.dp))
             IconButton(G.CHEVRON_UP, size = 36.dp, label = "Show card") { mini = false }
             Spacer(Modifier.width(6.dp))
@@ -320,8 +324,8 @@ fun InfoCard(engine: Engine, modifier: Modifier = Modifier) {
                 }
             }
             Row(Modifier.padding(top = 10.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                Button("Fly to", glyph = G.FLY, primary = true) { mini = true; expanded = false; engine.flyToSelected() }
-                if (Hud.selectedCanLand) Button("Land", glyph = G.LAND) { mini = true; expanded = false; engine.landOnSelected() }
+                Button("Fly to", glyph = G.FLY, primary = true) { mini = true; expanded = false; restoreOnArrival = true; engine.flyToSelected() }
+                if (Hud.selectedCanLand) Button("Land", glyph = G.LAND) { mini = true; expanded = false; restoreOnArrival = false; engine.landOnSelected() }
                 Spacer(Modifier.weight(1f))
                 IconButton(G.UP, size = 40.dp) { engine.goUp() }
                 IconButton(G.BOOKMARK, size = 40.dp) {

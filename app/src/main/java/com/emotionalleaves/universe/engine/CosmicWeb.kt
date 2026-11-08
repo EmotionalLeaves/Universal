@@ -275,3 +275,65 @@ object DeepHaze {
         return Result(level, ccx, ccy, ccz, anchor, out.toFloatArray(), s * 0.7)
     }
 }
+
+/**
+ * The cosmic web at whatever scale you are looking at, anywhere in the observable universe: seeded
+ * cells around the point you are looking at, sized to the zoom level, filled along the same filament
+ * field as [CosmicWeb]. Each dot stands for the galaxies of its patch, so its brightness adds up to
+ * theirs. Far from home the pre-made web is too sparse to show anything at a 10–1000 Mpc scale.
+ */
+object WebLod {
+    class Result(val level: Int, val ccx: Long, val ccy: Long, val ccz: Long, val anchor: UPos, val data: FloatArray)
+
+    const val RADIUS = 3
+    /** Galaxies per cubic Mpc brighter than about the Milky Way's magnitude. */
+    private const val DENSITY = 0.012
+    private const val ACCEPT = 0.12
+    private val noise = Noise3(CosmicWeb.SEED)
+
+    /** Cell edge 2^level Mpc; level 3 = 8 Mpc. */
+    fun levelFor(viewMetres: Double): Int {
+        val mpc = viewMetres / Units.MPC
+        return kotlin.math.floor(kotlin.math.ln(kotlin.math.max(mpc / 2.5, 8.0)) / kotlin.math.ln(2.0)).toInt().coerceIn(3, 12)
+    }
+
+    fun cellMpc(level: Int) = Math.pow(2.0, level.toDouble())
+
+    fun cellOf(focus: UPos, level: Int): Triple<Long, Long, Long> {
+        val c = (focus - UPos.ZERO) / Units.MPC
+        val s = cellMpc(level)
+        return Triple(kotlin.math.floor(c.x / s).toLong(), kotlin.math.floor(c.y / s).toLong(), kotlin.math.floor(c.z / s).toLong())
+    }
+
+    /** [innerMpc]: catalogues and the near web cover everything closer to Earth than this. */
+    fun generate(level: Int, cell: Triple<Long, Long, Long>, innerMpc: Double): Result {
+        val s = cellMpc(level)
+        val (ccx, ccy, ccz) = cell
+        val anchorMpc = Vec3d(ccx * s, ccy * s, ccz * s)
+        val edge = CosmicWeb.EDGE_MPC
+        // Candidates per cell; about 12% survive the filament test below.
+        val perCell = (DENSITY * s * s * s / ACCEPT).coerceIn(1.0, 70.0)
+        val represents = kotlin.math.max(1.0, DENSITY * s * s * s / (perCell * ACCEPT))
+        val out = ArrayList<Float>(343 * 12 * 7)
+        for (dx in -RADIUS..RADIUS) for (dy in -RADIUS..RADIUS) for (dz in -RADIUS..RADIUS) {
+            val cx = ccx + dx; val cy = ccy + dy; val cz = ccz + dz
+            val rng = Rng(Rng.hash(CosmicWeb.SEED, 0x10DL, level.toLong(), cx, cy, cz))
+            val n = perCell.toInt() + if (rng.nextDouble() < perCell - perCell.toInt()) 1 else 0
+            for (k in 0 until n) {
+                val p = Vec3d((cx + rng.nextDouble()) * s, (cy + rng.nextDouble()) * s, (cz + rng.nextDouble()) * s)
+                val r = p.length()
+                if (r < innerMpc || r > edge) continue
+                val w = noise.ridged(p.x / 160.0, p.y / 160.0, p.z / 160.0, 4)
+                // Mostly along filaments and in the knots where they meet; voids stay nearly empty.
+                val f = kotlin.math.max(0.0, w - 0.48) / 0.32
+                if (rng.nextDouble() > 0.012 + f * f) continue
+                val warm = rng.nextDouble().toFloat()
+                val rel = p - anchorMpc
+                out.add(rel.x.toFloat()); out.add(rel.y.toFloat()); out.add(rel.z.toFloat())
+                out.add(0.85f + 0.15f * warm); out.add(0.85f); out.add(1.0f - 0.2f * warm)
+                out.add((-20.3 + rng.gaussian() * 0.9 - 2.5 * log10(represents) - 1.5 * w).toFloat())
+            }
+        }
+        return Result(level, ccx, ccy, ccz, UPos.ZERO + anchorMpc * Units.MPC, out.toFloatArray())
+    }
+}

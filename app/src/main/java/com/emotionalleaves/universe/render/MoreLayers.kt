@@ -193,7 +193,7 @@ class ExoticLayer : Layer {
     private var gcl: PointBatch? = null
     var daylight = 0f
 
-    private fun exposure(frame: Frame): Float = (7.2 + 5 * log10(max(1.0, frame.focusDistance / (0.3 * Units.MPC)))).toFloat()
+    private fun exposure(frame: Frame): Float = Exposure.of(frame)
 
     override fun init(rc: RenderContext) { src = null; psr = null; qso = null; gcl = null }
 
@@ -237,7 +237,7 @@ class ExoticLayer : Layer {
         // from afar (not as fake stars in the night sky), or when one is selected.
         val psrVis = pulsarMarkers(frame)
         psr?.let { if (psrVis > 0.01f) rc.drawer.points(frame, it, 7.2f + rc.engine.settings.starBrightness, 2.2f, 0.8f * day * psrVis, minSize = 1.2f, maxSize = 5f) }
-        qso?.let { rc.drawer.points(frame, it, exp, 2.2f, 0.9f * day, minSize = 1.1f, maxSize = 5f) }
+        qso?.let { rc.drawer.points(frame, it, exp - 1.2f, 2.2f, 0.9f * day, minSize = 1.1f, maxSize = 5f) }
         gcl?.let { rc.drawer.points(frame, it, exp, 2.6f, 0.9f * day, minSize = 1.4f, maxSize = 8f) }
         // Close up: a pulsar is a tiny white-hot ball with a glow; a quasar a blinding core.
         val ex = src

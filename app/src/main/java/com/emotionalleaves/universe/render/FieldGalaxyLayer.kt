@@ -19,7 +19,7 @@ class FieldGalaxyLayer : Layer {
     private var batch: PointBatch? = null
     var daylight = 0f
 
-    private fun exposure(frame: Frame): Float = (7.2 + 5 * log10(max(1.0, frame.focusDistance / (0.3 * Units.MPC)))).toFloat()
+    private fun exposure(frame: Frame): Float = Exposure.of(frame)
 
     override fun init(rc: RenderContext) {
         src = null; srcList = null; batch = null
@@ -44,7 +44,7 @@ class FieldGalaxyLayer : Layer {
         val day = 1f - daylight
         if (day < 0.03f) return
         rc.drawer.beginAdditive()
-        rc.drawer.points(frame, b, exposure(frame), 2.4f, 0.85f * day, minSize = 1.2f, maxSize = 6f)
+        rc.drawer.points(frame, b, exposure(frame) + 1.5f, 2.4f, 0.85f * day, minSize = 1.2f, maxSize = 6f)
         rc.drawer.end()
     }
 

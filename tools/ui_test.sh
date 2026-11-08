@@ -61,7 +61,7 @@ adb shell input tap 540 1200; sleep 3; shot tap_center; texts
 
 # Explore -> Mars
 tap_text "Explore"; sleep 3; shot explore; texts
-tap_text "Mars"; sleep 9; shot at_mars; texts
+tap_text "Mars"; sleep 12; shot at_mars; texts
 tap_text "Read more & all facts"; sleep 2; shot card_expanded
 tap_text "Land"; sleep 3; shot landing_3s; sleep 9; shot landed_12s; texts
 drag 540 1500 540 1100 800; sleep 2; shot walk_up
@@ -79,12 +79,12 @@ tap_text "Home"; sleep 8; shot home_again; texts
 tap_text "Free flight"; sleep 2; shot free_on; texts
 drag 300 1200 700 1000 700; sleep 2; shot free_look
 hold_text "Forward" 4000; sleep 1; shot free_forward; texts
-tap_text "×1"; sleep 1; tap_text "×100"; sleep 1; hold_text "Forward" 3000; sleep 1; shot free_warp; texts
+tap_text "×1"; sleep 1; tap_text "×10"; sleep 1; hold_text "Forward" 3000; sleep 1; shot free_warp; texts
 tap_text "Exit"; sleep 2; shot free_exit
 
 # Search
 tap_text "Search"; sleep 3; adb shell input text "Sirius"; sleep 5; shot search; texts
-tap_text "Sirius" contains; sleep 10; shot sirius; texts
+adb shell input keyevent 66; log "enter"; sleep 10; shot sirius; texts
 
 # Menu and census
 tap_text "Menu"; sleep 2; shot menu; texts
@@ -96,6 +96,6 @@ tap_text "Explore"; sleep 2; tap_text "Black hole"; sleep 12; shot black_hole; t
 tap_text "Explore"; sleep 2; tap_text "Galaxy"; sleep 12; shot random_galaxy; texts
 
 adb logcat -d > $OUT/logcat.txt
-grep -E "FATAL|AndroidRuntime|E/libEGL|GL_INVALID|shader|Shader" $OUT/logcat.txt | head -50 > $OUT/errors.txt || true
+grep -E "FATAL|E AndroidRuntime|GL_INVALID|UniverseProblem|UniverseGL|UniverseDiag" $OUT/logcat.txt | head -120 > $OUT/errors.txt || true
 adb shell run-as $PKG cat files/last_problem.txt > $OUT/last_problem.txt 2>/dev/null || true
 log "done"
