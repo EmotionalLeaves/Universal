@@ -1,0 +1,9 @@
+# Compile the app's own code (and the Kotlin/Compose code it leans on) ahead of time at install.
+# Without this a freshly installed app runs interpreted at first, and parsing the star, galaxy
+# and asteroid catalogues took close to a minute on slow phones.
+HSPLcom/emotionalleaves/universe/**->**(**)**
+SPLcom/emotionalleaves/universe/**;
+HSPLkotlin/**->**(**)**
+SPLkotlin/**;
+HSPLandroidx/compose/**->**(**)**
+SPLandroidx/compose/**;
