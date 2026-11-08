@@ -41,10 +41,12 @@ fun UniverseScreen(engine: Engine, version: String, view: UniverseView) {
         Box(Modifier.fillMaxSize().safeDrawingPadding()) {
             Column(Modifier.align(Alignment.TopStart).padding(8.dp).fillMaxWidth(0.58f)) {
                 TopStatus(engine)
+                FreeFlightHint(engine, Modifier.padding(top = 6.dp))
                 LoadingChip(Modifier.padding(top = 4.dp))
                 if (SettingsUi.showStats) StatsBadge(Modifier.padding(top = 4.dp))
             }
-            ZoomSlider(
+            if (Hud.freeFlight) FlightPad(engine, Modifier.align(Alignment.CenterEnd).padding(end = 8.dp))
+            else ZoomSlider(
                 engine,
                 Modifier.align(Alignment.CenterEnd).padding(end = 6.dp),
             )
@@ -56,7 +58,11 @@ fun UniverseScreen(engine: Engine, version: String, view: UniverseView) {
                     Spacer(Modifier.width(8.dp))
                     MenuButton()
                 }
-                ExploreButton(Modifier.padding(top = 8.dp))
+                Row(Modifier.padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    FreeFlightButton(engine)
+                    Spacer(Modifier.width(8.dp))
+                    ExploreButton()
+                }
             }
             Column(
                 Modifier.align(Alignment.BottomCenter).padding(horizontal = 10.dp, vertical = 8.dp),

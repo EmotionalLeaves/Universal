@@ -111,6 +111,7 @@ class Engine(val context: Context) {
         if (!paused) jd += dt * timeRate / 86400.0
         synchronized(camera) {
             val before = camera.snapshot()
+            freeFlightStep(dt)
             steerLanding()
             surfaceFollow()
             camera.update(dt, now) { it.position(jd) }
@@ -495,6 +496,60 @@ class Engine(val context: Context) {
         selected = world.universe
         synchronized(camera) {
             camera.flyTo(world.universe, UPos.ZERO, Units.UNIVERSE_RADIUS * 7, nowSeconds())
+        }
+    }
+
+    // ---------------------------------------------------------------- free flight
+
+    /** -1 back, 0 coast, +1 forward (held buttons). */
+    @Volatile var thrust = 0
+    /** Speed multiplier steps (×1, ×100, ×10,000, ×1,000,000). */
+    @Volatile var warp = 0
+    val warpFactors = doubleArrayOf(1.0, 100.0, 1e4, 1e6)
+    private var cruise = 0.0
+
+    val freeFlight: Boolean get() = camera.freeFlight
+
+    fun setFreeFlight(on: Boolean) {
+        synchronized(camera) { if (on) camera.enterFreeFlight() else camera.leaveFreeFlight() }
+        if (!on) { thrust = 0; warp = 0 }
+    }
+
+    /** Current free-flight speed (m/s): about the distance to the nearest thing per 1.5 s, times warp. */
+    fun flightSpeed(): Double = world.nearestDist / 1.5 * warpFactors[warp]
+
+    /** Pinch in free flight: a step forward or back scaled to what is nearby. */
+    fun freeZoom(factor: Float) {
+        val step = world.nearestDist * 0.6 * kotlin.math.ln(factor.toDouble()) * 2.2 * warpFactors[warp]
+        camera.moveForward(step)
+        keepInsideUniverse()
+    }
+
+    private fun freeFlightStep(dt: Double) {
+        if (!camera.freeFlight) return
+        val targetV = thrust * flightSpeed()
+        // Ease in and out so starting and stopping feel smooth.
+        cruise += (targetV - cruise) * kotlin.math.min(1.0, dt * 4.0)
+        if (kotlin.math.abs(cruise) > 1e-9) {
+            // Never fly into something: slow down to stop just short of the nearest surface.
+            val limit = world.nearestDist * 0.9
+            val step = (cruise * dt).coerceIn(-1e300, if (warp == 0) limit else 1e300)
+            camera.moveForward(step)
+        }
+        keepInsideUniverse()
+    }
+
+    /** The modelled universe has an edge (9,000× the observable radius, or 3× without "beyond"): stop there. */
+    fun keepInsideUniverse() {
+        val maxR = camera.maxDistance() * 0.98
+        val p = camera.position() - UPos.ZERO
+        val r = p.length()
+        if (r > maxR) {
+            camera.strafe(0.0, 0.0)
+            camera.moveForward(0.0)
+            val back = p * (maxR / r - 1.0)
+            camera.shift(back)
+            cruise = 0.0
         }
     }
 

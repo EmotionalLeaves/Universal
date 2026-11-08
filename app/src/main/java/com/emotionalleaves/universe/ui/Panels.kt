@@ -50,7 +50,9 @@ fun TopStatus(engine: Engine, modifier: Modifier = Modifier) {
         Column(Modifier.glass(14.dp).padding(horizontal = 12.dp, vertical = 8.dp)) {
             if (Hud.breadcrumb.isNotEmpty()) Overline(Hud.breadcrumb)
             Text(Hud.focusName, style = Type.Heading.copy(fontSize = 16.sp), maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Row(verticalAlignment = Alignment.CenterVertically) {
+            if (Hud.freeFlight) {
+                Text(Hud.nearestText, style = Type.Caption, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            } else Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(Hud.distanceText, style = Type.Caption.copy(fontFeatureSettings = "tnum"), maxLines = 1)
                 if (Hud.altitudeText.isNotEmpty()) {
                     Text("  ·  ", style = Type.Caption.copy(color = TextFaint))
@@ -333,4 +335,61 @@ fun TimeBar(engine: Engine, modifier: Modifier = Modifier) {
 @Composable
 private fun TimeButton(g: G, onClick: () -> Unit) {
     Box(Modifier.size(36.dp).clickable { onClick() }, contentAlignment = Alignment.Center) { Glyph(g, size = 15.dp) }
+}
+
+
+/** Toggles free flight (look around and fly anywhere) vs orbiting an object. */
+@Composable
+fun FreeFlightButton(engine: Engine, modifier: Modifier = Modifier) {
+    IconButton(G.FLY, modifier, active = Hud.freeFlight) { engine.setFreeFlight(!Hud.freeFlight); Hud.freeFlight = !Hud.freeFlight }
+}
+
+/** Free-flight controls: hold to fly forward or back, warp steps, speed readout. */
+@Composable
+fun FlightPad(engine: Engine, modifier: Modifier = Modifier) {
+    Column(
+        modifier.glass(22.dp).padding(8.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Text(Hud.warpText, style = Type.Caption.copy(color = Accent, fontWeight = FontWeight.Bold),
+            modifier = Modifier.background(Accent.copy(alpha = 0.14f), RoundedCornerShape(8.dp)).clickable {
+                engine.warp = (engine.warp + 1) % engine.warpFactors.size
+            }.padding(horizontal = 10.dp, vertical = 6.dp))
+        HoldButton(G.UP, "Forward") { engine.thrust = if (it) 1 else 0 }
+        HoldButton(G.LAND, "Back") { engine.thrust = if (it) -1 else 0 }
+        Text(Hud.speedText, style = Type.Caption.copy(fontSize = 10.sp, fontFeatureSettings = "tnum"), maxLines = 1)
+        Text("Exit", style = Type.Caption.copy(color = TextDim), modifier = Modifier.clickable { engine.setFreeFlight(false); Hud.freeFlight = false }.padding(4.dp))
+    }
+}
+
+@Composable
+private fun HoldButton(g: G, label: String, onHold: (Boolean) -> Unit) {
+    var held by remember { mutableStateOf(false) }
+    Box(
+        Modifier
+            .size(58.dp)
+            .background(if (held) Accent else PanelRaised, CircleShape)
+            .border(1.dp, PanelBorder, CircleShape)
+            .pointerInput(Unit) {
+                detectTapGestures(onPress = {
+                    held = true; onHold(true)
+                    tryAwaitRelease()
+                    held = false; onHold(false)
+                })
+            },
+        contentAlignment = Alignment.Center,
+    ) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Glyph(g, size = 20.dp, color = if (held) AccentInk else TextMain)
+            Text(label, style = Type.Caption.copy(fontSize = 9.sp, color = if (held) AccentInk else TextDim))
+        }
+    }
+}
+
+/** Shown when you are zoomed far out while orbiting: suggests free flight. */
+@Composable
+fun FreeFlightHint(engine: Engine, modifier: Modifier = Modifier) {
+    if (Hud.freeFlight || !Hud.suggestFree) return
+    Button("Fly freely here", modifier, glyph = G.FLY) { engine.setFreeFlight(true); Hud.freeFlight = true }
 }

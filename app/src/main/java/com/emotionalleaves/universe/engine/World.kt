@@ -42,6 +42,46 @@ class World(private val engine: Engine) {
     @Volatile var galaxies: List<GalaxyBody> = listOf(milkyWay)
     private val galaxyIndex = java.util.concurrent.ConcurrentHashMap<String, GalaxyBody>().also { it[milkyWay.id] = milkyWay }
 
+    // ---------------------------------------------------------------- nearest thing (free-flight speed)
+
+    /** Distance (m) to the surface of the nearest thing around the camera, and what it is. */
+    @Volatile var nearestDist = 1e7
+        private set
+    @Volatile var nearestBody: Body? = null
+        private set
+    private var nearestTimer = 1.0
+
+    private fun updateNearest(cam: UPos, dt: Double) {
+        nearestTimer += dt
+        if (nearestTimer < 0.25) return
+        nearestTimer = 0.0
+        var best = Double.MAX_VALUE
+        var bestBody: Body? = null
+        fun consider(b: Body, d: Double) { if (d < best) { best = d; bestBody = b } }
+        val jd = engine.jd
+        for (b in solar) consider(b, (b.position(jd) - cam).length() - b.radius)
+        activeSystem?.let { s ->
+            consider(s.star, (s.star.pos - cam).length() - s.star.radius)
+            for (p in s.planets) { consider(p, (p.position(jd) - cam).length() - p.radius); for (m in p.moons) consider(m, (m.position(jd) - cam).length() - m.radius) }
+        }
+        realStars?.let { rs ->
+            rs.nearest(cam - UPos.ZERO, 20.0)?.let { (t, i) -> val s = rs.bodyFrom(t, i); consider(s, (s.pos - cam).length() - s.radius) }
+        }
+        nearestGenerated(cam, 50.0)?.let { consider(it, (it.pos - cam).length() - it.radius) }
+        rocks?.bodies?.let { for (r in it) consider(r, (r.pos - cam).length() - r.radius) }
+        remnants?.bodies?.let { for (r in it) consider(r, (r.pos - cam).length() - r.radius) }
+        // Galaxies: only count them from outside (inside one, its stars are what is near).
+        for (g in galaxies) {
+            val d = (g.center - cam).length() - g.radius
+            if (d > 0) consider(g, d)
+        }
+        field?.let { f -> for (i in 0 until f.count) { val d = (f.position(i) - cam).length() - f.radiusPc[i] * Units.PC; if (d > 0 && d < best) { best = d; bestBody = null } } }
+        // Galaxies are never more than a few tens of Mpc apart, so never assume more empty space than
+        // that (at high warp the galaxy field cannot keep up, which would make speed run away).
+        nearestDist = best.coerceIn(1.0, 30 * Units.MPC)
+        nearestBody = bestBody
+    }
+
     /** Rocks, boulders and comet nuclei generated around the camera in belts and clouds. */
     @Volatile var rocks: RockField.Generated? = null
     private val rockExec = java.util.concurrent.Executors.newSingleThreadExecutor()
@@ -574,6 +614,7 @@ class World(private val engine: Engine) {
         updateNearGalaxies(cam, dt)
         updateGenerated(cam, dt)
         updateRocks(cam, dt)
+        updateNearest(cam, dt)
         systemTimer += dt
         if (systemTimer > 0.25) {
             systemTimer = 0.0

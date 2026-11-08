@@ -348,3 +348,9 @@ Phone checklist:
 - [x] Haze: smoothstep(0, 0, x) undefined for the deep haze; guarded.
 - [x] Landing: terrain drawn during the descent (it hid the sphere but drew nothing until arrival), flight aims at the real ground height, waits up to 2.5 s for the ground and picks dry land near the spot on worlds with seas, no cloud shell from below.
 - [x] Headless landing test with a real clock: Earth, Mars and Moon all land in ~2.5 s at ground level.
+
+## Round 21: Free flight
+- [x] Free-flight mode (paper-plane button beside Explore, or "Fly freely here" when zoomed far out): drag looks around in place, hold Forward/Back to fly, pinch hops, two fingers slide, twist rolls.
+- [x] Auto speed: ~ distance to the nearest surface per 1.5 s (planets, stars, generated stars, rocks, remnants, galaxies, field galaxies), capped at 30 Mpc so it cannot run away; never flies into a surface at ×1. Warp ×100 / ×10,000 / ×1,000,000.
+- [x] Hard edge at the modelled universe's boundary (9,000× or 3× the observable radius) keeps positions exact.
+- [x] Headless test: eases from 14,000 km to ~60 km above Earth without hitting it; roams the beyond region at warp without escaping it.

@@ -137,6 +137,40 @@ class CameraController {
         distance = clamp(d, minDistance(), maxDistance())
     }
 
+    // ---------------------------------------------------------------- free flight
+
+    /** Free flight: drags look around from where you are; nothing is orbited. */
+    var freeFlight = false
+        private set
+
+    fun enterFreeFlight() {
+        cancelFlight()
+        target = null
+        surfaceExtra = 0.0
+        walkMode = false
+        freeFlight = true
+        yawVel = 0.0; pitchVel = 0.0; zoomVel = 0.0
+    }
+
+    fun leaveFreeFlight() { freeFlight = false }
+
+    /** Turns the view on the spot (the camera stays where it is). */
+    fun look(dxPx: Float, dyPx: Float, viewHeightPx: Int) {
+        val p = position()
+        val k = 1.6 / max(viewHeightPx, 1)
+        applyRotation(-dxPx * k, -dyPx * k)
+        focus = p - orientation.rotate(Vec3d.Z) * distance
+    }
+
+    /** Moves the camera [m] metres along the view direction (negative = backwards). */
+    fun moveForward(m: Double) { focus = focus + forward() * m }
+
+    /** Moves the camera by a world-space vector (metres). */
+    fun shift(v: Vec3d) { focus = focus + v }
+
+    /** Slides the camera sideways/up by metres. */
+    fun strafe(rightM: Double, upM: Double) { focus = focus + right() * rightM + up() * upM }
+
     /** Two-finger drag: slide the focus point sideways. Leaves the current target. */
     fun pan(dxPx: Float, dyPx: Float, viewHeightPx: Int) {
         cancelFlight()
@@ -159,6 +193,7 @@ class CameraController {
 
     /** Instantly orbit [body] at [dist] metres. */
     fun jumpTo(body: Body?, pos: UPos, dist: Double) {
+        freeFlight = false
         flight = null
         target = body
         surfaceExtra = 0.0
@@ -168,6 +203,7 @@ class CameraController {
 
     /** Smooth flight to [body]. The camera rises out, travels and comes back down. */
     fun flyTo(body: Body?, destination: UPos, endDistance: Double, now: Double, endOrientation: Quatd? = null) {
+        freeFlight = false
         val startPos = focus
         val sep = (destination - startPos).length()
         val d0 = distance

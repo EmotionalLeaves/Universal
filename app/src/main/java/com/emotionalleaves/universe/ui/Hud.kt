@@ -14,6 +14,13 @@ object Hud {
     var frameMs by mutableStateOf(0f)
     var distanceText by mutableStateOf("")
     var focusName by mutableStateOf("")
+    /** Free flight state for the controls: on/off, speed and what is nearest. */
+    var freeFlight by mutableStateOf(false)
+    var speedText by mutableStateOf("")
+    var nearestText by mutableStateOf("")
+    var warpText by mutableStateOf("×1")
+    /** True when zoomed far out while orbiting (offer free flight). */
+    var suggestFree by mutableStateOf(false)
     /** Name of the last object orbited, shown as "Back to …" when drifting in empty space. */
     var lastName by mutableStateOf("")
     var altitudeText by mutableStateOf("")

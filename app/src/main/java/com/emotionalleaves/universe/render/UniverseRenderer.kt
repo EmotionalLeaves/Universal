@@ -285,8 +285,17 @@ class UniverseRenderer(private val context: Context, private val engine: Engine)
             Hud.rateText = rate
             Hud.distanceText = Units.formatDistance(focusDist)
             val going = flyingTo
-            Hud.focusName = target?.name ?: going?.let { "Flying to ${it.name}" } ?: "Empty space"
-            Hud.lastName = if (target == null && going == null) (engine.lastTarget?.name ?: "") else ""
+            val free = engine.freeFlight
+            Hud.freeFlight = free
+            Hud.suggestFree = !free && focusDist > 3e23
+            if (free) {
+                Hud.speedText = Units.formatDistance(engine.flightSpeed()) + "/s"
+                Hud.warpText = "×" + String.format(java.util.Locale.US, "%,.0f", engine.warpFactors[engine.warp])
+                val nb = engine.world.nearestBody
+                Hud.nearestText = "Nearest: " + (nb?.name ?: "galaxy") + ", " + Units.formatDistance(engine.world.nearestDist)
+            }
+            Hud.focusName = if (free) "Free flight" else target?.name ?: going?.let { "Flying to ${it.name}" } ?: "Empty space"
+            Hud.lastName = if (!free && target == null && going == null) (engine.lastTarget?.name ?: "") else ""
             Hud.altitudeText = altitude
             Hud.selectedName = sel?.name ?: ""
             Hud.selectedSubtitle = sel?.subtitle ?: ""

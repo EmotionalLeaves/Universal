@@ -66,6 +66,22 @@ class UniverseView(context: Context, private val engine: Engine) : GLSurfaceView
                     val cx = (e.getX(0) + e.getX(1)) / 2
                     val cy = (e.getY(0) + e.getY(1)) / 2
                     val ang = angle(e)
+                    if (engine.freeFlight) {
+                        // Free flight: pinch flies forward/back, two fingers slide, twist rolls.
+                        synchronized(cam) {
+                            if (lastDist > 10f && d > 10f) engine.freeZoom(d / lastDist)
+                            val k = engine.world.nearestDist * 1.5 / height.coerceAtLeast(1)
+                            cam.strafe(-(cx - lastCx) * k, (cy - lastCy) * k)
+                            engine.keepInsideUniverse()
+                            var da = ang - lastAngle
+                            if (da > Math.PI) da -= (2 * Math.PI).toFloat()
+                            if (da < -Math.PI) da += (2 * Math.PI).toFloat()
+                            if (kotlin.math.abs(da) < 0.3f) cam.roll(da.toDouble())
+                        }
+                        lastDist = d; lastCx = cx; lastCy = cy; lastAngle = ang
+                        moved += 100f
+                        return true
+                    }
                     synchronized(cam) {
                         if (lastDist > 10f && d > 10f) {
                             if (kotlin.math.abs(d / lastDist - 1f) > 0.002f) engine.retargetIfAdrift()
@@ -100,7 +116,7 @@ class UniverseView(context: Context, private val engine: Engine) : GLSurfaceView
                     val dy = e.y - lastY
                     moved += hypot(dx, dy)
                     if (moved > TAP_SLOP_PX) {
-                        synchronized(cam) { cam.rotate(dx, dy, height) }
+                        synchronized(cam) { if (cam.freeFlight) cam.look(dx, dy, height) else cam.rotate(dx, dy, height) }
                     }
                     lastX = e.x; lastY = e.y
                 }
