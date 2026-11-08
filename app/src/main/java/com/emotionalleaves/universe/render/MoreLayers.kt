@@ -33,6 +33,8 @@ class SmallBodyLayer : Layer {
     private var radiusM = DoubleArray(0)
     private val worker = Executors.newSingleThreadExecutor()
     var daylight = 0f
+    /** The full asteroid list is drawn by [AsteroidCloudLayer]: draw only comets here. */
+    var skipAsteroids = false
 
     private val pcPerAuMag = (5 * log10(Units.PC / Units.AU) + 5).toFloat()
 
@@ -109,7 +111,7 @@ class SmallBodyLayer : Layer {
         val sun = frame.rel(UPos.ZERO)
         rc.drawer.beginOpaque()
         val cam = (frame.camPos - UPos.ZERO) / Units.AU
-        for (i in 0 until sb.count) {
+        for (i in (if (skipAsteroids) sb.cometFrom else 0) until sb.count) {
             val dx = pos[i * 3] - cam.x; val dy = pos[i * 3 + 1] - cam.y; val dz = pos[i * 3 + 2] - cam.z
             val distAu = sqrt(dx * dx + dy * dy + dz * dz)
             val r = radiusM[i]
@@ -136,6 +138,7 @@ class SmallBodyLayer : Layer {
         val vis = visibility(frame)
         if (vis <= 0) return
         rc.drawer.beginAdditive()
+        b.first = if (skipAsteroids) set?.cometFrom ?: 0 else 0
         rc.drawer.points(frame, b, limit(rc), 2.2f, (0.9 * vis).toFloat() * (1f - daylight), minSize = 1.1f, maxSize = 5f)
         rc.drawer.end()
     }
@@ -148,7 +151,7 @@ class SmallBodyLayer : Layer {
         val lim = limit(rc)
         var best = -1
         var bestScore = Double.MAX_VALUE
-        for (i in 0 until sb.count) {
+        for (i in (if (skipAsteroids) sb.cometFrom else 0) until sb.count) {
             val dx = pos[i * 3] - cam.x; val dy = pos[i * 3 + 1] - cam.y; val dz = pos[i * 3 + 2] - cam.z
             val d = sqrt(dx * dx + dy * dy + dz * dz)
             val r = sqrt((pos[i * 3] * pos[i * 3] + pos[i * 3 + 1] * pos[i * 3 + 1] + pos[i * 3 + 2] * pos[i * 3 + 2]).toDouble())

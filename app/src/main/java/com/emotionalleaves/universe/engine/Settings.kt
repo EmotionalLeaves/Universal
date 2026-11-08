@@ -29,6 +29,15 @@ class Settings(context: Context) {
     /** Extra star brightness in magnitudes (-2..+3). */
     @Volatile var starBrightness = prefs.getFloat("starBright", 0.5f)
         set(v) { field = v; prefs.edit().putFloat("starBright", v).apply() }
+    /** Look names up in SIMBAD, NED and JPL when the app's own catalogues don't have them. */
+    @Volatile var onlineSearch = prefs.getBoolean("onlineSearch", true)
+        set(v) { field = v; prefs.edit().putBoolean("onlineSearch", v).apply() }
+    /** Stream real Gaia DR3 stars around you while you fly through the Milky Way. */
+    @Volatile var gaiaStream = prefs.getBoolean("gaiaStream", true)
+        set(v) { field = v; prefs.edit().putBoolean("gaiaStream", v).apply() }
+    /** Stream real GLADE+ galaxies around you between the galaxies. */
+    @Volatile var gladeStream = prefs.getBoolean("gladeStream", true)
+        set(v) { field = v; prefs.edit().putBoolean("gladeStream", v).apply() }
     @Volatile var wifiOnly = prefs.getBoolean("wifiOnly", true)
         set(v) { field = v; prefs.edit().putBoolean("wifiOnly", v).apply() }
     // Key bumped when the tour changes, so everyone sees the new features once.

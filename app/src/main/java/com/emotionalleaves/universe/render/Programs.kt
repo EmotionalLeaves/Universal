@@ -9,6 +9,8 @@ class Programs {
     val line = Program(Shaders.LINE_VS, Shaders.LINE_FS)
     val billboard = Program(Shaders.BILLBOARD_VS, Shaders.BILLBOARD_FS)
     val ring = Program(Shaders.RING_VS, Shaders.RING_FS)
+    /** Compiled on first use (only with the full asteroid list installed). */
+    val kepler by lazy { Program(Shaders.KEPLER_VS, Shaders.POINTS_FS) }
 
     val sphereMesh = Meshes.sphere()
     val lowSphereMesh = Meshes.sphere(16, 32)

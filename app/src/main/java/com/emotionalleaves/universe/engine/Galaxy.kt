@@ -324,6 +324,8 @@ object StarField {
     const val LUMINOUS_LIMIT = 1.5   // absolute magnitude
     /** Brightest apparent magnitude (seen from the Sun) the real catalogue is complete to. */
     @Volatile var catalogLimit = 8.0
+    /** The streamed Gaia neighbourhood in Milky Way coordinates (x, y, z, radius pc), or null. */
+    @Volatile var gaiaBubble: DoubleArray? = null
 
     private class Kind(val p: Double, val tMin: Double, val tMax: Double, val mBright: Double, val mFaint: Double, val spect: String)
 
@@ -435,8 +437,10 @@ object StarField {
     /** Generates one cell. Deterministic: seeded by galaxy, tier and cell coordinates. */
     fun generateCell(
         g: GalaxyBody, tier: Int, cx: Int, cy: Int, cz: Int, sunLocal: Vec3d?,
+        gaiaFilter: Boolean = true,
         emit: (local: Vec3d, absMag: Double, teff: Double, index: Int) -> Unit,
     ) {
+        val gb = if (gaiaFilter && sunLocal != null) gaiaBubble else null
         val size = cellSize(tier)
         val base = baseOf(tier)
         val luminous = base == 1
@@ -457,6 +461,11 @@ object StarField {
                 if (!luminous && d < 25.0) continue
                 val app = m + 5 * log10(max(d, 0.01)) - 5
                 if (app < catalogLimit) continue
+                // Inside the streamed Gaia bubble, real stars stand in for everything Gaia can see.
+                if (gb != null && app < GaiaStream.LIMIT_MAG) {
+                    val bx = local.x - gb[0]; val by = local.y - gb[1]; val bz = local.z - gb[2]
+                    if (bx * bx + by * by + bz * bz < gb[3] * gb[3]) continue
+                }
             }
             emit(local, m, t, i)
         }
@@ -503,7 +512,7 @@ object StarField {
         if (c.size != 3) return null
         var found: StarBody? = null
         val sunLocal = if (g.isMilkyWay) g.toLocal(UPos.ZERO) else null
-        generateCell(g, tier, c[0], c[1], c[2], sunLocal) { local, m, t, i ->
+        generateCell(g, tier, c[0], c[1], c[2], sunLocal, gaiaFilter = false) { local, m, t, i ->
             if (i == idx) found = makeBody(g, g.toWorld(local), m, t, cellKey(c[0], c[1], c[2]), tier, i)
         }
         return found

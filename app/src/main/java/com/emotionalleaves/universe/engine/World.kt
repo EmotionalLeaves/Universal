@@ -18,6 +18,34 @@ class World(private val engine: Engine) {
     /** Real asteroids and comets; null until loaded or if the data is missing. */
     @Volatile var smallBodies: SmallBodies? = null
         private set
+    /** Every known asteroid (Minor Planet Center list), once downloaded; null otherwise. */
+    @Volatile var allAsteroids: AsteroidDb? = null
+        private set
+
+    /** Opens (or drops) the full asteroid list after it was downloaded or deleted. */
+    fun reloadAsteroids() {
+        loader3.execute {
+            allAsteroids = if (AsteroidDb.installed(engine.context.filesDir)) AsteroidDb.open(engine.context.filesDir) else null
+            searchStale = true
+            loaded("all asteroids (${allAsteroids?.count ?: 0})")
+        }
+    }
+
+    private val asteroidBodies = object : LinkedHashMap<Int, Body>(64, 0.75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<Int, Body>?) = size > 48
+    }
+
+    /** Asteroid [i] of the full list (the built-in entry, with its measured size, when there is one). */
+    fun asteroidBody(i: Int): Body? = synchronized(asteroidBodies) {
+        asteroidBodies[i] ?: run {
+            val db = allAsteroids ?: return null
+            if (i !in 0 until db.count) return null
+            val b = db.body(i)
+            val base = smallBodies?.indexOf(b.name)?.let { smallBodies?.body(it) }
+            (base ?: b).also { asteroidBodies[i] = it }
+        }
+    }
+
     /** Pulsars, quasars and galaxy clusters. */
     @Volatile var exotic: ExoticCatalog = ExoticCatalog(emptyList(), emptyList(), emptyList())
         private set
@@ -528,6 +556,7 @@ class World(private val engine: Engine) {
                 GalaxyField.clusters = exotic.clusters
                 fieldCell = null
                 smallBodies = SmallBodies.load(engine.context)
+                if (AsteroidDb.installed(engine.context.filesDir)) allAsteroids = AsteroidDb.open(engine.context.filesDir)
                 searchStale = true
                 loaded("asteroids, quasars, clusters")
             } catch (e: Throwable) {
@@ -678,8 +707,31 @@ class World(private val engine: Engine) {
 
     fun homeBody(): Body = earth
 
+    /** Real Gaia DR3 stars streamed around the camera. */
+    val gaia = GaiaStream(engine.context.cacheDir)
+    private var gaiaTimer = 0.0
+
+    private fun updateGaia(cam: UPos, dt: Double) {
+        gaiaTimer += dt
+        if (gaiaTimer < 0.5) return
+        gaiaTimer = 0.0
+        val rs = realStars ?: return
+        rs.gaia = gaia
+        if (!engine.settings.gaiaStream) {
+            if (gaia.bubble != null || StarField.gaiaBubble != null) { gaia.clear(); StarField.gaiaBubble = null; genLocal = null }
+            return
+        }
+        gaia.update(cam, rs) {
+            val b = gaia.bubble ?: return@update
+            val c = milkyWay.toLocal(UPos.ZERO + b.centerPc * Units.PC)
+            StarField.gaiaBubble = doubleArrayOf(c.x, c.y, c.z, b.radiusPc)
+            genLocal = null   // regenerate without the stars Gaia now provides
+        }
+    }
+
     fun update(engine: Engine, dt: Double) {
         val cam = synchronized(engine.camera) { engine.camera.position() }
+        updateGaia(cam, dt)
         updateNearGalaxies(cam, dt)
         updateGenerated(cam, dt)
         updateRocks(cam, dt)
@@ -713,6 +765,11 @@ class World(private val engine: Engine) {
             val sb = smallBodies ?: return null
             return sb.indexOf(id.substring(4))?.let { sb.body(it) }
         }
+        if (id.startsWith("ast:")) {
+            val db = allAsteroids ?: return null
+            return db.indexOfPacked(id.removePrefix("ast:"))?.let { asteroidBody(it) }
+        }
+        if (id.startsWith("net:")) return Online.find(id)
         if (id.startsWith("psr:") || id.startsWith("qso:") || id.startsWith("gcl:")) return exotic.find(id)
         if (id.startsWith("rem:")) return Remnants.fromId(id) { galaxyById(it) }
         if (id.startsWith("gal:f")) {
@@ -721,6 +778,13 @@ class World(private val engine: Engine) {
         }
         if (id.startsWith("gal:")) return galaxyIndex[id]
         if (id.startsWith("gs:") && !id.contains("/")) return StarField.fromId(id) { galaxyById(it) }
+        if (id.startsWith("gaia:") && !id.contains("/")) {
+            val src = id.removePrefix("gaia:").toLongOrNull() ?: return null
+            gaia.bubble?.catalog?.let { cat ->
+                for (t in cat.tiles) for (i in 0 until t.count) if (gaia.sourceOf[t.ids[i]] == src) return realStars?.bodyFrom(t, i)
+            }
+            return gaia.lookup(src)
+        }
         if (id.startsWith("hyg:") && !id.contains("/")) return id.removePrefix("hyg:").toIntOrNull()?.let { realStars?.body(it) }
         if (id.startsWith("rock|")) return RockField.fromId(id) { zonesForKey(it) }
         if (id.contains("/belt")) return Belts.fromId(id, { find(it) }, { systemFor(it) })

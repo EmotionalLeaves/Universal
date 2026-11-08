@@ -36,16 +36,16 @@ data class PackState(
  * 2 GB each). Packs unzip into files/packs/<id>/ and the world reloads them.
  */
 class PackManager(private val context: Context, private val world: World, private val settings: Settings) {
+    /**
+     * Packs the app builds itself from public servers (no hosting needed). The old GitHub-hosted
+     * packs (AT-HYG, GLADE+) are replaced by streaming Gaia DR3 and GLADE+ straight from VizieR.
+     */
     val packs = listOf(
         PackInfo(
-            "stars-athyg", "750,000 more real stars",
-            "AT-HYG (Tycho-2 + Gaia DR3) down to magnitude 11. Fills the sky with real stars where generated ones were.",
-            "pack-stars-athyg.zip", 15,
-        ),
-        PackInfo(
-            "galaxies-glade", "Millions of real galaxies",
-            "4.4 million galaxies from GLADE+, out to about 6.5 billion light years. Replaces the generated cosmic web inside that range.",
-            "pack-galaxies-glade.zip", 64,
+            ASTEROIDS, "Every known asteroid",
+            "All ~1.5 million asteroids with known orbits, straight from the Minor Planet Center (updated daily; NASA JPL " +
+                "as a backup). Each one moves on its real orbit and can be tapped and searched. About 75 MB on your phone.",
+            "mpcorb", 94,
         ),
     )
 
@@ -92,6 +92,7 @@ class PackManager(private val context: Context, private val world: World, privat
         cancelId = null
         notifyUi()
         exec.execute {
+            if (p.id == ASTEROIDS) { buildAsteroids(); return@execute }
             try {
                 val url = assetUrl(p.asset) ?: throw IllegalStateException("Pack not published yet")
                 val tmp = File(context.cacheDir, "${p.id}.zip")
@@ -116,6 +117,57 @@ class PackManager(private val context: Context, private val world: World, privat
         }
     }
 
+    /** Downloads the MPC orbit list and turns it into the app's compact format, as it arrives. */
+    private fun buildAsteroids() {
+        val id = ASTEROIDS
+        try {
+            AsteroidDb.build(context.filesDir, context.cacheDir, { url ->
+                val c = openRetrying(url)
+                AsteroidDb.Companion.SizedStream(c.inputStream, c.contentLengthLong)
+            },
+                { f -> main.post { progress[id] = f; onChange?.invoke() } }, { cancelId == id })
+            world.reloadAsteroids()
+        } catch (e: Exception) {
+            dir(id).deleteRecursively()
+            val msg = when {
+                cancelId == id -> "Cancelled"
+                e is java.net.UnknownHostException -> "No internet connection."
+                e is java.io.IOException -> "Download interrupted (${e.message ?: "network error"}). Try again."
+                else -> e.message ?: e.javaClass.simpleName
+            }
+            main.post { errors[id] = msg }
+        } finally {
+            main.post { active = null; notifyUi() }
+        }
+    }
+
+    /** [openFollowing] with a few retries (JPL answers 503 when busy). */
+    private fun openRetrying(url: String): HttpURLConnection {
+        var last: Exception? = null
+        for (attempt in 0 until 4) {
+            if (cancelId != null) throw IllegalStateException("Cancelled")
+            try { return openFollowing(url) } catch (e: Exception) { last = e; Thread.sleep(2000L shl attempt) }
+        }
+        throw last ?: IllegalStateException("Download failed")
+    }
+
+    /** Opens [url] following redirects (HTTP 200 required). */
+    private fun openFollowing(url: String): HttpURLConnection {
+        var u = url
+        repeat(6) {
+            val conn = URL(u).openConnection() as HttpURLConnection
+            conn.instanceFollowRedirects = false
+            conn.setRequestProperty("User-Agent", "UniverseExplorer-app")
+            conn.connectTimeout = 20_000
+            conn.readTimeout = 120_000
+            val code = conn.responseCode
+            if (code in 300..399) { u = conn.getHeaderField("Location") ?: throw IllegalStateException("Bad redirect"); return@repeat }
+            if (code != 200) throw IllegalStateException("Download failed (HTTP $code)")
+            return conn
+        }
+        throw IllegalStateException("Too many redirects")
+    }
+
     fun cancel(id: String) {
         cancelId = id
     }
@@ -124,7 +176,7 @@ class PackManager(private val context: Context, private val world: World, privat
         if (active == id) return
         exec.execute {
             dir(id).deleteRecursively()
-            world.packsChanged()
+            if (id == ASTEROIDS) world.reloadAsteroids() else world.packsChanged()
             main.post { errors.remove(id); progress.remove(id); notifyUi() }
         }
     }
@@ -207,6 +259,7 @@ class PackManager(private val context: Context, private val world: World, privat
     }
 
     companion object {
+        const val ASTEROIDS = "asteroids-mpc"
         const val RELEASE_API = "https://api.github.com/repos/EmotionalLeaves/Universal/releases/tags/data-v1"
     }
 }

@@ -52,7 +52,10 @@ class RealStars(
 
     fun info(id: Int): StarInfo? = info[id]
 
-    fun allCatalogs(): List<StarCatalog> = listOfNotNull(base, exoHosts) + packs
+    /** Real Gaia DR3 stars streamed around the camera (see [GaiaStream]). */
+    @Volatile var gaia: GaiaStream? = null
+
+    fun allCatalogs(): List<StarCatalog> = listOfNotNull(base, exoHosts, gaia?.bubble?.catalog) + packs
 
     /** Adds names for stars from other sources (exoplanet hosts). Call before publishing them. */
     fun addInfo(extra: Collection<StarInfo>) {
@@ -71,6 +74,13 @@ class RealStars(
 
     fun bodyFrom(tile: StarTile, i: Int): StarBody {
         val id = tile.ids[i]
+        if (id >= 30_000_000) {
+            val g = gaia
+            val src = g?.sourceOf?.get(id)
+            if (g != null && src != null) {
+                return GaiaStream.makeBody(src, UPos.ZERO + tile.posPc(i) * Units.PC, tile.absMag(i), g.teffOf(src) ?: 5000.0, null)
+            }
+        }
         val inf = info[id]
         val pos = UPos.ZERO + tile.posPc(i) * Units.PC
         val r = tile.data[i * 7 + 3]; val g = tile.data[i * 7 + 4]; val b = tile.data[i * 7 + 5]

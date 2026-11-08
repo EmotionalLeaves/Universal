@@ -28,13 +28,49 @@ class Engine(val context: Context) {
     /** Searches off the main thread; only the latest query's results are delivered. */
     fun searchAsync(query: String, done: (List<SearchHit>) -> Unit) {
         val gen = ++searchGen
+        val main = android.os.Handler(android.os.Looper.getMainLooper())
         searchExec.execute {
             if (gen != searchGen) return@execute
             val r = try { search.search(query) } catch (e: Exception) { ErrorLog.record("search", e); emptyList() }
             if (gen != searchGen) return@execute
-            android.os.Handler(android.os.Looper.getMainLooper()).post { if (gen == searchGen) done(r) }
+            main.post { if (gen == searchGen) done(r) }
+            val q = query.trim()
+            if (q.length < 2) return@execute
+            // Then the slower places: every asteroid (if downloaded), then the online databases.
+            extExec.execute {
+                try {
+                    if (gen != searchGen) return@execute
+                    Thread.sleep(450) // still typing?
+                    if (gen != searchGen) return@execute
+                    val seen = r.map { it.id }.toHashSet()
+                    val more = ArrayList<SearchHit>()
+                    world.allAsteroids?.let { db ->
+                        for (i in db.search(q, 8)) {
+                            val b = world.asteroidBody(i) ?: continue
+                            if (seen.add(b.id)) more.add(SearchHit(b.id, b.name, b.subtitle, 95))
+                        }
+                    }
+                    if (gen != searchGen) return@execute
+                    if (more.isNotEmpty()) main.post { if (gen == searchGen) done(r + more) }
+                    val exact = r.firstOrNull()?.let { it.score >= 1000 || normalize(it.name) == normalize(q) } == true
+                    if (!settings.onlineSearch || exact || q.length < 3) return@execute
+                    onlineSearching = true
+                    val net = try { Online.search(q) } finally { onlineSearching = false }
+                    if (gen != searchGen) return@execute
+                    val add = net.filter { seen.add(it.id) }
+                    main.post { if (gen == searchGen) { onlineDone = gen; done(r + more + add) } }
+                } catch (e: Exception) {
+                    onlineSearching = false
+                    ErrorLog.record("online search", e)
+                }
+            }
         }
     }
+
+    private val extExec = java.util.concurrent.Executors.newSingleThreadExecutor()
+    /** True while an online lookup is running (the search screen shows it). */
+    @Volatile var onlineSearching = false
+    @Volatile var onlineDone = 0
 
     fun prepareSearch(done: () -> Unit) {
         bg.execute {
@@ -100,6 +136,7 @@ class Engine(val context: Context) {
 
     init {
         ErrorLog.init(context)
+        Online.init(context)
         world.start()
         val home = world.homeBody()
         // Open on the sunlit side (it opened on whatever side was night at the time).

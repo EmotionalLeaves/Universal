@@ -42,15 +42,17 @@ class UniverseRenderer(private val context: Context, private val engine: Engine)
     private val fieldLayer = FieldGalaxyLayer()
     private val exoticLayer = ExoticLayer()
     private val smallBodyLayer = SmallBodyLayer()
+    private val asteroidCloudLayer = AsteroidCloudLayer()
     private val remnantLayer = RemnantLayer()
     private val hazeLayer = HazeLayer()
     private val beltLayer = BeltLayer()
     private val rockLayer = RockLayer()
     private val webLodLayer = WebLodLayer()
     private val famousLayer = FamousLayer()
+    private val onlineLayer = OnlineLayer()
     private val layers: List<Layer> = listOf(
         cosmicLayer, hazeLayer, webLodLayer, exoticLayer, fieldLayer, galaxyCatalogLayer, galaxyLayer, deepSkyLayer, starLayer, remnantLayer, systemLayer, beltLayer, rockLayer,
-        solarLayer, smallBodyLayer, famousLayer, testLayer,
+        solarLayer, asteroidCloudLayer, smallBodyLayer, famousLayer, onlineLayer, testLayer,
     )
 
     override fun onSurfaceCreated(gl: GL10?, config: EGLConfig?) {
@@ -125,6 +127,7 @@ class UniverseRenderer(private val context: Context, private val engine: Engine)
         galaxyLayer.maxBlob = when (engine.settings.quality) { 0 -> 14f; 2 -> 28f; else -> 20f }
         solarLayer.showOrbits = engine.settings.showOrbits
         systemLayer.showOrbits = engine.settings.showOrbits
+        smallBodyLayer.skipAsteroids = asteroidCloudLayer.active
         for (l in layers) safely(l, "update") { l.update(frame, ctx) }
         diagTimer += dt
         val diag = diagTimer >= 3.0

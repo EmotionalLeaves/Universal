@@ -128,12 +128,28 @@ fun formatBytes(b: Long): String = when {
 
 @Composable
 fun DataScreen(engine: Engine) {
+    var tick by androidx.compose.runtime.remember { mutableStateOf(0) }
+    androidx.compose.runtime.LaunchedEffect(Unit) { while (true) { kotlinx.coroutines.delay(1000); tick++ } }
     Panel("Data packs", { Nav.screen = Screen.NONE }) {
+        @Suppress("UNUSED_EXPRESSION") tick
         Text(
-            "The app already includes 109,000 stars, 6,400 exoplanets, 52,000 asteroids, 4,000 comets, every known moon, " +
-                "62,000 galaxies, 56,000 quasars and more. Packs add more real data; without them, the gaps are generated.",
+            "Built in: 109,000 stars, 6,400 exoplanets, 52,000 asteroids, every known comet and moon, 62,000 galaxies, " +
+                "56,000 quasars and more. Everything else that is known comes from the big public catalogues below.",
             color = TextDim, fontSize = 13.sp,
         )
+        Spacer(Modifier.height(12.dp))
+        StreamToggle("Real stars wherever you fly (Gaia DR3)",
+            "Streams ESA Gaia's 1.8 billion stars around you anywhere within ~8,000 light years of the Sun, a neighbourhood at a time " +
+                "(about 1–5 MB each, kept on your phone). Generated stars only fill in what Gaia can't see.",
+            engine.settings.gaiaStream) { engine.settings.gaiaStream = it }
+        if (engine.settings.gaiaStream) {
+            val st = engine.world.gaia.status
+            if (st.isNotEmpty()) Text(st, color = if (st.startsWith("Gaia:")) Danger else RealGreen, fontSize = 12.sp, modifier = Modifier.padding(start = 2.dp))
+        }
+        StreamToggle("Look up anything by name",
+            "Search asks SIMBAD (20 million stars, galaxies and nebulae), NED and NASA JPL (every asteroid and comet) when " +
+                "something isn't in the app, then flies you there.",
+            engine.settings.onlineSearch) { engine.settings.onlineSearch = it }
         Spacer(Modifier.height(12.dp))
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
@@ -188,6 +204,22 @@ fun DataScreen(engine: Engine) {
 @Composable
 fun Spacer8() = Spacer(Modifier.width(8.dp))
 
+@Composable
+private fun StreamToggle(title: String, detail: String, value: Boolean, set: (Boolean) -> Unit) {
+    var on by androidx.compose.runtime.remember { mutableStateOf(value) }
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp).glass(16.dp, raised = true).padding(16.dp),
+    ) {
+        Column(Modifier.weight(1f)) {
+            Text(title, style = Type.Heading)
+            Text(detail, color = TextDim, fontSize = 12.sp)
+        }
+        Spacer(Modifier.width(10.dp))
+        Switch(checked = on, onCheckedChange = { on = it; set(it) })
+    }
+}
+
 object SearchUi {
     /** Recently opened results (name, id), newest first; kept between launches. */
     var recent by mutableStateOf<List<Pair<String, String>>>(emptyList())
@@ -216,6 +248,8 @@ object SearchUi {
     var query by mutableStateOf("")
     var results by mutableStateOf<List<com.emotionalleaves.universe.engine.SearchHit>>(emptyList())
     var ready by mutableStateOf(false)
+    /** An online lookup is running (polled from the engine while the screen is open). */
+    var online by mutableStateOf(false)
 }
 
 @Composable
@@ -227,6 +261,9 @@ fun SearchScreen(engine: Engine) {
             SearchUi.ready = true
             engine.searchAsync(SearchUi.query) { SearchUi.results = it }
         }
+    }
+    androidx.compose.runtime.LaunchedEffect(Unit) {
+        while (true) { SearchUi.online = engine.onlineSearching; kotlinx.coroutines.delay(200) }
     }
     val focus = androidx.compose.runtime.remember { androidx.compose.ui.focus.FocusRequester() }
     val keyboard = androidx.compose.ui.platform.LocalSoftwareKeyboardController.current
@@ -283,12 +320,21 @@ fun SearchScreen(engine: Engine) {
                     )
                 }
             }
-            Text("Search any planet, moon, star, exoplanet, nebula, galaxy, black hole, quasar or catalogue number (M31, NGC 224, HIP 32349). Spelling does not need to be exact.",
+            Text("Search any planet, moon, star, exoplanet, nebula, galaxy, black hole, quasar, asteroid, comet or catalogue number (M31, NGC 224, HIP 32349). " +
+                "Anything not in the app is looked up online in SIMBAD, NED and JPL's Small-Body Database, so every named object can be found.",
                 style = Type.BodyDim, modifier = Modifier.padding(top = 16.dp))
             Button("Browse famous places", Modifier.padding(top = 12.dp), glyph = G.COMPASS) { Nav.screen = Screen.EXPLORE }
         }
-        if (SearchUi.ready && SearchUi.query.isNotBlank() && SearchUi.results.isEmpty()) {
-            Text("Nothing found for \u201c${SearchUi.query.trim()}\u201d. Try another spelling, or a catalogue number like M31 or HIP 32349.", color = TextDim, fontSize = 13.sp)
+        if (SearchUi.ready && SearchUi.query.isNotBlank() && SearchUi.results.isEmpty() && !SearchUi.online) {
+            Text("Nothing found for \u201c${SearchUi.query.trim()}\u201d. Try another spelling, or a catalogue number like M31 or HIP 32349." +
+                (if (!engine.settings.onlineSearch) " Online lookup is off in Settings." else ""), color = TextDim, fontSize = 13.sp)
+        }
+        if (SearchUi.online && SearchUi.query.isNotBlank()) {
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(vertical = 6.dp)) {
+                androidx.compose.material3.CircularProgressIndicator(Modifier.size(14.dp), strokeWidth = 2.dp, color = Accent)
+                Spacer(Modifier.width(8.dp))
+                Text("Looking it up in SIMBAD, NED and JPL…", color = TextDim, fontSize = 13.sp)
+            }
         }
         for (h in SearchUi.results) {
             val (g, tint) = glyphForDetail(h.detail)
@@ -442,7 +488,8 @@ fun HelpScreen() {
             "Explore" to "Tap Explore (top right) for famous places sorted by type. One tap flies you there. The Surprise me buttons pick a random alien world, galaxy, black hole and more.",
             "Jump between scales" to "The labels beside the zoom slider (Planet, Solar system, Nearby stars, Milky Way, Galaxy groups, Universe, Beyond) jump straight to that size.",
             "Lost in space?" to "If you drift into empty space, tap Back to … under the name at the top left, or the home button.",
-            "Find things" to "Search (magnifier, top right) finds planets, stars, exoplanets, asteroids, nebulae and galaxies by name or catalogue number (HIP, HD, NGC, M, PGC).",
+            "Find things" to "Search (magnifier, top right) finds planets, stars, exoplanets, asteroids, nebulae and galaxies by name or catalogue number (HIP, HD, NGC, M, PGC). Anything else with a name is looked up online (SIMBAD, NED, NASA JPL) and you can fly straight to it.",
+            "Every known object" to "Data packs: download all ~1.5 million known asteroids (each on its real orbit), and turn on Gaia streaming to see the real stars around you anywhere near the Sun — 1.8 billion are available, loaded a neighbourhood at a time.",
             "Save places" to "The bookmark button on any card. Generated places reopen exactly the same.",
             "Home" to "Flies back to Earth.",
         )
@@ -460,8 +507,12 @@ fun CreditsScreen(version: String) {
         Text("App code: MIT licence.", color = TextDim, fontSize = 13.sp)
         val items = listOf(
             "HYG v4.4 and AT-HYG v4.0 star catalogues" to "© Astronexus (David Nash), CC BY-SA 4.0. Built on Hipparcos, Yale Bright Star, Gliese, Tycho-2 and Gaia DR3. Star tiles derived from them are also CC BY-SA 4.0.",
-            "Gaia" to "This app uses data from the ESA mission Gaia, processed by the Gaia DPAC (via AT-HYG).",
             "NASA Exoplanet Archive" to "This research has made use of the NASA Exoplanet Archive, operated by Caltech under contract with NASA.",
+            "Gaia" to "This work has made use of data from the European Space Agency (ESA) mission Gaia (cosmos.esa.int/gaia), processed by the Gaia Data Processing and Analysis Consortium (DPAC).",
+            "Minor Planet Center" to "Orbits of all known asteroids from the IAU Minor Planet Center (MPCORB).",
+            "JPL Small-Body Database" to "Asteroid and comet orbits from NASA JPL's Solar System Dynamics group (ssd.jpl.nasa.gov).",
+            "SIMBAD" to "This research has made use of the SIMBAD database, operated at CDS, Strasbourg, France.",
+            "NED" to "This research has made use of the NASA/IPAC Extragalactic Database, operated by Caltech under contract with NASA.",
             "OpenNGC" to "Mattia Verga, CC BY-SA 4.0 (nebulae, clusters, NGC/IC galaxies).",
             "JPL Small-Body Database and satellite elements" to "NASA/JPL-Caltech Solar System Dynamics: asteroid and comet orbits, orbits of every known moon.",
             "ATNF Pulsar Catalogue" to "Manchester et al. 2005, AJ 129, 1993 (via VizieR).",

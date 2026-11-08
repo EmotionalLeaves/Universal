@@ -129,12 +129,14 @@ class PointBatch(
 ) {
     /** How many points to draw (the order is random, so any prefix is an even sample). */
     var limit = count
+    /** First point to draw (the rest before it are skipped). */
+    var first = 0
 
     fun draw() {
-        val n = limit.coerceIn(0, count)
-        if (n == 0) return
+        val n = limit.coerceIn(0, count) - first
+        if (n <= 0) return
         GLES30.glBindVertexArray(vao)
-        GLES30.glDrawArrays(GLES30.GL_POINTS, 0, n)
+        GLES30.glDrawArrays(GLES30.GL_POINTS, first, n)
         GLES30.glBindVertexArray(0)
     }
 

@@ -100,6 +100,62 @@ void main() {
 }
 """
 
+    /**
+     * Every known asteroid, positioned on the GPU: each vertex carries its orbital elements and the
+     * shader solves Kepler's equation for the current time (1.5 million orbits per frame).
+     */
+    val KEPLER_VS = HEADER + LOG_DEPTH_VS + """
+layout(location = 0) in vec4 aEl0;   // a (AU), e, inclination, node
+layout(location = 1) in vec4 aEl1;   // perihelion, mean anomaly at the reference epoch, H, class
+uniform mat4 uViewProj;
+uniform vec3 uCamAu;       // camera minus Sun, AU
+uniform float uDt;         // days since the reference epoch
+uniform float uMagLimit;
+uniform float uSizeScale;
+uniform float uMinSize;
+uniform float uMaxSize;
+uniform float uAlpha;
+uniform float uFloor;      // minimum brightness, so the whole belt shows as a haze when zoomed out
+uniform float uFadeNearAu; // hide points this close (the exact sphere is drawn there)
+out vec4 vColor;
+out float vSize;
+void main() {
+    float a = aEl0.x;
+    float e = aEl0.y;
+    float n = 0.01720209895 / (a * sqrt(a));
+    float M = mod(aEl1.y + n * uDt, 6.2831853);
+    float E = e > 0.8 ? 3.14159265 : M + e * sin(M);
+    for (int k = 0; k < 6; k++) E -= (E - e * sin(E) - M) / (1.0 - e * cos(E));
+    float xp = a * (cos(E) - e);
+    float yp = a * sqrt(max(1.0 - e * e, 0.0)) * sin(E);
+    float cw = cos(aEl1.x), sw = sin(aEl1.x), cn = cos(aEl0.w), sn = sin(aEl0.w), ci = cos(aEl0.z), si = sin(aEl0.z);
+    vec3 ecl = vec3((cw * cn - sw * sn * ci) * xp + (-sw * cn - cw * sn * ci) * yp,
+                    (cw * sn + sw * cn * ci) * xp + (-sw * sn + cw * cn * ci) * yp,
+                    (sw * si) * xp + (cw * si) * yp);
+    vec3 h = vec3(ecl.x, 0.91748206 * ecl.y - 0.39777716 * ecl.z, 0.39777716 * ecl.y + 0.91748206 * ecl.z);
+    vec3 rel = h - uCamAu;
+    float d = max(length(rel), 1e-9);
+    float r = max(length(h), 0.05);
+    float m = aEl1.z + 1.50515 * log2(r * d);
+    float ex = clamp(-0.4 * (m - uMagLimit), -20.0, 12.0);
+    float b = exp2(ex * 3.3219281);
+    float size = clamp(uSizeScale * pow(b, 0.35), uMinSize, uMaxSize);
+    float al = clamp(max(b, uFloor), 0.0, 1.0);
+    if (uFadeNearAu > 0.0) al *= smoothstep(uFadeNearAu * 0.4, uFadeNearAu, d);
+    int c = int(aEl1.w + 0.5);
+    vec3 col = vec3(0.85, 0.8, 0.72);
+    if (c >= 1 && c <= 4) col = vec3(1.0, 0.68, 0.45);       // near-Earth
+    else if (c == 9) col = vec3(0.9, 0.85, 0.6);             // trojans
+    else if (c == 10) col = vec3(0.72, 0.8, 1.0);            // distant
+    else if (c == 8) col = vec3(0.8, 0.9, 0.75);             // Hildas
+    vColor = vec4(col, al * uAlpha);
+    gl_PointSize = size;
+    vSize = size;
+    gl_Position = logDepth(uViewProj * vec4(rel * 1.495978707e11, 1.0));
+    if (vColor.a < 0.004) gl_Position = vec4(2.0, 2.0, 2.0, 1.0);
+}
+"""
+
     /** Soft glowing blobs for the large-scale structure (filaments, clusters) seen from afar. */
     val HAZE_VS = HEADER + LOG_DEPTH_VS + """
 layout(location = 0) in vec3 aPos;
