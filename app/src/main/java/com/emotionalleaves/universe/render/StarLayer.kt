@@ -1,5 +1,7 @@
 package com.emotionalleaves.universe.render
 
+import com.emotionalleaves.universe.engine.Constellation
+
 import android.opengl.GLES30
 import com.emotionalleaves.universe.core.Quatd
 import com.emotionalleaves.universe.core.UPos
@@ -18,6 +20,7 @@ class StarLayer : Layer {
 
     private val uploaded = ArrayList<Uploaded>()
     private var constellationMesh: LineMesh? = null
+    private var consFor: List<Constellation>? = null
     private var stars: RealStars? = null
     private var fallback: PointBatch? = null
     var magLimit = 7.2f
@@ -41,6 +44,13 @@ class StarLayer : Layer {
             stars = rs
             for (u in uploaded) u.batches.forEach { it.release() }
             uploaded.clear()
+            constellationMesh?.release()
+            constellationMesh = buildConstellations(rs)
+            consFor = rs.constellations
+        }
+        // Constellation figures arrive a little after the stars (names are parsed second).
+        if (consFor !== rs.constellations) {
+            consFor = rs.constellations
             constellationMesh?.release()
             constellationMesh = buildConstellations(rs)
         }

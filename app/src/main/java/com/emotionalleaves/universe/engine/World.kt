@@ -471,13 +471,16 @@ class World(private val engine: Engine) {
         byId[milkyWay.id] = milkyWay
         loader.execute {
             try {
-                realStars = RealStars.load(engine.context)
+                // Positions first (fast) so the sky appears; names and figures follow.
+                realStars = RealStars.loadBase(engine.context)
+                loaded("stars")
+                realStars?.let { RealStars.loadNames(engine.context, it) }
                 searchStale = true
             } catch (e: Throwable) {
                 ErrorLog.record("loading stars", e)
             }
             if (realStars == null) starsFailed = true
-            loaded("stars")
+            loaded("star names")
             try {
                 loadExoplanets()
                 searchStale = true

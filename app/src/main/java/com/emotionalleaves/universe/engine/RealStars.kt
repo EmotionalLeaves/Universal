@@ -9,19 +9,33 @@ import java.util.Locale
 /** The real star catalogues (HYG in the APK, AT-HYG as a pack) plus names and constellations. */
 class RealStars(
     val base: StarCatalog,
-    private val info: HashMap<Int, StarInfo>,
-    val constellations: List<Constellation>,
+    initialInfo: Map<Int, StarInfo>,
+    initialConstellations: List<Constellation>,
 ) {
+    /** Names arrive after the star positions (see [loadNames]), so the sky shows up first. */
+    private val info = java.util.concurrent.ConcurrentHashMap<Int, StarInfo>(initialInfo)
+    @Volatile var constellations: List<Constellation> = initialConstellations
+        private set
     @Volatile var packs: List<StarCatalog> = emptyList()
     /** Exoplanet host stars that are not in HYG (e.g. TRAPPIST-1), built from the archive. */
     @Volatile var exoHosts: StarCatalog? = null
-    val hipToId = HashMap<String, Int>()
-    val hdToId = HashMap<String, Int>()
-    val nameToId = HashMap<String, Int>()
+    val hipToId = java.util.concurrent.ConcurrentHashMap<String, Int>()
+    val hdToId = java.util.concurrent.ConcurrentHashMap<String, Int>()
+    val nameToId = java.util.concurrent.ConcurrentHashMap<String, Int>()
     /** Named stars (proper names), for labels. */
-    val namedIds: List<Int>
+    @Volatile var namedIds: List<Int> = emptyList()
+        private set
 
-    init {
+    init { index() }
+
+    /** Adds the names, catalogue numbers and constellation figures (slow to parse: done after the sky is up). */
+    fun setNames(names: Map<Int, StarInfo>, cons: List<Constellation>) {
+        info.putAll(names)
+        index()
+        constellations = cons
+    }
+
+    private fun index() {
         val named = ArrayList<Int>()
         for (s in info.values) {
             if (s.hip.isNotEmpty()) hipToId[s.hip] = s.id
@@ -36,13 +50,13 @@ class RealStars(
         namedIds = named
     }
 
-    fun info(id: Int) = info[id]
+    fun info(id: Int): StarInfo? = info[id]
 
     fun allCatalogs(): List<StarCatalog> = listOfNotNull(base, exoHosts) + packs
 
     /** Adds names for stars from other sources (exoplanet hosts). Call before publishing them. */
     fun addInfo(extra: Collection<StarInfo>) {
-        synchronized(info) { for (s in extra) info[s.id] = s }
+        for (s in extra) info[s.id] = s
         for (s in extra) if (s.proper.isNotEmpty()) nameToId[s.proper.lowercase(Locale.US)] = s.id
     }
 
@@ -105,9 +119,21 @@ class RealStars(
     }
 
     companion object {
-        fun load(context: Context): RealStars? {
+        /** Star positions only (fast): enough to draw the sky. */
+        fun loadBase(context: Context): RealStars? {
             val base = StarFiles.open(context, "stars/hyg.bin")?.use { StarFiles.read(it, "HYG") } ?: return null
-            val info = HashMap<Int, StarInfo>(base.count * 2)
+            return RealStars(base, emptyMap(), emptyList())
+        }
+
+        fun load(context: Context): RealStars? {
+            val rs = loadBase(context) ?: return null
+            loadNames(context, rs)
+            return rs
+        }
+
+        /** Parses names and constellation figures into [rs]. */
+        fun loadNames(context: Context, rs: RealStars) {
+            val info = HashMap<Int, StarInfo>(rs.base.count * 2)
             try {
                 context.assets.open("stars/hyg_names.tsv").bufferedReader().useLines { lines ->
                     lines.drop(1).forEach { l -> StarInfo.parse(l)?.let { info[it.id] = it } }
@@ -135,7 +161,7 @@ class RealStars(
                 }
             } catch (_: Exception) {
             }
-            return RealStars(base, info, cons)
+            rs.setNames(info, cons)
         }
     }
 }
