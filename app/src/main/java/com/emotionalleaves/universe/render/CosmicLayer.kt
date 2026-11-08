@@ -92,10 +92,15 @@ class CosmicLayer : Layer {
         // Nothing beyond ~300 Mpc is visible until you zoom out past a few Mpc: skip the work.
         val fromEarth = (frame.camPos - UPos.ZERO).length()
         if (frame.focusDistance < 2 * Units.MPC && fromEarth < 20 * Units.MPC) return
+        // Low quality: draw an even half of the generated web, a little brighter (much faster on slow GPUs).
+        val low = rc.engine.settings.quality == 0
+        val boost = if (low) 0.75f else 0f
+        webBatch?.let { it.limit = if (low) it.count / 2 else it.count }
+        outerBatch?.let { it.limit = if (low) it.count / 2 else it.count }
         rc.drawer.beginAdditive()
         gladeBatch?.let { rc.drawer.points(frame, it, exp + 1.5f, 2.2f, 0.85f * day, minSize = 1.3f, maxSize = 5f) }
-        webBatch?.let { rc.drawer.points(frame, it, exp + 1.5f, 2.2f, 0.95f * day, minSize = 1.3f, maxSize = 5f) }
-        outerBatch?.let { rc.drawer.points(frame, it, exp + 1.5f, 2.2f, 0.9f * day, minSize = 1.3f, maxSize = 5f) }
+        webBatch?.let { rc.drawer.points(frame, it, exp + 1.5f + boost, 2.2f, 0.95f * day, minSize = 1.3f, maxSize = 5f) }
+        outerBatch?.let { rc.drawer.points(frame, it, exp + 1.5f + boost, 2.2f, 0.9f * day, minSize = 1.3f, maxSize = 5f) }
         rc.drawer.end()
     }
 

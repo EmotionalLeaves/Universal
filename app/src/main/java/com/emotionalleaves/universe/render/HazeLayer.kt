@@ -85,11 +85,11 @@ class HazeLayer : Layer {
         val vis = (smoothstep(3 * Units.MPC, 30 * Units.MPC, frame.focusDistance) * day).toFloat()
         if (vis < 0.01f) return
         rc.drawer.beginAdditive()
-        local?.let { rc.drawer.haze(frame, it, 1.6 * Units.MPC, 0.30f * vis, 1.5 * Units.MPC, minSize = 2f, maxSize = 36f) }
-        far?.let { rc.drawer.haze(frame, it, 22 * Units.MPC, 0.11f * vis, 25 * Units.MPC, minSize = 2.5f, maxSize = 48f) }
+        local?.let { rc.drawer.haze(frame, it, 1.6 * Units.MPC, 0.30f * vis, 1.5 * Units.MPC, minSize = 2f, maxSize = 26f) }
+        far?.let { rc.drawer.haze(frame, it, 22 * Units.MPC, 0.11f * vis, 25 * Units.MPC, minSize = 2.5f, maxSize = 30f) }
         val d = deep
         val db = deepBatch
-        if (d != null && db != null) rc.drawer.haze(frame, db, d.blobMpc * Units.MPC, 0.09f * vis, 0.0, minSize = 2.5f, maxSize = 56f)
+        if (d != null && db != null) rc.drawer.haze(frame, db, d.blobMpc * Units.MPC, 0.09f * vis, 0.0, minSize = 2.5f, maxSize = 34f)
         rc.drawer.end()
     }
 }
