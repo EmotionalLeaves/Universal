@@ -287,7 +287,6 @@ class UniverseRenderer(private val context: Context, private val engine: Engine)
             val going = flyingTo
             val free = engine.freeFlight
             Hud.freeFlight = free
-            Hud.flying = going != null
             Hud.suggestFree = !free && focusDist > 3e23
             if (free) {
                 Hud.speedText = Units.formatDistance(engine.flightSpeed()) + "/s"
