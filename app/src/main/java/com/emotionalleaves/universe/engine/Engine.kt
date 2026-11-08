@@ -26,7 +26,7 @@ class Engine(val context: Context) {
     @Volatile private var searchGen = 0
 
     /** Searches off the main thread; only the latest query's results are delivered. */
-    fun searchAsync(query: String, done: (List<SearchHit>) -> Unit) {
+    fun searchAsync(query: String, done: (List<SearchHit>) -> Unit, finished: (() -> Unit)? = null) {
         val gen = ++searchGen
         val main = android.os.Handler(android.os.Looper.getMainLooper())
         searchExec.execute {
@@ -35,7 +35,7 @@ class Engine(val context: Context) {
             if (gen != searchGen) return@execute
             main.post { if (gen == searchGen) done(r) }
             val q = query.trim()
-            if (q.length < 2) return@execute
+            if (q.length < 2) { main.post { if (gen == searchGen) finished?.invoke() }; return@execute }
             // Then the slower places: every asteroid (if downloaded), then the online databases.
             extExec.execute {
                 try {
@@ -52,16 +52,22 @@ class Engine(val context: Context) {
                     }
                     if (gen != searchGen) return@execute
                     if (more.isNotEmpty()) main.post { if (gen == searchGen) done(r + more) }
-                    val exact = r.firstOrNull()?.let { it.score >= 1000 || normalize(it.name) == normalize(q) } == true
-                    if (!settings.onlineSearch || exact || q.length < 3) return@execute
+                    val nq = normalize(q)
+                    val exact = (r + more).any { normalize(it.name) == nq } || r.firstOrNull()?.score?.let { it >= 1000 } == true
+                    if (!settings.onlineSearch || exact || q.length < 3) { main.post { if (gen == searchGen) finished?.invoke() }; return@execute }
                     onlineSearching = true
                     val net = try { Online.search(q) } finally { onlineSearching = false }
                     if (gen != searchGen) return@execute
                     val add = net.filter { seen.add(it.id) }
-                    main.post { if (gen == searchGen) { onlineDone = gen; done(r + more + add) } }
+                    // An online object with exactly the name you typed beats a near-miss from the app.
+                    val all = r + more + add
+                    val sorted = all.filter { normalize(it.name) == nq || normalize(it.name.substringBefore(" (")) == nq } +
+                        all.filterNot { normalize(it.name) == nq || normalize(it.name.substringBefore(" (")) == nq }
+                    main.post { if (gen == searchGen) { onlineDone = gen; done(sorted); finished?.invoke() } }
                 } catch (e: Exception) {
                     onlineSearching = false
                     ErrorLog.record("online search", e)
+                    main.post { if (gen == searchGen) finished?.invoke() }
                 }
             }
         }

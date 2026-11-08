@@ -250,6 +250,10 @@ object SearchUi {
     var ready by mutableStateOf(false)
     /** An online lookup is running (polled from the engine while the screen is open). */
     var online by mutableStateOf(false)
+    /** The search key was pressed while results were still coming: go as soon as they are in. */
+    var pendingGo = false
+    /** All lookups for the current query have finished. */
+    var finished = false
 }
 
 @Composable
@@ -262,7 +266,7 @@ fun SearchScreen(engine: Engine) {
         SearchUi.results = emptyList()
         engine.prepareSearch {
             SearchUi.ready = true
-            engine.searchAsync(SearchUi.query) { SearchUi.results = it }
+            engine.searchAsync(SearchUi.query, { SearchUi.results = it })
         }
     }
     androidx.compose.runtime.LaunchedEffect(Unit) {
@@ -280,14 +284,28 @@ fun SearchScreen(engine: Engine) {
             value = SearchUi.query,
             onValueChange = {
                 SearchUi.query = it
-                if (it.isBlank()) SearchUi.results = emptyList() else engine.searchAsync(it) { r -> SearchUi.results = r }
+                SearchUi.pendingGo = false
+                SearchUi.finished = false
+                if (it.isBlank()) SearchUi.results = emptyList() else engine.searchAsync(it, { r -> SearchUi.results = r }) {
+                    SearchUi.finished = true
+                    if (SearchUi.pendingGo) {
+                        SearchUi.pendingGo = false
+                        val nq = com.emotionalleaves.universe.engine.normalize(SearchUi.query)
+                        val h = SearchUi.results.firstOrNull { com.emotionalleaves.universe.engine.normalize(it.name) == nq } ?: SearchUi.results.firstOrNull()
+                        if (h != null) { Nav.screen = Screen.NONE; SearchUi.remember(engine, h.name, h.id); engine.goTo(h.id) }
+                    }
+                }
             },
             modifier = Modifier.fillMaxWidth().focusRequester(focus),
             singleLine = true,
             // The keyboard's search key goes to the best match.
             keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(imeAction = androidx.compose.ui.text.input.ImeAction.Search),
             keyboardActions = androidx.compose.foundation.text.KeyboardActions(onSearch = {
-                SearchUi.results.firstOrNull()?.let { h -> Nav.screen = Screen.NONE; keyboard?.hide(); SearchUi.remember(engine, h.name, h.id); engine.goTo(h.id) }
+                val nq = com.emotionalleaves.universe.engine.normalize(SearchUi.query)
+                val exact = SearchUi.results.firstOrNull { com.emotionalleaves.universe.engine.normalize(it.name) == nq }
+                keyboard?.hide()
+                if (exact == null && !SearchUi.finished) SearchUi.pendingGo = true   // wait for the asteroid list / online lookup
+                else (exact ?: SearchUi.results.firstOrNull())?.let { h -> Nav.screen = Screen.NONE; SearchUi.remember(engine, h.name, h.id); engine.goTo(h.id) }
             }),
             shape = RoundedCornerShape(14.dp),
             leadingIcon = { Glyph(G.SEARCH, size = 18.dp, color = TextDim) },

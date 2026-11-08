@@ -143,12 +143,16 @@ object Online {
 
     fun simbad(name: String): NetBody? {
         var text: String? = null
-        for (base in SIMBAD) {
-            try {
-                val (code, s) = get(base + enc(name), 10_000)
-                if (code == 200 && s.contains("Coordinates(ICRS")) { text = s; break }
-                if (code == 200 && (s.contains("not found") || s.contains("!!"))) return null
-            } catch (_: Exception) {
+        // Nicknames are stored as "NAME …" ("Gaia BH3" alone reads as a malformed Gaia catalogue number).
+        val tries = if (name.startsWith("NAME ", true)) listOf(name) else listOf(name, "NAME $name")
+        outer@ for (ident in tries) {
+            for (base in SIMBAD) {
+                try {
+                    val (code, s) = get(base + enc(ident), 10_000)
+                    if (code == 200 && s.contains("Coordinates(ICRS")) { text = s; break@outer }
+                    if (code == 200 && (s.contains("not found") || s.contains("!!"))) continue@outer
+                } catch (_: Exception) {
+                }
             }
         }
         val t = text ?: return null

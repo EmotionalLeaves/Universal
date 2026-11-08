@@ -143,9 +143,13 @@ class SearchIndex(private val world: World) {
         // Few matches: allow a typo or two ("betelguese", "andromida") among named things.
         if (heap.size < 8 && qn.length >= 4) {
             val maxEd = if (qn.length >= 8) 2 else 1
+            // Designations differ by one character on purpose ("Gaia BH1" vs "BH3", "2024 OR4" vs "YR4"):
+            // only allow typos in the letters, never in the numbers.
+            val qDigits = qn.filter { it.isDigit() }
             for (e in list) {
                 if (e.weight < 35) continue
                 val n = e.norm
+                if (n.filter { it.isDigit() } != qDigits) continue
                 if (kotlin.math.abs(n.length - qn.length) > maxEd && n.length < qn.length) continue
                 val cand = if (n.length > qn.length + maxEd) n.substring(0, qn.length) else n
                 val d = editDistance(qn, cand, maxEd)
