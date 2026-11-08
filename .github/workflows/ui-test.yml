@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   ui:
@@ -62,3 +62,12 @@ jobs:
         with:
           name: ui-test
           path: ui-test/
+
+      - name: Publish screenshots to the ui-test release
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cd ui-test && zip -qr ../ui-test.zip . && cd ..
+          gh release view ui-test >/dev/null 2>&1 || gh release create ui-test --title "UI test screenshots" --notes "Latest emulator UI test run." --latest=false --prerelease
+          gh release upload ui-test ui-test.zip --clobber
