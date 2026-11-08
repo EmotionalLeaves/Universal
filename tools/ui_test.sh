@@ -20,16 +20,21 @@ try:
     root = ET.parse("ui-test/ui.xml").getroot()
 except Exception:
     sys.exit(1)
+hits = []
 for n in root.iter("node"):
     for key in ("text", "content-desc"):
         v = n.get(key, "")
         if (v == want) or (mode == "contains" and want.lower() in v.lower()):
             b = re.findall(r"\d+", n.get("bounds", ""))
             if len(b) == 4:
-                x1, y1, x2, y2 = map(int, b)
-                print((x1 + x2) // 2, (y1 + y2) // 2)
-                sys.exit(0)
-sys.exit(1)
+                hits.append((list(map(int, b)), n.get("clickable"), n.get("class")))
+if len(hits) > 1:
+    with open("ui-test/steps.txt", "a") as f:
+        f.write("   %d matches for %r: %s\n" % (len(hits), want, hits))
+if not hits:
+    sys.exit(1)
+(x1, y1, x2, y2), _, _ = hits[0]
+print((x1 + x2) // 2, (y1 + y2) // 2)
 PY
 }
 tap_text() { xy=$(find_xy "$1" "$2"); if [ -n "$xy" ]; then adb shell input tap $xy; log "tap '$1' at $xy"; else log "NOT FOUND: '$1'"; fi; }
@@ -87,7 +92,7 @@ tap_text "Search"; sleep 3; adb shell input text "Sirius"; sleep 5; shot search;
 adb shell input keyevent 66; log "enter"; sleep 10; shot sirius; texts
 
 # Menu and census
-tap_text "Menu"; sleep 2; shot menu; texts
+sleep 2; tap_text "Menu"; sleep 3; shot menu; texts
 tap_text "What's in the universe"; sleep 2; shot census; texts
 adb shell input keyevent 4; sleep 2; shot after_back; texts
 

@@ -59,7 +59,7 @@ object PacksUi {
 
 @Composable
 fun MenuButton(modifier: Modifier = Modifier) {
-    IconButton(G.MENU, modifier, active = Nav.screen == Screen.MENU) { Nav.screen = if (Nav.screen == Screen.NONE) Screen.MENU else Screen.NONE }
+    IconButton(G.MENU, modifier, active = Nav.screen == Screen.MENU) { Nav.screen = if (Nav.screen == Screen.MENU) Screen.NONE else Screen.MENU }
 }
 
 /** Full-screen panel with a title bar and a close button. */

@@ -60,6 +60,10 @@ class UniverseRenderer(private val context: Context, private val engine: Engine)
         rc = ctx
         for (l in layers) l.init(ctx)
         lastTime = now()
+        // Point sprites carry the stars and galaxies: log what this GPU allows (a cap of 1 px = no galaxies).
+        val range = IntArray(2)
+        GLES30.glGetIntegerv(0x846D, range, 0)
+        android.util.Log.i("UniverseDiag", "point size range ${range[0]}..${range[1]}")
     }
 
     override fun onSurfaceChanged(gl: GL10?, w: Int, h: Int) {
