@@ -85,6 +85,8 @@ tap_text "Free flight"; sleep 2; shot free_on; texts
 drag 300 1200 700 1000 700; sleep 2; shot free_look
 hold_text "Forward" 4000; sleep 1; shot free_forward; texts
 tap_text "×1"; sleep 1; tap_text "×10"; sleep 1; hold_text "Forward" 3000; sleep 1; shot free_warp; texts
+tap_text "Go to nearest"; sleep 8; shot free_nearest; texts
+tap_text "Go to nearest"; sleep 8; shot free_nearest2; texts
 tap_text "Exit"; sleep 2; shot free_exit
 
 # Search

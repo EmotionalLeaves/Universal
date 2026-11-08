@@ -50,7 +50,11 @@ import com.emotionalleaves.universe.engine.Engine
 fun TopStatus(engine: Engine, modifier: Modifier = Modifier) {
     if (Hud.focusName.isEmpty()) return
     Column(modifier) {
-        Column(Modifier.glass(14.dp).padding(horizontal = 12.dp, vertical = 8.dp)) {
+        Column(
+            Modifier.glass(14.dp)
+                .clickable(enabled = Hud.freeFlight && Hud.canVisitNearest) { engine.travelToNearest() }
+                .padding(horizontal = 12.dp, vertical = 8.dp),
+        ) {
             if (Hud.breadcrumb.isNotEmpty()) Overline(Hud.breadcrumb)
             Text(Hud.focusName, style = Type.Heading.copy(fontSize = 16.sp), maxLines = 1, overflow = TextOverflow.Ellipsis)
             if (Hud.freeFlight) {
@@ -62,6 +66,10 @@ fun TopStatus(engine: Engine, modifier: Modifier = Modifier) {
                     Text(Hud.altitudeText, style = Type.Caption.copy(fontFeatureSettings = "tnum"), maxLines = 1)
                 }
             }
+        }
+        // Free flight: one tap travels to the nearest thing (the line above says what and how far).
+        if (Hud.freeFlight && Hud.canVisitNearest) {
+            Button("Go to nearest", Modifier.padding(top = 6.dp), glyph = G.FLY, primary = true) { engine.travelToNearest() }
         }
         if (Hud.lastName.isNotEmpty()) {
             Button("Back to ${Hud.lastName}", Modifier.padding(top = 6.dp), glyph = G.TARGET, primary = true) { engine.recenter() }

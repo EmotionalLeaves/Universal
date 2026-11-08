@@ -140,7 +140,19 @@ class CameraController {
     fun look(dxPx: Float, dyPx: Float, viewHeightPx: Int) {
         val p = position()
         val k = 1.6 / max(viewHeightPx, 1)
+        userLooked = true
         applyRotation(-dxPx * k, -dyPx * k)
+        focus = p - orientation.rotate(Vec3d.Z) * distance
+    }
+
+    /** Set when the user turns the view by hand (cancels an autopilot trip). */
+    @Volatile var userLooked = false
+
+    /** Turns the view on the spot part of the way ([t] 0..1) toward world direction [dir]. */
+    fun turnToward(dir: Vec3d, t: Double) {
+        val p = position()
+        val want = Quatd.lookRotation(dir, up())
+        orientation = Quatd.slerp(orientation, want, t.coerceIn(0.0, 1.0)).normalized()
         focus = p - orientation.rotate(Vec3d.Z) * distance
     }
 

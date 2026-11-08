@@ -279,6 +279,8 @@ class Engine(val context: Context) {
 
     fun flyTo(body: Body) {
         prefetch(body)
+        // In free flight every trip stays a free trip: travel there without snapping into orbit.
+        if (camera.freeFlight) { freeTravelTo(body); return }
         synchronized(camera) {
             camera.flyTo(body, body.position(jd), body.viewDistance(), nowSeconds(), arrivalView(body))
         }
@@ -453,7 +455,7 @@ class Engine(val context: Context) {
     fun setFreeFlight(on: Boolean) {
         synchronized(camera) { if (on) camera.enterFreeFlight() else camera.leaveFreeFlight() }
         speedRef = world.nearestDist.coerceAtLeast(1.0)
-        if (!on) { thrust = 0; warp = 0 }
+        if (!on) { thrust = 0; warp = 0; autopilot = null }
     }
 
     /**
@@ -483,8 +485,58 @@ class Engine(val context: Context) {
         keepInsideUniverse()
     }
 
+    // ---------------------------------------------------------------- free-flight autopilot
+
+    /** Where free flight is heading on its own (tap something, Fly to, or the nearest-object button). */
+    @Volatile var autopilot: Body? = null
+        private set
+
+    /** Travel to [b] in free flight: turn to face it and glide in, stopping at a good viewing distance. */
+    fun freeTravelTo(b: Body) {
+        if (!camera.freeFlight) setFreeFlight(true)
+        selected = b
+        prefetch(b)
+        thrust = 0
+        camera.userLooked = false
+        autopilot = b
+    }
+
+    /** The nearest thing you are not already at: the free-flight "Nearest" button. */
+    fun nearestToVisit(): Body? {
+        val cam = camera.position()
+        return world.nearestFew.firstOrNull { (b, _) ->
+            (b.position(jd) - cam).length() > arrivalDistance(b) * 1.3
+        }?.first ?: world.nearestFew.firstOrNull()?.first
+    }
+
+    fun travelToNearest() { nearestToVisit()?.let { freeTravelTo(it) } }
+
+    private fun arrivalDistance(b: Body): Double =
+        kotlin.math.max(b.viewDistance(), camera.minDistanceFor(b)).let { if (it > 0) it else 1e3 }
+
+    /** One step of the autopilot; false when there is none (or it just finished or was cancelled). */
+    private fun autopilotStep(dt: Double): Boolean {
+        val b = autopilot ?: return false
+        if (thrust != 0 || camera.userLooked) { autopilot = null; camera.userLooked = false; return false }
+        val rel = b.position(jd) - camera.position()
+        val dist = rel.length()
+        val stop = arrivalDistance(b)
+        if (dist <= 0) { autopilot = null; return false }
+        val dir = rel / dist
+        camera.turnToward(dir, kotlin.math.min(1.0, dt * 3.0))
+        val remain = dist - stop
+        if (kotlin.math.abs(remain) <= stop * 0.02 + 1.0) { autopilot = null; cruise = 0.0; return false }
+        // Close a share of the remaining gap every second, a bigger share the more orders of magnitude
+        // are left: about 3–8 s whether it is a moon next door or a galaxy billions of light years away.
+        val k = 2.0 + 0.25 * kotlin.math.ln(kotlin.math.max(remain / stop, 1.0))
+        camera.shift(dir * (remain * (1 - kotlin.math.exp(-dt * k))))
+        keepInsideUniverse()
+        return true
+    }
+
     private fun freeFlightStep(dt: Double) {
-        if (!camera.freeFlight) return
+        if (!camera.freeFlight) { autopilot = null; return }
+        if (autopilotStep(dt)) return
         held = if (thrust != 0) held + dt else 0.0
         val room = clearance()
         val ref = world.nearestDist.coerceAtLeast(1.0)

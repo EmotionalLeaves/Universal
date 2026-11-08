@@ -57,7 +57,14 @@ class World(private val engine: Engine) {
         nearestTimer = 0.0
         var best = Double.MAX_VALUE
         var bestBody: Body? = null
-        fun consider(b: Body, d: Double) { if (d < best) { best = d; bestBody = b } }
+        // A few nearest things, for "go to the nearest" in free flight (field galaxies by id, built only if kept).
+        val top = ArrayList<Pair<Any, Double>>(6)
+        fun keep(b: Any, d: Double) {
+            if (top.size >= 5 && d >= top.last().second) return
+            top.add(b to d); top.sortBy { it.second }
+            if (top.size > 5) top.removeAt(top.size - 1)
+        }
+        fun consider(b: Body, d: Double) { if (d < best) { best = d; bestBody = b }; keep(b, d) }
         val jd = engine.jd
         for (b in solar) consider(b, (b.position(jd) - cam).length() - b.radius)
         activeSystem?.let { s ->
@@ -75,12 +82,17 @@ class World(private val engine: Engine) {
             val d = (g.center - cam).length() - g.radius
             if (d > 0) consider(g, d)
         }
-        field?.let { f -> for (i in 0 until f.count) { val d = (f.position(i) - cam).length() - f.radiusPc[i] * Units.PC; if (d > 0 && d < best) { best = d; bestBody = null } } }
+        field?.let { f -> for (i in 0 until f.count) { val d = (f.position(i) - cam).length() - f.radiusPc[i] * Units.PC; if (d > 0) { if (d < best) { best = d; bestBody = null }; keep(f.id(i), d) } } }
         // Galaxies are never more than a few tens of Mpc apart, so never assume more empty space than
         // that (at high warp the galaxy field cannot keep up, which would make speed run away).
         nearestDist = best.coerceIn(1.0, 30 * Units.MPC)
-        nearestBody = bestBody
+        nearestBody = bestBody ?: (top.firstOrNull()?.first as? String)?.let { GalaxyField.fromId(it) }
+        nearestFew = top.mapNotNull { (b, d) -> ((b as? Body) ?: (b as? String)?.let { GalaxyField.fromId(it) })?.let { it to d } }
     }
+
+    /** The few nearest things to the camera (with distance to their surface), nearest first. */
+    @Volatile var nearestFew: List<Pair<Body, Double>> = emptyList()
+        private set
 
     /** Rocks, boulders and comet nuclei generated around the camera in belts and clouds. */
     @Volatile var rocks: RockField.Generated? = null

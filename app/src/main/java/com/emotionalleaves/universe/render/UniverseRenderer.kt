@@ -293,7 +293,11 @@ class UniverseRenderer(private val context: Context, private val engine: Engine)
         val barLen = Units.niceLength(barMax)
         val barFraction = (barLen / metresPerPx / frame.width).toFloat()
         val zoom = engine.zoomFraction()
-        val flying = engine.camera.isFlying
+        val auto = engine.autopilot
+        val flying = engine.camera.isFlying || auto != null
+        // Free flight: the nearest thing you are not already at, for the "Nearest" button.
+        val visit = if (engine.freeFlight && auto == null) engine.nearestToVisit() else null
+        val visitDist = visit?.let { v -> engine.world.nearestFew.firstOrNull { it.first.id == v.id }?.second }
         val date = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm", java.util.Locale.US)
             .format(java.util.Date(com.emotionalleaves.universe.core.Astro.epochMillis(frame.jd)))
         val rate = engine.rateLabel() + if (!engine.paused && engine.timeRate == 1.0 &&
@@ -320,10 +324,14 @@ class UniverseRenderer(private val context: Context, private val engine: Engine)
             if (free) {
                 Hud.speedText = Units.formatDistance(engine.flightSpeed()) + "/s"
                 Hud.warpText = "×" + String.format(java.util.Locale.US, "%,.0f", engine.warpFactors[engine.warp])
-                val nb = engine.world.nearestBody
-                Hud.nearestText = "Nearest: " + (nb?.name ?: "galaxy") + ", " + Units.formatDistance(engine.world.nearestDist)
+                Hud.nearestText = when {
+                    auto != null -> "Travelling to ${auto.name}"
+                    visit != null -> "Nearest: ${visit.name}, " + Units.formatDistance(visitDist ?: engine.world.nearestDist)
+                    else -> "Nothing nearby yet"
+                }
+                Hud.canVisitNearest = visit != null
             }
-            Hud.focusName = if (free) "Free flight" else target?.name ?: going?.let { "Flying to ${it.name}" } ?: "Empty space"
+            Hud.focusName = if (free) (if (auto != null) "Autopilot" else "Free flight") else target?.name ?: going?.let { "Flying to ${it.name}" } ?: "Empty space"
             Hud.lastName = if (!free && target == null && going == null) (engine.lastTarget?.name ?: "") else ""
             Hud.altitudeText = altitude
             Hud.selectedName = sel?.name ?: ""

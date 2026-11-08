@@ -20,6 +20,8 @@ object Hud {
     var freeFlight by mutableStateOf(false)
     var speedText by mutableStateOf("")
     var nearestText by mutableStateOf("")
+    /** Free flight: the "Nearest" line can be tapped to travel there. */
+    var canVisitNearest by mutableStateOf(false)
     var warpText by mutableStateOf("×1")
     /** True when zoomed far out while orbiting (offer free flight). */
     var suggestFree by mutableStateOf(false)

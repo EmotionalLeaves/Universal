@@ -381,3 +381,7 @@ How it was tested: an Android emulator on GitHub (ui-test.yml + tools/ui_test.sh
 - [x] Flying to (or picking from Also here) a star starts building its planets straight away, so they are there on arrival.
 - [x] Baseline profile: the app is compiled ahead of time at install (fresh installs ran interpreted; catalogues took close to a minute on the emulator).
 - [x] Easier on the eyes: names slightly see-through and smaller (selection stays bright), at most 28 on screen, orbit lines and constellation figures dimmer.
+
+## Pass 18: free travel to anything
+- [x] Free-flight autopilot: in free flight, Fly to / tap twice / Explore / Search / Home all glide you there and you stay in free flight (it turns to face the target and closes the gap, faster when many orders of magnitude are left: 3–9 s from a moon next door to a galaxy billions of light years away). Holding Forward/Back or dragging the view takes back control.
+- [x] "Go to nearest" button (and the Nearest line itself) in free flight: travels to the nearest thing you are not already at — planet, moon, star, rock, black hole or galaxy (field galaxies included).
