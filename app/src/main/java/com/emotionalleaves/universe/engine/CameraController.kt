@@ -294,8 +294,11 @@ class CameraController {
     /** Surface radius of [b] if it has a surface (zoom and slider measure height above it). */
     fun surfaceOf(b: Body?): Double = if (b != null && solid(b)) b.radius else 0.0
 
-    /** A low orbit, not the ground: there is no landing. */
-    fun minDistanceFor(b: Body?): Double = if (b != null && solid(b)) b.radius * 1.04 + 2.0 else 0.05
+    /**
+     * Closest approach: one radius above the surface, where the world still shows its curved edge
+     * the screen. Closer, the view was just a blurry patch of map (there is no landing).
+     */
+    fun minDistanceFor(b: Body?): Double = if (b != null && solid(b)) b.radius * 2.0 + 2.0 else 0.05
 
     companion object {
         /** Each pinch is amplified so you can cross the universe in a handful of gestures. */
