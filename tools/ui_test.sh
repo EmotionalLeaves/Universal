@@ -107,8 +107,8 @@ tap_text "Explore"; sleep 2; tap_text "Galaxy"; sleep 12; shot random_galaxy; te
 
 # Every known object: online name lookup (not in the app), the asteroid download, Gaia streaming.
 tap_text "Search"; sleep 3
-adb shell input text "Gaia%sBH3"; sleep 14; shot search_online; texts
-adb shell input keyevent 66; log "enter"; sleep 14; shot online_gaiabh3; texts
+adb shell input text "Sirius%sB"; sleep 14; shot search_online; texts
+adb shell input keyevent 66; log "enter"; sleep 14; shot online_siriusb; texts
 tap_text "Search"; sleep 3
 adb shell input text "2024%sYR4"; sleep 14; shot search_yr4; texts
 adb shell input keyevent 66; log "enter"; sleep 14; shot online_yr4; texts
