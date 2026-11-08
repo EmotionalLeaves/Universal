@@ -124,7 +124,17 @@ fun ZoomSlider(engine: Engine, modifier: Modifier = Modifier) {
     val presets = engine.zoomPresets.filter { it.second <= engine.camera.maxDistance() }.map { (n, alt) -> n to engine.zoomFractionFor(alt) }
     Row(modifier.height(trackDp)) {
         // Scale labels, each placed at its height on the track.
-        Box(Modifier.width(92.dp).height(trackDp)) {
+        // The whole label column is a tap target (nearest label wins), so a slightly-off tap
+        // zooms instead of falling through and selecting a star behind the label.
+        Box(
+            Modifier.width(92.dp).height(trackDp).pointerInput(presets) {
+                detectTapGestures { o ->
+                    val f = 1f - (o.y / trackH).coerceIn(0f, 1f)
+                    val best = presets.minByOrNull { kotlin.math.abs(it.second - f) } ?: return@detectTapGestures
+                    Hud.zoomFraction = best.second; engine.setZoomFraction(best.second)
+                }
+            },
+        ) {
             for ((name, f) in presets) {
                 val near = kotlin.math.abs(Hud.zoomFraction - f) < 0.04f
                 val y = with(density) { ((1f - f) * trackH).toDp() } - 10.dp
