@@ -153,7 +153,7 @@ class CameraController {
 
     /** Twist with two fingers: roll around the view axis. */
     fun roll(angle: Double) {
-        cancelFlight()
+        // Rolling never cancels a trip: it only turns the view around the line of sight.
         orientation = (orientation * Quatd.axisAngle(Vec3d.Z, angle)).normalized()
     }
 

@@ -194,3 +194,17 @@ class RockBody(
         "Data" to "Generated (size law N ∝ D^-2.5, down to 1 m)",
     )
 }
+
+/** How many things the app can generate and let you visit (shown in the census and on the universe card). */
+object Census {
+    const val STARS_OBSERVABLE = 2e23
+
+    /** Per star: the star, ~2 planets, their moons, remnants, a rogue planet, and every rock down to 1 m. */
+    fun perStar() = 1 + 2.0 + 2.0 * 0.11 + 0.0055 + 1.0 + RockField.rocksPerStar()
+
+    fun observable() = STARS_OBSERVABLE * perStar()
+
+    fun withBeyond(): Double { val f = CosmicWeb.BEYOND_FACTOR; return observable() * f * f * f }
+
+    fun total(beyond: Boolean) = if (beyond) withBeyond() else observable()
+}

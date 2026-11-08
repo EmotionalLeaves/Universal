@@ -135,7 +135,9 @@ object Story {
             is RemnantBody -> remnant(b)
             is ExoticBody -> exotic(b)
             is DsoBody -> dso(b)
-            is UniverseBody -> "Everything light has had time to reach us from in 13.8 billion years: around 2 trillion galaxies, " +
+            is UniverseBody -> "This app holds about ${Units.sci(Census.total(true))} things you can visit — every star, planet, moon and rock down to 1 m, " +
+                "here and in the imagined universe beyond the edge. " +
+                "The part we can actually see: around 2 trillion galaxies, " +
                 "spread along a web of filaments and walls around vast empty voids. Because space has been stretching all along, " +
                 "its edge is now about 46 billion light years away in every direction."
             else -> ""

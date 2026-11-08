@@ -31,6 +31,8 @@ class UniverseView(context: Context, private val engine: Engine) : GLSurfaceView
     private var panAccum = 0f
     private var zoomAccum = 0f
     private var panning = false
+    private var twistAccum = 0f
+    private var twisting = false
     private var twoFinger = false
     private var downTime = 0L
     private var downX = 0f
@@ -81,7 +83,15 @@ class UniverseView(context: Context, private val engine: Engine) : GLSurfaceView
                         var da = ang - lastAngle
                         if (da > Math.PI) da -= (2 * Math.PI).toFloat()
                         if (da < -Math.PI) da += (2 * Math.PI).toFloat()
-                        if (kotlin.math.abs(da) < 0.3f) cam.roll(-da.toDouble())
+                        // Twist: the view turns the same way as your fingers. Ignore the small wobble
+                        // of an ordinary pinch until the fingers have clearly turned (~4°).
+                        if (kotlin.math.abs(da) < 0.3f) {
+                            twistAccum += da
+                            if (twisting || kotlin.math.abs(twistAccum) > 0.07f) {
+                                cam.roll((if (twisting) da else twistAccum).toDouble())
+                                twisting = true
+                            }
+                        }
                     }
                     lastDist = d; lastCx = cx; lastCy = cy; lastAngle = ang
                     moved += 100f
@@ -132,6 +142,8 @@ class UniverseView(context: Context, private val engine: Engine) : GLSurfaceView
         panAccum = 0f
         zoomAccum = 0f
         panning = false
+        twistAccum = 0f
+        twisting = false
     }
 
     private fun dist(e: MotionEvent) = hypot(e.getX(0) - e.getX(1), e.getY(0) - e.getY(1))

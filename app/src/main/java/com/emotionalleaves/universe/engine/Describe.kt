@@ -217,6 +217,7 @@ object Describe {
                     "Width" to if (b.radius > Units.LY * 0.01) String.format(Locale.US, "%,.0f ly", b.radius * 2 / Units.LY) else km(b.radius * 2),
                 )
                 is ExoticBody -> listOf("Type" to b.kind.label, (b.facts(jd).getOrNull(1) ?: ("" to "")).let { it.first to it.second.substringBefore(" (") })
+                is UniverseBody -> listOf("Things here" to Units.sci(Census.total(true)), "Galaxies" to "~2 trillion")
                 is DsoBody -> listOf("Type" to DsoBody.typeLabel(b.type), "Width" to String.format(Locale.US, "%,.0f ly", b.radius * 2 / Units.LY))
                 else -> emptyList()
             }.filter { it.second.isNotEmpty() }

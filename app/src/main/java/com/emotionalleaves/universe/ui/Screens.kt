@@ -430,6 +430,7 @@ fun TipsOverlay(engine: Engine) {
     var page by androidx.compose.runtime.remember { mutableStateOf(0) }
     val tips = listOf(
         "Welcome!" to "You are looking at Earth, today, from space. Everything you see is in its real place.",
+        "A universe of ${com.emotionalleaves.universe.core.Units.sci(com.emotionalleaves.universe.engine.Census.withBeyond())} things" to "Every star in every galaxy, with its planets, moons and every rock down to 1 metre, is built the moment you get close — and is the same every time. Explore → the count shows how it adds up.",
         "Zoom anywhere" to "Pinch, or drag the slider on the right. Tap a label beside it (Planet, Solar system, Milky Way…) to jump to that scale.",
         "Not sure where to go?" to "Tap Explore (top right) for famous planets, stars, nebulae and galaxies, or Surprise me for a random alien world.",
         "Tap to explore" to "Tap anything for its card. Double-tap or Fly to to travel there.",

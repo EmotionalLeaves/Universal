@@ -134,7 +134,15 @@ object ExploreUi {
 fun ExploreScreen(engine: Engine) {
     var open by ExploreUi::open
     Panel("Explore", { Nav.screen = Screen.NONE }) {
-        Text("Famous places, sorted by type. One tap flies you there.", style = Type.BodyDim)
+        val count = com.emotionalleaves.universe.engine.Census.total(engine.settings.showBeyond && engine.settings.showGenerated)
+        Column(
+            Modifier.fillMaxWidth().glass(16.dp, raised = true).clickable { Nav.screen = Screen.CENSUS }.padding(14.dp),
+        ) {
+            Overline("This universe holds", color = Accent)
+            Text("${com.emotionalleaves.universe.core.Units.sci(count)} things", style = Type.Title.copy(color = Accent))
+            Text("Every star, planet, moon and rock down to 1 m — all of them can be visited. Tap for the count.", style = Type.Caption)
+        }
+        Text("Famous places, sorted by type. One tap flies you there.", style = Type.BodyDim, modifier = Modifier.padding(top = 12.dp))
         Overline("Surprise me", Modifier.padding(top = 18.dp, bottom = 8.dp))
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             SurpriseTile(G.PLANET, "Alien world", "land on one", kindColor("planet"), Modifier.weight(1f)) { engine.surprise(land = true); Nav.screen = Screen.NONE }
@@ -238,19 +246,17 @@ fun CensusScreen(engine: Engine) {
         "Rocks and boulders around you" to n(w.rocks?.bodies?.size ?: 0),
         "Distant galaxies (cosmic web)" to n(w.cosmicWeb?.count ?: 0),
     )
-    // Everything the generators can produce, counted the way they make it.
-    val stars = 2e23
-    val perStar = 1 + 2.0 + 2.0 * 0.11 + 0.0055 + 1.0 + com.emotionalleaves.universe.engine.RockField.rocksPerStar()  // star, planets, moons, remnants, rogue planets, rocks
-    val observable = stars * perStar
-    val beyondOn = w.outerWeb != null
-    val f = com.emotionalleaves.universe.engine.CosmicWeb.BEYOND_FACTOR
-    val total = if (beyondOn) observable * f * f * f else observable
+    // Everything the generators can produce, counted the way they make it (from the setting, not
+    // from what has finished loading, so the number is right from the first second).
+    val beyondOn = engine.settings.showBeyond && engine.settings.showGenerated
+    val observable = com.emotionalleaves.universe.engine.Census.observable()
+    val total = com.emotionalleaves.universe.engine.Census.total(beyondOn)
     Panel("What's in the universe", { Nav.screen = Screen.NONE }) {
         Column(Modifier.fillMaxWidth().glass(18.dp, raised = true).padding(16.dp)) {
             Overline("Things you can visit in this app", color = Accent)
             Text(com.emotionalleaves.universe.core.Units.sci(total), style = Type.Title.copy(fontSize = 34.sp, color = Accent))
             Text(
-                (if (beyondOn) "Including the speculative universe beyond the edge (9,000 times further out). " else "In the observable universe. Turn on \"Beyond the observable universe\" in Settings for about ${com.emotionalleaves.universe.core.Units.sci(observable * f * f * f)}. ") +
+                (if (beyondOn) "Including the speculative universe beyond the edge (9,000 times further out). " else "In the observable universe. Turn on \"Beyond the observable universe\" in Settings for about ${com.emotionalleaves.universe.core.Units.sci(com.emotionalleaves.universe.engine.Census.withBeyond())}. ") +
                     "Counted: every star (2 × 10²³), its planets and moons, black holes, neutron stars, rogue planets, and every asteroid, comet and boulder down to 1 m in its belts and comet cloud (about ${com.emotionalleaves.universe.core.Units.sci(com.emotionalleaves.universe.engine.RockField.rocksPerStar())} per star). " +
                     "Each one is built the moment you get close, and is the same every time.",
                 style = Type.Caption, modifier = Modifier.padding(top = 6.dp),

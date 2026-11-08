@@ -176,6 +176,7 @@ class UniverseBody : Body() {
     override val subtitle get() = "Everything light has had time to reach us from"
     override fun viewDistance() = radius * 2.4
     override fun facts(jd: Double) = listOf(
+        "Things in this app" to "${Units.sci(Census.total(true))} with the region beyond the edge (${Units.sci(Census.observable())} without)",
         "Radius" to "about 46 billion light years (comoving)",
         "Age" to "13.8 billion years",
         "Galaxies" to "around 2 trillion (estimate)",
