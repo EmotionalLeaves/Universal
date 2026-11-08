@@ -385,3 +385,9 @@ How it was tested: an Android emulator on GitHub (ui-test.yml + tools/ui_test.sh
 ## Pass 18: free travel to anything
 - [x] Free-flight autopilot: in free flight, Fly to / tap twice / Explore / Search / Home all glide you there and you stay in free flight (it turns to face the target and closes the gap, faster when many orders of magnitude are left: 3–9 s from a moon next door to a galaxy billions of light years away). Holding Forward/Back or dragging the view takes back control.
 - [x] "Go to nearest" button (and the Nearest line itself) in free flight: travels to the nearest thing you are not already at — planet, moon, star, rock, black hole or galaxy (field galaxies included).
+
+## Pass 19: looks and load time
+- [x] Bloom: the scene is drawn offscreen, its brightest parts blurred at 1/4 and 1/8 size and added back (soft glow round stars, suns, galaxy cores), plus a soft highlight shoulder and a light vignette. Off on Low quality or if the phone cannot make the offscreen images.
+- [x] Galaxies: brightness capped to an even glow over the disk and bulge (cores burned to flat white discs), a bit less light in bulges and more in young arm stars so spiral arms read, dust lanes along the mid-plane, and for the Milky Way seen from the Sun the dusty path through the disk (the galactic centre is now a band with its dark rift, not a white slab; rebuilt without it when seen from outside).
+- [x] Quasars dimmer at the whole-universe scale (the survey footprint showed as white patches).
+- [x] Catalogues parsed with a fast tab-separated reader (no split/toDouble): interpreted-mode load of star names, galaxies, asteroids and quasars about 2× faster; galaxy card facts built only when a card opens.

@@ -58,6 +58,7 @@ class UniverseRenderer(private val context: Context, private val engine: Engine)
         val ctx = RenderContext(context, engine, programs, BodyDrawer(programs), textures)
         rc = ctx
         for (l in layers) l.init(ctx)
+        postFx = try { PostFx().also { it.resize(width, height) } } catch (e: Throwable) { com.emotionalleaves.universe.engine.ErrorLog.record("glow setup", e); null }
         lastTime = now()
         // Point sprites carry the stars and galaxies: log what this GPU allows (a cap of 1 px = no galaxies).
         val range = IntArray(2)
@@ -69,7 +70,10 @@ class UniverseRenderer(private val context: Context, private val engine: Engine)
         width = w.coerceAtLeast(1)
         height = h.coerceAtLeast(1)
         GLES30.glViewport(0, 0, width, height)
+        postFx?.resize(width, height)
     }
+
+    private var postFx: PostFx? = null
 
     override fun onDrawFrame(gl: GL10?) {
         val ctx = rc ?: return
@@ -107,6 +111,10 @@ class UniverseRenderer(private val context: Context, private val engine: Engine)
         GLES30.glClearColor(0f, 0f, 0f, 1f)
         GLES30.glClearDepthf(1f)
         GLES30.glDepthMask(true)
+        val fx = postFx
+        val glow = fx != null && engine.settings.quality > 0 && fx.begin(true)
+        if (!glow) fx?.begin(false)
+        GLES30.glViewport(0, 0, width, height)
         GLES30.glClear(GLES30.GL_COLOR_BUFFER_BIT or GLES30.GL_DEPTH_BUFFER_BIT)
 
         testLayer.enabled = engine.settings.showTestObjects
@@ -120,6 +128,7 @@ class UniverseRenderer(private val context: Context, private val engine: Engine)
         if (diag) { diagTimer = 0.0; GLES30.glGetError() }
         for (l in layers) safely(l, "drawOpaque") { l.drawOpaque(frame, ctx); if (diag) glCheck(l, "drawOpaque") }
         for (l in layers) safely(l, "drawTransparent") { l.drawTransparent(frame, ctx); if (diag) glCheck(l, "drawTransparent") }
+        if (glow) try { fx!!.end(0.75f) } catch (e: Throwable) { com.emotionalleaves.universe.engine.ErrorLog.record("glow", e); postFx = null }
         if (diag) {
             android.util.Log.i("UniverseDiag", "dist=%.3e target=%s fps=%d gpuMB=%.1f lastErr=0x%x galaxies=%d near=%s".format(
                 focusDist, target?.name, Hud.fps, Gl.uploadedBytes / 1e6, Gl.lastGlError, engine.world.galaxies.size,

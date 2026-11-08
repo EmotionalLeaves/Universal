@@ -1,5 +1,7 @@
 package com.emotionalleaves.universe.engine
 
+import com.emotionalleaves.universe.core.TsvRow
+
 import android.content.Context
 import com.emotionalleaves.universe.core.Astro
 import com.emotionalleaves.universe.core.Quatd
@@ -57,18 +59,20 @@ class SmallBodies(
             val el = ArrayList<Double>(320_000)
             val diam = ArrayList<Float>(40_000)
             val cls = ArrayList<String>(40_000)
+            val p = TsvRow()
             context.assets.open("smallbodies/asteroids.tsv").bufferedReader().useLines { lines ->
                 for ((n, line) in lines.withIndex()) {
                     if (n == 0) continue
-                    val p = line.split('\t')
+                    p.set(line)
                     if (p.size < 11) continue
+                    val name = p.str(0)
                     // Pluto is already a full body of the solar system.
-                    if (p[0] == "134340 Pluto") continue
-                    val v = DoubleArray(9) { p[it + 1].toDoubleOrNull() ?: 0.0 }
-                    names.add(p[0])
+                    if (name == "134340 Pluto") continue
+                    val v = DoubleArray(9) { p.num(it + 1) ?: 0.0 }
+                    names.add(name)
                     el.add(v[0]); el.add(v[1]); el.add(Math.toRadians(v[2])); el.add(Math.toRadians(v[3]))
                     el.add(Math.toRadians(v[4])); el.add(Math.toRadians(v[5])); el.add(v[6]); el.add(v[7])
-                    diam.add(v[8].toFloat()); cls.add(p[10])
+                    diam.add(v[8].toFloat()); cls.add(p.str(10))
                 }
             }
             val cometFrom = names.size
@@ -76,18 +80,18 @@ class SmallBodies(
                 context.assets.open("smallbodies/comets.tsv").bufferedReader().useLines { lines ->
                     for ((n, line) in lines.withIndex()) {
                         if (n == 0) continue
-                        val p = line.split('\t')
+                        p.set(line)
                         if (p.size < 8) continue
-                        val q = p[1].toDoubleOrNull() ?: continue
-                        val e = p[2].toDoubleOrNull() ?: continue
+                        val q = p.num(1) ?: continue
+                        val e = p.num(2) ?: continue
                         if (e >= 0.995 || q <= 0) continue  // near-parabolic ones would need special handling
                         val a = q / (1 - e)
                         if (a > 2000) continue
-                        val tp = p[6].toDoubleOrNull() ?: continue
-                        names.add(p[0])
+                        val tp = p.num(6) ?: continue
+                        names.add(p.str(0))
                         // Mean anomaly is 0 at perihelion time tp.
-                        el.add(a); el.add(e); el.add(Math.toRadians(p[3].toDouble())); el.add(Math.toRadians(p[4].toDouble()))
-                        el.add(Math.toRadians(p[5].toDouble())); el.add(0.0); el.add(tp); el.add(p[7].toDoubleOrNull() ?: 15.0)
+                        el.add(a); el.add(e); el.add(Math.toRadians(p.num(3) ?: continue)); el.add(Math.toRadians(p.num(4) ?: 0.0))
+                        el.add(Math.toRadians(p.num(5) ?: 0.0)); el.add(0.0); el.add(tp); el.add(p.num(7) ?: 15.0)
                         diam.add(-1f); cls.add("COM")
                     }
                 }
@@ -190,40 +194,46 @@ class ExoticCatalog(
     fun find(id: String) = byId[id]
 
     companion object {
-        private fun rows(context: Context, path: String): List<List<String>> = try {
-            context.assets.open(path).bufferedReader().useLines { s -> s.drop(1).map { it.split('\t') }.toList() }
+        /** Parses each row of a TSV asset with one reused [TsvRow] (fast; see TsvRow). */
+        private fun <T> rows(context: Context, path: String, f: (TsvRow) -> T?): List<T> = try {
+            val row = TsvRow()
+            val out = ArrayList<T>()
+            context.assets.open(path).bufferedReader().useLines { s -> for (l in s.drop(1)) f(row.set(l))?.let { out.add(it) } }
+            out
         } catch (_: Exception) {
             emptyList()
         }
 
         fun load(context: Context): ExoticCatalog {
-            val psr = rows(context, "exotic/pulsars.tsv").mapNotNull { p ->
-                if (p.size < 5) return@mapNotNull null
-                val ra = p[1].toDoubleOrNull() ?: return@mapNotNull null
-                val de = p[2].toDoubleOrNull() ?: return@mapNotNull null
-                val kpc = p[3].toDoubleOrNull() ?: return@mapNotNull null
-                val period = p[4].toDoubleOrNull() ?: 0.0
+            val psr = rows(context, "exotic/pulsars.tsv") { p ->
+                if (p.size < 5) return@rows null
+                val ra = p.num(1) ?: return@rows null
+                val de = p.num(2) ?: return@rows null
+                val kpc = p.num(3) ?: return@rows null
+                val period = p.num(4) ?: 0.0
+                val name = p.str(0)
                 val spin = { when {
                     period <= 0 -> "unknown"
                     period < 0.1 -> String.format(Locale.US, "%,.0f times a second", 1 / period)
                     else -> String.format(Locale.US, "once every %.2f s", period)
                 } }
                 ExoticBody(
-                    "psr:${p[0]}", p[0], Kind.PULSAR, UPos.ZERO + Vec3d.fromRaDec(ra, de) * (kpc * 1000 * Units.PC), 12_000.0,
+                    "psr:$name", name, Kind.PULSAR, UPos.ZERO + Vec3d.fromRaDec(ra, de) * (kpc * 1000 * Units.PC), 12_000.0,
                     { listOf("Spins" to spin(), "Size" to "about 24 km across, heavier than the Sun", "Data" to "ATNF Pulsar Catalogue") },
                     "A pulsar: a spinning neutron star, the crushed core of a star that exploded. It sweeps beams of radio waves across space like a lighthouse.",
                     0x9FD8FF,
                 )
             }
-            val qso = rows(context, "exotic/quasars.tsv").mapNotNull { p ->
-                if (p.size < 6) return@mapNotNull null
-                val ra = p[1].toDoubleOrNull() ?: return@mapNotNull null
-                val de = p[2].toDoubleOrNull() ?: return@mapNotNull null
-                val z = p[3].toDoubleOrNull() ?: return@mapNotNull null
-                val mpc = p[4].toDoubleOrNull() ?: return@mapNotNull null
-                val mag = p[5].toDoubleOrNull() ?: 18.0
+            val qso = rows(context, "exotic/quasars.tsv") { p ->
+                if (p.size < 6) return@rows null
+                val ra = p.num(1) ?: return@rows null
+                val de = p.num(2) ?: return@rows null
+                val z = p.num(3) ?: return@rows null
+                val mpc = p.num(4) ?: return@rows null
+                val mag = p.num(5) ?: 18.0
+                val name = p.str(0)
                 ExoticBody(
-                    "qso:${p[0]}", p[0].ifBlank { "Quasar" }, Kind.QUASAR, UPos.ZERO + Vec3d.fromRaDec(ra, de) * (mpc * Units.MPC), 3e15,
+                    "qso:$name", name.ifBlank { "Quasar" }, Kind.QUASAR, UPos.ZERO + Vec3d.fromRaDec(ra, de) * (mpc * Units.MPC), 3e15,
                     { listOf(
                         "Redshift" to String.format(Locale.US, "z = %.3f", z),
                         "Seen as it was" to lookback(z),
@@ -234,18 +244,20 @@ class ExoticCatalog(
                     0xC8D8FF,
                 ).also { it.mag = mag; it.z = z }
             }
-            val gcl = rows(context, "exotic/clusters.tsv").mapNotNull { p ->
-                if (p.size < 7) return@mapNotNull null
-                val ra = p[1].toDoubleOrNull() ?: return@mapNotNull null
-                val de = p[2].toDoubleOrNull() ?: return@mapNotNull null
-                val z = p[3].toDoubleOrNull() ?: return@mapNotNull null
-                val mpc = p[4].toDoubleOrNull() ?: return@mapNotNull null
-                val rich = p[5].toIntOrNull() ?: 1
+            val gcl = rows(context, "exotic/clusters.tsv") { p ->
+                if (p.size < 7) return@rows null
+                val ra = p.num(1) ?: return@rows null
+                val de = p.num(2) ?: return@rows null
+                val z = p.num(3) ?: return@rows null
+                val mpc = p.num(4) ?: return@rows null
+                val rich = p.int(5) ?: 1
+                val name = p.str(0)
+                val estimated = p.str(6) == "G"
                 ExoticBody(
-                    "gcl:${p[0]}", p[0], Kind.GALAXY_CLUSTER, UPos.ZERO + Vec3d.fromRaDec(ra, de) * (mpc * Units.MPC), 1.5 * Units.MPC,
+                    "gcl:$name", name, Kind.GALAXY_CLUSTER, UPos.ZERO + Vec3d.fromRaDec(ra, de) * (mpc * Units.MPC), 1.5 * Units.MPC,
                     { listOf(
                         "Galaxies" to when (rich) { 0 -> "30–49 bright ones"; 1 -> "50–79 bright ones"; 2 -> "80–129 bright ones"; 3 -> "130–199 bright ones"; else -> "200 or more bright ones" } + " (plus many fainter)",
-                        "Redshift" to String.format(Locale.US, "z = %.3f%s", z, if (p[6] == "G") " (estimated)" else ""),
+                        "Redshift" to String.format(Locale.US, "z = %.3f%s", z, if (estimated) " (estimated)" else ""),
                         "Seen as it was" to lookback(z),
                         "Data" to "Abell catalogue of rich clusters",
                     ) },

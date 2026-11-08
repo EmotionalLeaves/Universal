@@ -1,5 +1,7 @@
 package com.emotionalleaves.universe.engine
 
+import com.emotionalleaves.universe.core.TsvRow
+
 import android.content.Context
 import com.emotionalleaves.universe.core.Quatd
 import com.emotionalleaves.universe.core.Rng
@@ -43,16 +45,17 @@ object GalaxyCatalog {
         val seen = HashSet<Int>()
         run {
             run {
+                val p = TsvRow()
                 for (l in lines.drop(1)) {
-                    val p = l.split("\t")
+                    p.set(l)
                     if (p.size < 12) continue
-                    val pgc = p[1].toIntOrNull()
+                    val pgc = p.int(1)
                     if (pgc != null && !seen.add(pgc)) continue
                     val g = build(
-                        name = pgc?.let { NAMES[it] } ?: p[0], pgc = pgc, ra = p[2].toDoubleOrNull() ?: continue,
-                        dec = p[3].toDoubleOrNull() ?: continue, mpc = p[4].toDoubleOrNull() ?: continue,
-                        absMag = p[5].toDoubleOrNull(), rKpc = p[6].toDoubleOrNull(), hubble = p[7],
-                        pa = p[8].toDoubleOrNull(), incl = p[9].toDoubleOrNull(), distSrc = p[10], ngc = p[11],
+                        name = pgc?.let { NAMES[it] } ?: p.str(0), pgc = pgc, ra = p.num(2) ?: continue,
+                        dec = p.num(3) ?: continue, mpc = p.num(4) ?: continue,
+                        absMag = p.num(5), rKpc = p.num(6), hubble = p.str(7),
+                        pa = p.num(8), incl = p.num(9), distSrc = p.str(10), ngc = p.str(11),
                     ) ?: continue
                     out.add(g)
                 }
@@ -96,20 +99,31 @@ object GalaxyCatalog {
             ngc.isNotBlank() -> ngc
             else -> "PGC $pgc"
         }
-        val facts = ArrayList<Pair<String, String>>()
-        if (hubble.isNotBlank()) facts.add("Hubble type" to hubble)
-        val ids = listOfNotNull(ngc.takeIf { it.isNotBlank() }, pgc?.let { "PGC $it" }).filter { it != display }
-        if (ids.isNotEmpty()) facts.add("Catalogue" to ids.joinToString(", "))
-        facts.add("Distance source" to when (distSrc) {
-            "R" -> "Measured (Cosmicflows-4)"
-            "Z" -> "From redshift (Hubble's law)"
-            else -> distSrc
-        })
-        if (generatedLooks.isNotEmpty()) facts.add("Generated" to generatedLooks.joinToString(", ") + "; stars inside are generated")
-        else facts.add("Inside" to "Stars and planets are generated")
+        // Facts are only needed when a card opens: built then, not for all 62,000 galaxies at startup.
+        val facts = LazyFacts {
+            val facts = ArrayList<Pair<String, String>>()
+            if (hubble.isNotBlank()) facts.add("Hubble type" to hubble)
+            val ids = listOfNotNull(ngc.takeIf { it.isNotBlank() }, pgc?.let { "PGC $it" }).filter { it != display }
+            if (ids.isNotEmpty()) facts.add("Catalogue" to ids.joinToString(", "))
+            facts.add("Distance source" to when (distSrc) {
+                "R" -> "Measured (Cosmicflows-4)"
+                "Z" -> "From redshift (Hubble's law)"
+                else -> distSrc
+            })
+            if (generatedLooks.isNotEmpty()) facts.add("Generated" to generatedLooks.joinToString(", ") + "; stars inside are generated")
+            else facts.add("Inside" to "Stars and planets are generated")
+            facts
+        }
         return GalaxyBody(
             "gal:" + (pgc?.let { "pgc$it" } ?: ngc.ifBlank { "x${seed and 0xFFFFFF}" }), display, center, frame, model,
             radius * 1000, mpc * 3.2616, Source.REAL, facts, seed, mag,
         )
     }
+}
+
+/** A list built on first use (card facts for catalogue objects). */
+class LazyFacts(build: () -> List<Pair<String, String>>) : AbstractList<Pair<String, String>>() {
+    private val v by lazy(build)
+    override val size get() = v.size
+    override fun get(index: Int) = v[index]
 }

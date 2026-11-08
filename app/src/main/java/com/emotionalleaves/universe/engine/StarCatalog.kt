@@ -1,5 +1,7 @@
 package com.emotionalleaves.universe.engine
 
+import com.emotionalleaves.universe.core.TsvRow
+
 import android.content.Context
 import com.emotionalleaves.universe.core.UPos
 import com.emotionalleaves.universe.core.Units
@@ -151,12 +153,14 @@ class StarInfo(
             return "$g$rest ${parts[1]}"
         }
 
+        private val row = ThreadLocal.withInitial { TsvRow() }
+
         fun parse(line: String): StarInfo? {
-            val p = line.split("\t")
+            val p = row.get()!!.set(line)
             if (p.size < 11) return null
             return StarInfo(
-                p[0].toIntOrNull() ?: return null, p[1], p[2], p[3], p[4], p[5], p[6],
-                p[7].toDoubleOrNull() ?: 0.0, p[8], p[9].toDoubleOrNull() ?: 5800.0, p.getOrElse(11) { "" },
+                p.int(0) ?: return null, p.str(1), p.str(2), p.str(3), p.str(4), p.str(5), p.str(6),
+                p.num(7) ?: 0.0, p.str(8), p.num(9) ?: 5800.0, p.str(11),
             )
         }
     }
