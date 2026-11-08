@@ -31,6 +31,7 @@ class UniverseView(context: Context, private val engine: Engine) : GLSurfaceView
     private var panAccum = 0f
     private var zoomAccum = 0f
     private var panning = false
+    private var dragNotified = false
     private var twistAccum = 0f
     private var twisting = false
     private var twoFinger = false
@@ -51,11 +52,13 @@ class UniverseView(context: Context, private val engine: Engine) : GLSurfaceView
                 downX = e.x; downY = e.y
                 downTime = e.eventTime
                 moved = 0f
+                dragNotified = false
                 twoFinger = false
                 synchronized(cam) { cam.stopInertia() }
                 engine.onUserInteraction()
             }
             MotionEvent.ACTION_POINTER_DOWN -> if (e.pointerCount == 2) {
+                if (!dragNotified) { dragNotified = true; Hud.dragTick++ }
                 twoFinger = true
                 startTwo(e)
             }
@@ -116,6 +119,7 @@ class UniverseView(context: Context, private val engine: Engine) : GLSurfaceView
                     val dy = e.y - lastY
                     moved += hypot(dx, dy)
                     if (moved > TAP_SLOP_PX) {
+                        if (!dragNotified) { dragNotified = true; Hud.dragTick++ }
                         synchronized(cam) { if (cam.freeFlight) cam.look(dx, dy, height) else cam.rotate(dx, dy, height) }
                     }
                     lastX = e.x; lastY = e.y

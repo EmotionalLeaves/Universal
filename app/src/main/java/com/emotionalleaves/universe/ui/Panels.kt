@@ -222,8 +222,37 @@ fun SourceBadge(source: String) {
 @Composable
 fun InfoCard(engine: Engine, modifier: Modifier = Modifier) {
     if (Hud.selectedName.isEmpty()) return
-    // Each new selection starts with the compact card.
+    // Each new selection starts with the normal card.
     var expanded by remember(Hud.selectedName) { mutableStateOf(false) }
+    var mini by remember(Hud.selectedName) { mutableStateOf(false) }
+    // Get out of the way while you fly, land, roam freely or move the view; tap to bring it back.
+    val firstTick = remember(Hud.selectedName) { Hud.dragTick }
+    androidx.compose.runtime.LaunchedEffect(Hud.flying, Hud.freeFlight) {
+        if (Hud.flying || Hud.freeFlight) { mini = true; expanded = false }
+    }
+    androidx.compose.runtime.LaunchedEffect(Hud.dragTick) {
+        if (Hud.dragTick != firstTick) { mini = true; expanded = false }
+    }
+    if (mini) {
+        Row(
+            modifier.widthIn(max = 540.dp).fillMaxWidth().glass(18.dp).clickable { mini = false }
+                .padding(start = 14.dp, end = 8.dp, top = 8.dp, bottom = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            if (Hud.selectedKind.isNotEmpty()) Chip(Hud.selectedKind, kindColor(Hud.selectedKind), filled = true)
+            Spacer(Modifier.width(8.dp))
+            Column(Modifier.weight(1f)) {
+                Text(Hud.selectedName, style = Type.Body.copy(fontWeight = FontWeight.SemiBold), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                if (Hud.selectedDistance.isNotEmpty()) Text("${Hud.selectedDistance} away", style = Type.Caption.copy(fontSize = 11.sp), maxLines = 1)
+            }
+            if (!Hud.flying) IconButton(G.FLY, size = 36.dp, label = "Fly to") { engine.flyToSelected() }
+            Spacer(Modifier.width(6.dp))
+            IconButton(G.CHEVRON_UP, size = 36.dp, label = "Show card") { mini = false }
+            Spacer(Modifier.width(6.dp))
+            IconButton(G.CLOSE, size = 36.dp, tint = TextDim) { engine.clearSelection() }
+        }
+        return
+    }
     Column(
         modifier
             .widthIn(max = 540.dp)
@@ -236,6 +265,8 @@ fun InfoCard(engine: Engine, modifier: Modifier = Modifier) {
                 if (Hud.selectedKind.isNotEmpty()) Chip(Hud.selectedKind, kindColor(Hud.selectedKind), filled = true)
                 SourceBadge(Hud.selectedSource)
             }
+            IconButton(G.CHEVRON_DOWN, size = 32.dp, tint = TextDim, label = "Minimize card") { mini = true; expanded = false }
+            Spacer(Modifier.width(4.dp))
             IconButton(G.CLOSE, size = 32.dp, tint = TextDim) { engine.clearSelection() }
         }
         Column(Modifier.padding(end = 6.dp)) {
@@ -254,7 +285,7 @@ fun InfoCard(engine: Engine, modifier: Modifier = Modifier) {
                     for ((k, v) in tiles) StatTile(k, v, Modifier.weight(1f))
                 }
             }
-            val maxH = (LocalConfiguration.current.screenHeightDp * (if (expanded) 0.42f else 0.16f)).dp
+            val maxH = (LocalConfiguration.current.screenHeightDp * (if (expanded) 0.34f else 0.14f)).dp
             Column(Modifier.padding(top = 10.dp).heightIn(max = maxH).verticalScroll(rememberScrollState())) {
                 if (Hud.selectedStory.isNotEmpty()) {
                     Text(Hud.selectedStory, style = Type.Body.copy(fontSize = 13.5.sp, lineHeight = 19.sp, color = Color(0xFFDCE2EE)),
@@ -289,8 +320,8 @@ fun InfoCard(engine: Engine, modifier: Modifier = Modifier) {
                 }
             }
             Row(Modifier.padding(top = 10.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                Button("Fly to", glyph = G.FLY, primary = true) { engine.flyToSelected() }
-                if (Hud.selectedCanLand) Button("Land", glyph = G.LAND) { engine.landOnSelected() }
+                Button("Fly to", glyph = G.FLY, primary = true) { mini = true; expanded = false; engine.flyToSelected() }
+                if (Hud.selectedCanLand) Button("Land", glyph = G.LAND) { mini = true; expanded = false; engine.landOnSelected() }
                 Spacer(Modifier.weight(1f))
                 IconButton(G.UP, size = 40.dp) { engine.goUp() }
                 IconButton(G.BOOKMARK, size = 40.dp) {

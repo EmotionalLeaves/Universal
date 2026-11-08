@@ -11,6 +11,9 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import androidx.compose.material3.Text
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -88,8 +91,26 @@ fun UniverseScreen(engine: Engine, version: String, view: UniverseView) {
             else -> {}
         }
         TipsOverlay(engine)
-        androidx.activity.compose.BackHandler(enabled = Nav.screen != Screen.NONE || Hud.selectedName.isNotEmpty()) {
-            if (Nav.screen != Screen.NONE) Nav.screen = Screen.NONE else engine.clearSelection()
+        // Back closes what is open; with nothing open, press it twice to leave the app.
+        androidx.activity.compose.BackHandler(enabled = true) {
+            when {
+                Nav.screen != Screen.NONE -> Nav.screen = Screen.NONE
+                Hud.selectedName.isNotEmpty() -> engine.clearSelection()
+                Hud.freeFlight -> { engine.setFreeFlight(false); Hud.freeFlight = false }
+                System.currentTimeMillis() - BackUi.last < 2000 -> (view.context as? android.app.Activity)?.finish()
+                else -> { BackUi.last = System.currentTimeMillis(); BackUi.hint = true }
+            }
+        }
+        if (BackUi.hint) {
+            Text("Press back again to leave", style = Type.Caption.copy(color = TextMain),
+                modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 90.dp).glass(12.dp).padding(horizontal = 14.dp, vertical = 8.dp))
+            androidx.compose.runtime.LaunchedEffect(BackUi.last) { kotlinx.coroutines.delay(2000); BackUi.hint = false }
         }
     }
+}
+
+/** Double-back-to-exit state. */
+object BackUi {
+    var last = 0L
+    var hint by androidx.compose.runtime.mutableStateOf(false)
 }

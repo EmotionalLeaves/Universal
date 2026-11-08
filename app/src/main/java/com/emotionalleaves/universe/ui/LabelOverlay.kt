@@ -81,7 +81,8 @@ class LabelOverlay(context: Context) : View(context) {
             p.typeface = if (l.selected) Typeface.DEFAULT_BOLD else Typeface.DEFAULT
             val dx = l.offset + 6f * density
             canvas.drawText(l.text, l.x + dx, l.y - 4f * density, p)
-            if (l.selected) {
+            // Big on screen already (a planet filling the view): a ring would just float in its middle.
+            if (l.selected && l.offset < 160f) {
                 ring.color = 0xCCFFD27A.toInt()
                 canvas.drawCircle(l.x, l.y, (l.offset + 4f * density).coerceAtLeast(10f * density), ring)
             }

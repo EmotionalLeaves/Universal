@@ -14,6 +14,10 @@ object Hud {
     var frameMs by mutableStateOf(0f)
     var distanceText by mutableStateOf("")
     var focusName by mutableStateOf("")
+    /** True while the camera is flying somewhere (the info card shrinks out of the way). */
+    var flying by mutableStateOf(false)
+    /** Bumped when you start dragging or pinching the view (the info card shrinks out of the way). */
+    var dragTick by mutableStateOf(0)
     /** Free flight state for the controls: on/off, speed and what is nearest. */
     var freeFlight by mutableStateOf(false)
     var speedText by mutableStateOf("")

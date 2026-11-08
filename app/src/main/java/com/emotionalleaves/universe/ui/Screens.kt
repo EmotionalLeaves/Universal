@@ -28,6 +28,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -200,6 +201,13 @@ fun SearchScreen(engine: Engine) {
             engine.searchAsync(SearchUi.query) { SearchUi.results = it }
         }
     }
+    val focus = androidx.compose.runtime.remember { androidx.compose.ui.focus.FocusRequester() }
+    val keyboard = androidx.compose.ui.platform.LocalSoftwareKeyboardController.current
+    // Ready to type straight away.
+    androidx.compose.runtime.LaunchedEffect(Unit) {
+        kotlinx.coroutines.delay(150)
+        try { focus.requestFocus(); keyboard?.show() } catch (_: Exception) {}
+    }
     Panel("Search", { Nav.screen = Screen.NONE }) {
         androidx.compose.material3.OutlinedTextField(
             value = SearchUi.query,
@@ -207,7 +215,7 @@ fun SearchScreen(engine: Engine) {
                 SearchUi.query = it
                 if (it.isBlank()) SearchUi.results = emptyList() else engine.searchAsync(it) { r -> SearchUi.results = r }
             },
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier.fillMaxWidth().focusRequester(focus),
             singleLine = true,
             shape = RoundedCornerShape(14.dp),
             leadingIcon = { Glyph(G.SEARCH, size = 18.dp, color = TextDim) },

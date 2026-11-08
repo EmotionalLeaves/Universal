@@ -68,6 +68,9 @@ class CosmicLayer : Layer {
         val tex = rc.textures.get("cmb/planck.jpg")
         val rel = frame.rel(UPos.ZERO)
         val inside = rel.length() < Units.UNIVERSE_RADIUS
+        // From outside (beyond the edge) the shell is huge and thin on screen and breaks up into
+        // triangles; the cosmic web shows where the observable universe is instead.
+        if (!inside) return
         GLES30.glEnable(GLES30.GL_DEPTH_TEST)
         GLES30.glDepthMask(false)
         GLES30.glEnable(GLES30.GL_BLEND)

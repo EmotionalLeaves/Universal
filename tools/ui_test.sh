@@ -63,10 +63,12 @@ adb shell input tap 540 1200; sleep 3; shot tap_center; texts
 tap_text "Explore"; sleep 3; shot explore; texts
 tap_text "Mars"; sleep 9; shot at_mars; texts
 tap_text "Read more & all facts"; sleep 2; shot card_expanded
-tap_text "Land"; sleep 2; shot landing_2s; sleep 8; shot landed_10s; texts
+tap_text "Land"; sleep 3; shot landing_3s; sleep 9; shot landed_12s; texts
 drag 540 1500 540 1100 800; sleep 2; shot walk_up
 drag 300 1200 800 1200 800; sleep 2; shot turn
 
+# Close the card so the slider is reachable
+tap_text "Close"; sleep 1
 # Zoom out through the scales with the slider labels
 for s in "Planet" "Solar system" "Nearby stars" "Milky Way" "Galaxy groups" "Universe" "Beyond"; do
   tap_text "$s"; sleep 6; shot "zoom_${s// /_}"; texts
@@ -81,13 +83,13 @@ tap_text "×1"; sleep 1; tap_text "×100"; sleep 1; hold_text "Forward" 3000; sl
 tap_text "Exit"; sleep 2; shot free_exit
 
 # Search
-tap_text "Search"; sleep 2; adb shell input text "Sirius"; sleep 4; shot search; texts
-tap_text "Sirius"; sleep 9; shot sirius; texts
+tap_text "Search"; sleep 3; adb shell input text "Sirius"; sleep 5; shot search; texts
+tap_text "Sirius" contains; sleep 10; shot sirius; texts
 
 # Menu and census
 tap_text "Menu"; sleep 2; shot menu; texts
 tap_text "What's in the universe"; sleep 2; shot census; texts
-adb shell input keyevent 4; sleep 2
+adb shell input keyevent 4; sleep 2; shot after_back; texts
 
 # Explore a far galaxy and a black hole
 tap_text "Explore"; sleep 2; tap_text "Black hole"; sleep 12; shot black_hole; texts
