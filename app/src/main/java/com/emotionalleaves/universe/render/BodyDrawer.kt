@@ -185,7 +185,7 @@ class BodyDrawer(private val programs: Programs) {
         p.set3f("uOffset", rel.x.toFloat(), rel.y.toFloat(), rel.z.toFloat())
         p.set1f("uScale", scale.toFloat())
         p.setMat3("uRot", Mat4.rotation3(rot))
-        p.set4f("uColor", color[0], color[1], color[2], alpha)
+        p.set4f("uColor", color[0], color[1], color[2], alpha * 0.7f)   // orbits and figures stay subtle
         mesh.draw()
     }
 

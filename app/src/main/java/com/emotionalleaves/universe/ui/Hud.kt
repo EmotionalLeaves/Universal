@@ -28,6 +28,8 @@ object Hud {
     var altitudeText by mutableStateOf("")
 
     var selectedName by mutableStateOf("")
+    /** Other things under the last tap (name, id): "Also here" on the card. */
+    var choices by mutableStateOf<List<Pair<String, String>>>(emptyList())
     var selectedSubtitle by mutableStateOf("")
     var selectedSource by mutableStateOf("")
     var selectedDistance by mutableStateOf("")

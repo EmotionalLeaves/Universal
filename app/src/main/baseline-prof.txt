@@ -2,8 +2,8 @@
 # Without this a freshly installed app runs interpreted at first, and parsing the star, galaxy
 # and asteroid catalogues took close to a minute on slow phones.
 HSPLcom/emotionalleaves/universe/**->**(**)**
-SPLcom/emotionalleaves/universe/**;
+Lcom/emotionalleaves/universe/**;
 HSPLkotlin/**->**(**)**
-SPLkotlin/**;
+Lkotlin/**;
 HSPLandroidx/compose/**->**(**)**
-SPLandroidx/compose/**;
+Landroidx/compose/**;

@@ -30,8 +30,8 @@ class LabelOverlay(context: Context) : View(context) {
     private val density = context.resources.displayMetrics.density
 
     private val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        textSize = 13f * density
-        setShadowLayer(3f * density, 0f, 0f, 0xFF000000.toInt())
+        textSize = 12.5f * density
+        setShadowLayer(2.5f * density, 0f, 0f, 0xCC000000.toInt())
     }
     private val smallPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         textSize = 11f * density
@@ -77,7 +77,9 @@ class LabelOverlay(context: Context) : View(context) {
                 continue
             }
             val p = if (l.small) smallPaint else paint
-            p.color = l.color
+            // Softer, slightly see-through names so the sky stays the main thing (easier on the eyes);
+            // the selection stays fully bright.
+            p.color = if (l.selected) l.color else (l.color and 0x00FFFFFF) or (((l.color ushr 24) * 0.72f).toInt() shl 24)
             p.typeface = if (l.selected) Typeface.DEFAULT_BOLD else Typeface.DEFAULT
             val dx = l.offset + 6f * density
             canvas.drawText(l.text, l.x + dx, l.y - 4f * density, p)

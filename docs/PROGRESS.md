@@ -374,3 +374,10 @@ How it was tested: an Android emulator on GitHub (ui-test.yml + tools/ui_test.sh
 - [x] Startup loads run on four threads side by side (stars, galaxies/nebulae, asteroids/quasars, cosmic web) instead of one queue; the generated cosmic web, haze and beyond-region clouds are saved to the cache after the first launch. Headless timing: everything loaded in 5.4 s before, 1.8 s on first launch and stars-limited after.
 - [x] Quasar and cluster facts built when a card opens, not for all 56,000 at startup (was 1.5 s).
 - [x] Free flight: speed can grow at most ~4.5× a second (it ran away exponentially at warp); steps towards the nearest thing never exceed the room left, so warp no longer jumps through planets; heading away is unlimited.
+
+## Pass 17: selection, speed, comfort
+- [x] Tap something again (not only double-tap) to fly there; tap reach a little larger.
+- [x] Crowded spots: the card lists "Also here" — the other things under your finger, one tap each.
+- [x] Flying to (or picking from Also here) a star starts building its planets straight away, so they are there on arrival.
+- [x] Baseline profile: the app is compiled ahead of time at install (fresh installs ran interpreted; catalogues took close to a minute on the emulator).
+- [x] Easier on the eyes: names slightly see-through and smaller (selection stays bright), at most 28 on screen, orbit lines and constellation figures dimmer.

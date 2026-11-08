@@ -222,7 +222,7 @@ class UniverseRenderer(private val context: Context, private val engine: Engine)
         val density = context.resources.displayMetrics.density
         val sliderBox = floatArrayOf(width - 150 * density, height / 2f - 175 * density, width.toFloat(), height / 2f + 175 * density)
         for (p in sorted) {
-            if (out.size >= 40) break
+            if (out.size >= 28) break   // fewer names: a calmer, less cluttered view
             // Several layers may offer the same object (e.g. the selection): label it once.
             if (!named.add(p.body.id)) continue
             val sel = p.body == selected
@@ -299,6 +299,7 @@ class UniverseRenderer(private val context: Context, private val engine: Engine)
         val rate = engine.rateLabel() + if (!engine.paused && engine.timeRate == 1.0 &&
             kotlin.math.abs(frame.jd - com.emotionalleaves.universe.core.Astro.julianDate(System.currentTimeMillis())) > 0.01) " · not now" else ""
         val crumb = engine.world.breadcrumb(frame.camPos, target)
+        val choices = if (sel == null) emptyList() else engine.tapChoices.filter { it.id != sel.id }.map { it.name to it.id }
         val w = engine.world
         val loading = when {
             engine.busy.isNotEmpty() -> engine.busy
@@ -326,6 +327,7 @@ class UniverseRenderer(private val context: Context, private val engine: Engine)
             Hud.lastName = if (!free && target == null && going == null) (engine.lastTarget?.name ?: "") else ""
             Hud.altitudeText = altitude
             Hud.selectedName = sel?.name ?: ""
+            if (Hud.choices != choices) Hud.choices = choices
             Hud.selectedSubtitle = sel?.subtitle ?: ""
             Hud.selectedSource = sel?.source?.label ?: ""
             Hud.selectedDistance = selDist?.let { Units.formatDistance(it) } ?: ""

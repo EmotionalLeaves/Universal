@@ -235,30 +235,50 @@ class Engine(val context: Context) {
     /** Called by the renderer with what was found under a tap. */
     fun applyTap(body: Body?, double: Boolean) {
         if (body != null && body.source == Source.GENERATED) bg.execute { world.rememberGenerated(body) }
-        if (double) {
-            if (body != null) { selected = body; flyTo(body) }
-        } else {
-            selected = body
+        when {
+            // Double tap, or tapping what is already selected: go there.
+            body != null && (double || body == selected) -> { selected = body; flyTo(body) }
+            else -> selected = body
+        }
+        if (body == null) tapChoices = emptyList()
+    }
+
+    /** Other things that were under the last tap (crowded spots): offered on the card. */
+    @Volatile var tapChoices: List<Body> = emptyList()
+
+    /** Selects something by id without flying (the card's "Also here" chips). */
+    fun selectId(id: String) {
+        bg.execute {
+            val b = world.find(id) ?: return@execute
+            selected = b
+            prefetch(b)
         }
     }
 
     val tapReach: Float get() = 36f * density
 
     fun pick(x: Float, y: Float): Pickable? {
-        val reach = 36f * density
-        var best: Pickable? = null
-        var bestScore = Double.MAX_VALUE
+        val reach = 40f * density
+        val hits = ArrayList<Pair<Pickable, Double>>()
         for (p in pickables) {
             val d = hypot((p.x - x).toDouble(), (p.y - y).toDouble())
             val edge = (d - p.pixelRadius).coerceAtLeast(0.0)
             if (edge > reach) continue
-            val score = edge - p.priority * 4.0
-            if (score < bestScore) { bestScore = score; best = p }
+            hits.add(p to edge - p.priority * 4.0)
         }
+        hits.sortBy { it.second }
+        val best = hits.firstOrNull()?.first
+        tapChoices = hits.drop(1).map { it.first.body }.distinctBy { it.id }.filter { it.id != best?.body?.id }.take(5)
         return best
     }
 
+    /** Starts building what is around [b] (its planets) before you arrive, so it is there on arrival. */
+    fun prefetch(b: Body) {
+        if (b is StarBody) bg.execute { try { world.systemFor(b) } catch (_: Exception) {} }
+    }
+
     fun flyTo(body: Body) {
+        prefetch(body)
         synchronized(camera) {
             camera.flyTo(body, body.position(jd), body.viewDistance(), nowSeconds(), arrivalView(body))
         }

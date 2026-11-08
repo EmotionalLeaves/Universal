@@ -383,7 +383,7 @@ fun HelpScreen() {
         val items = listOf(
             "Look around" to "Drag with one finger to orbit whatever you are looking at.",
             "Zoom" to "Pinch, or drag the slider on the right. Bottom of the slider = a low orbit over whatever you picked; top = the whole universe.",
-            "Pick something" to "Tap a planet, star, nebula or galaxy to see its card. Double-tap (or Fly to) to travel there.",
+            "Pick something" to "Tap a planet, star, nebula or galaxy to see its card; tap it again (or Fly to) to travel there. In crowded spots the card lists what else was under your finger under Also here.",
             "Know more" to "Every card describes the object; tap Read more for the full story, its Wikipedia summary and figures: gravity, your weight there, star type, lifetime, habitable zone and more.",
             "How much is here?" to "Menu → What's in the universe counts the real objects in the app and what is generated as you travel.",
             "Everything is there" to "Tap anywhere on the glow of a galaxy (even the Milky Way band) to pick an actual star at that spot. Fly to it: it has planets. Between galaxies, millions of dwarf and distant galaxies appear around you as you travel.",
@@ -445,7 +445,7 @@ fun TipsOverlay(engine: Engine) {
         "A universe of ${com.emotionalleaves.universe.core.Units.sci(com.emotionalleaves.universe.engine.Census.withBeyond())} things" to "Every star in every galaxy, with its planets, moons and every rock down to 1 metre, is built the moment you get close — and is the same every time. Explore → the count shows how it adds up.",
         "Zoom anywhere" to "Pinch, or drag the slider on the right. Tap a label beside it (Planet, Solar system, Milky Way…) to jump to that scale.",
         "Not sure where to go?" to "Tap Explore (top right) for famous planets, stars, nebulae and galaxies, or Surprise me for a random alien world.",
-        "Tap to explore" to "Tap anything for its card. Double-tap or Fly to to travel there.",
+        "Tap to explore" to "Tap anything for its card. Tap it again, or Fly to, to travel there.",
         "Fly freely" to "The paper-plane button next to Explore switches to free flight: look around and fly anywhere, at a speed that adapts to what is near you.",
         "Every star is real to visit" to "Tap anywhere on the glow of a galaxy, even the Milky Way band, to pick a star at that spot. Each one has planets to fly to.",
         "Real or generated" to "Green Real = from scientific catalogues. Purple Generated = filled in by rules where nobody has measured yet.",

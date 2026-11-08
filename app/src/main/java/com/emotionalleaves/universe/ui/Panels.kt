@@ -3,6 +3,7 @@ package com.emotionalleaves.universe.ui
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
@@ -289,6 +290,23 @@ fun InfoCard(engine: Engine, modifier: Modifier = Modifier) {
                 modifier = Modifier.padding(top = 4.dp),
             )
             if (Hud.selectedSubtitle.isNotEmpty()) Text(Hud.selectedSubtitle, style = Type.BodyDim, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            // Crowded spot: the other things under your finger, one tap away.
+            if (Hud.choices.isNotEmpty()) {
+                Row(
+                    Modifier.fillMaxWidth().padding(top = 8.dp).horizontalScroll(rememberScrollState()),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    Text("Also here", style = Type.Caption.copy(fontSize = 11.sp))
+                    for ((name, id) in Hud.choices) {
+                        Text(
+                            name, maxLines = 1, fontSize = 12.sp, color = TextMain,
+                            modifier = Modifier.background(PanelRaised, RoundedCornerShape(10.dp))
+                                .clickable { engine.selectId(id) }.padding(horizontal = 10.dp, vertical = 5.dp),
+                        )
+                    }
+                }
+            }
             // Headline numbers
             val tiles = buildList {
                 if (Hud.selectedDistance.isNotEmpty()) add("From you" to Hud.selectedDistance)
