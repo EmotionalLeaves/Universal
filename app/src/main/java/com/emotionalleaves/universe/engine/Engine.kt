@@ -102,7 +102,8 @@ class Engine(val context: Context) {
         ErrorLog.init(context)
         world.start()
         val home = world.homeBody()
-        camera.jumpTo(home, home.position(jd), home.viewDistance())
+        // Open on the sunlit side (it opened on whatever side was night at the time).
+        camera.jumpTo(home, home.position(jd), home.viewDistance(), arrivalView(home))
     }
 
     fun nowSeconds() = SystemClock.elapsedRealtimeNanos() / 1e9

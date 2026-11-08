@@ -391,3 +391,4 @@ How it was tested: an Android emulator on GitHub (ui-test.yml + tools/ui_test.sh
 - [x] Galaxies: brightness capped to an even glow over the disk and bulge (cores burned to flat white discs), a bit less light in bulges and more in young arm stars so spiral arms read, dust lanes along the mid-plane, and for the Milky Way seen from the Sun the dusty path through the disk (the galactic centre is now a band with its dark rift, not a white slab; rebuilt without it when seen from outside).
 - [x] Quasars dimmer at the whole-universe scale (the survey footprint showed as white patches).
 - [x] Catalogues parsed with a fast tab-separated reader (no split/toDouble): interpreted-mode load of star names, galaxies, asteroids and quasars about 2× faster; galaxy card facts built only when a card opens.
+- [x] Opens on Earth's sunlit side (it opened on whatever side was night at the time).

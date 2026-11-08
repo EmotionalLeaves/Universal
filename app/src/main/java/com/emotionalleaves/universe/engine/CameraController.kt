@@ -185,7 +185,8 @@ class CameraController {
     }
 
     /** Instantly orbit [body] at [dist] metres. */
-    fun jumpTo(body: Body?, pos: UPos, dist: Double) {
+    fun jumpTo(body: Body?, pos: UPos, dist: Double, view: Quatd? = null) {
+        view?.let { orientation = it }
         freeFlight = false
         flight = null
         target = body
