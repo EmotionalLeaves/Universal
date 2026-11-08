@@ -111,6 +111,7 @@ class Engine(val context: Context) {
         if (!paused) jd += dt * timeRate / 86400.0
         synchronized(camera) {
             val before = camera.snapshot()
+            steerLanding()
             surfaceFollow()
             camera.update(dt, now) { it.position(jd) }
             // Never let the camera end up inside a planet. Over the body you are orbiting, lift the
@@ -305,22 +306,67 @@ class Engine(val context: Context) {
         else -> false
     }
 
+    /** World being landed on and the landing spot (direction in the body's own frame). */
+    @Volatile private var landing: Body? = null
+    private var landingDir: Vec3d = Vec3d.Z
+
+    /** While landing: aim for the real ground height at the landing spot as soon as it is known. */
+    private fun steerLanding() {
+        val b = landing ?: return
+        if (!camera.isFlying || camera.zoomTarget() != b) { landing = null; return }
+        val q = world.orientationOf(b, jd) ?: return
+        val h = world.surfaceHeight(b, q.rotate(landingDir) * b.radius)
+        camera.setDistance(b.radius + kotlin.math.max(h, 0.0) + 2.0)
+    }
+
     /** Flies down to stand on the selected world, below where the camera is now. */
     fun landOnSelected() {
         val b = selected ?: return
         if (!canLand(b)) return
-        world.terrainModel(b) // start loading the ground now, not after touchdown
-        synchronized(camera) {
-            val c = b.position(jd)
-            var dir = (camera.position() - c).normalized()
-            // Land below you, but on the day side: if that spot is in darkness, move towards the Sun.
-            val star = when (b) { is PlanetBody -> b.star.pos; else -> UPos.ZERO }
-            val toSun = (star - c).let { if (it.lengthSq() > 0) it.normalized() else dir }
-            if (dir.dot(toSun) < 0.25) dir = (dir + toSun * 1.6).let { if (it.lengthSq() < 1e-9) toSun else it.normalized() }
-            val up = Vec3d.perpendicular(dir)
-            val endQ = com.emotionalleaves.universe.core.Quatd.lookRotation(-dir, up)
-            camera.flyTo(b, c, b.radius + 2.0, nowSeconds(), endQ)
+        world.terrainModel(b) // start loading the ground now
+        busy = "Preparing to land…"
+        bg.execute {
+            try {
+                // Wait (briefly) for the ground so we can pick a good spot.
+                val t0 = System.nanoTime()
+                while (world.terrainModel(b) == null && System.nanoTime() - t0 < 2_500_000_000L) Thread.sleep(50)
+                synchronized(camera) {
+                    val c = b.position(jd)
+                    var dir = (camera.position() - c).normalized()
+                    // Land below you, but on the day side: if that spot is in darkness, move towards the Sun.
+                    val star = when (b) { is PlanetBody -> b.star.pos; else -> UPos.ZERO }
+                    val toSun = (star - c).let { if (it.lengthSq() > 0) it.normalized() else dir }
+                    if (dir.dot(toSun) < 0.25) dir = (dir + toSun * 1.6).let { if (it.lengthSq() < 1e-9) toSun else it.normalized() }
+                    dir = solidGroundNear(b, dir)
+                    val up = Vec3d.perpendicular(dir)
+                    val endQ = com.emotionalleaves.universe.core.Quatd.lookRotation(-dir, up)
+                    val h = world.surfaceHeight(b, dir * b.radius).coerceAtLeast(0.0)
+                    camera.flyTo(b, c, b.radius + h + 2.0, nowSeconds(), endQ)
+                    landing = b
+                    landingDir = world.orientationOf(b, jd)?.conjugate()?.rotate(dir) ?: dir
+                }
+            } catch (e: Exception) {
+                ErrorLog.record("land", e)
+            } finally {
+                busy = ""
+            }
         }
+    }
+
+    /** On worlds with seas, look around [dir] (up to ~50°) for dry land so you do not land on open water. */
+    private fun solidGroundNear(b: Body, dir: Vec3d): Vec3d {
+        if (world.surfaceHeight(b, dir * b.radius) > 5) return dir
+        val a = Vec3d.perpendicular(dir)
+        val c = dir.cross(a).normalized()
+        for (ring in 1..10) {
+            val ang = Math.toRadians(ring * 5.0)
+            for (k in 0 until 16) {
+                val az = k * Math.PI / 8
+                val d = (dir * kotlin.math.cos(ang) + (a * kotlin.math.cos(az) + c * kotlin.math.sin(az)) * kotlin.math.sin(ang)).normalized()
+                if (world.surfaceHeight(b, d * b.radius) > 5) return d
+            }
+        }
+        return dir
     }
 
     /** The thing that contains [b]: moon → planet → star → galaxy → universe. */

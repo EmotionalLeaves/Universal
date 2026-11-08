@@ -162,7 +162,8 @@ class TerrainLayer : Layer {
         val m = model ?: return
         val id = bodyId ?: return
         if (rc.engine.world.terrainBodyId != id) return
-        val body = rc.engine.camera.target ?: return
+        // The world being orbited, or the one being landed on (otherwise it vanishes during the descent).
+        val body = synchronized(rc.engine.camera) { rc.engine.camera.zoomTarget() } ?: return
         if (body.id != id) return
         val q = rc.engine.world.orientationOf(body, frame.jd) ?: return
         val bodyRel = frame.rel(body.position(frame.jd))

@@ -105,7 +105,8 @@ class SolarSystemLayer : Layer {
                         Material.rgb(b.look.colorA), b.radius, light)
                 }
                 val clouds = b.look.clouds
-                if (clouds != null && px > 4) {
+                // From under the cloud layer (standing on the ground) the shell would wrap the whole sky.
+                if (clouds != null && px > 4 && dist > b.radius * 1.006) {
                     val tex = rc.textures.get(clouds)
                     if (tex != 0) {
                         val drift = Quatd.axisAngle(Vec3d.Z, frame.jd * 0.02 % (2 * Math.PI))

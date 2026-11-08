@@ -342,3 +342,9 @@ Phone checklist:
 - [x] RockField: belts and comet clouds of every star (and the Sun's main belt below the catalogue limit, Kuiper belt and Oort cloud) fill in around the camera in 7 size levels down to 1 m boulders (N ∝ D^-2.5), ~1.6 × 10^19 bodies per star, all tappable with stable ids (rock|…).
 - [x] Beyond region extended to 9,000 × the observable radius (64-bit cells stay exact), on by default; field galaxies use unpacked cell ids; depth range 1e33 m; deep haze keeps the structure visible at any zoom.
 - [x] Census headline: ≈ 3 × 10^42 things in the observable universe, ≈ 2 × 10^54 with the beyond region.
+
+## Pass 14: black zoom-out and landing
+- [x] Shaders: length()/normalize() of huge vectors overflowed 32-bit floats on phone GPUs (>~600 pc), making every distant galaxy, cosmic-web point and haze blob invisible. Added safeLength/safeNormalize.
+- [x] Haze: smoothstep(0, 0, x) undefined for the deep haze; guarded.
+- [x] Landing: terrain drawn during the descent (it hid the sphere but drew nothing until arrival), flight aims at the real ground height, waits up to 2.5 s for the ground and picks dry land near the spot on worlds with seas, no cloud shell from below.
+- [x] Headless landing test with a real clock: Earth, Mars and Moon all land in ~2.5 s at ground level.

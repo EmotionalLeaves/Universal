@@ -5,7 +5,11 @@ package com.emotionalleaves.universe.render
  * logarithmic depth buffer so a 1 m rock and a galaxy 10 billion light years away sort correctly.
  */
 object Shaders {
-    private const val HEADER = "#version 300 es\nprecision highp float;\nprecision highp int;\n"
+    // safeLength/safeNormalize: length() squares each component, which overflows 32-bit floats beyond
+    // ~1.8e19 m (600 pc) on many phone GPUs and made every distant galaxy vanish. Scale first.
+    private const val HEADER = "#version 300 es\nprecision highp float;\nprecision highp int;\n" +
+        "float safeLength(vec3 p) { float s = max(max(abs(p.x), abs(p.y)), abs(p.z)); return s > 0.0 ? s * length(p / s) : 0.0; }\n" +
+        "vec3 safeNormalize(vec3 p) { float s = max(max(abs(p.x), abs(p.y)), abs(p.z)); return s > 0.0 ? normalize(p / s) : vec3(0.0, 0.0, 1.0); }\n"
 
     private const val LOG_DEPTH_VS = """
 uniform float uLogF;
@@ -70,7 +74,7 @@ out vec4 vColor;
 out float vSize;
 void main() {
     vec3 p = aPos * uScale + uOffset;
-    float d = max(length(p), 1.0);
+    float d = max(safeLength(p), 1.0);
     float dpc = d / 3.0856776e16;
     float m = aMag + 5.0 * 0.30103 * log2(max(dpc, 1e-12)) - 5.0;
     float e = clamp(-0.4 * (m - uMagLimit), -20.0, 12.0);
@@ -113,12 +117,12 @@ uniform float uNear;       // metres: hide blobs closer than this
 out vec4 vColor;
 void main() {
     vec3 p = aPos * uScale + uOffset;
-    float d = max(length(p), 1.0);
+    float d = max(safeLength(p), 1.0);
     float size = uWorldSize / d * uPxPerRad;
     float s = clamp(size, uMinSize, uMaxSize);
     // Keep the light of each blob constant: tiny blobs dim, huge (close) blobs spread thin.
     float a = uAlpha * aWeight * min(1.0, size / uMinSize) * min(1.0, (uMaxSize * uMaxSize) / (size * size));
-    a *= smoothstep(uNear * 0.5, uNear, d);
+    if (uNear > 0.0) a *= smoothstep(uNear * 0.5, uNear, d);   // smoothstep(0, 0, x) is undefined
     vColor = vec4(aColor.rgb, a);
     gl_PointSize = s;
     gl_Position = logDepth(uViewProj * vec4(p, 1.0));
@@ -237,7 +241,7 @@ void main() {
         vec4 t = texture(uTex, vUv);
         float lum = dot(t.rgb, vec3(0.3333));
         float a = t.a < 0.999 ? t.a : lum;
-        float d = max(dot(n, normalize(uLightDir)), 0.0);
+        float d = max(dot(n, safeNormalize(uLightDir)), 0.0);
         oColor = vec4(vec3(uAmbient + (1.0 - uAmbient) * d), a * 0.95);
         writeDepth();
         return;
@@ -251,24 +255,24 @@ void main() {
     vec3 albedo = uHasTex == 1 ? texture(uTex, vUv).rgb : procedural(normalize(vLocal));
     if (uStyle == 5) {
         // Stars glow: limb darkening, no lighting
-        vec3 v = normalize(-vWorld);
+        vec3 v = safeNormalize(-vWorld);
         float mu = max(dot(n, v), 0.0);
         float limb = 0.4 + 0.6 * pow(mu, 0.5);
         oColor = vec4(albedo * limb * 1.4, 1.0);
         writeDepth();
         return;
     }
-    float diff = max(dot(n, normalize(uLightDir)), 0.0);
+    float diff = max(dot(n, safeNormalize(uLightDir)), 0.0);
     vec3 col = albedo * (uAmbient + (1.0 - uAmbient) * diff);
     if (uHasTex == 1 && uStyle == 4) {
         // Sun glint on water: oceans are the bluish texels.
         float water = smoothstep(0.03, 0.12, albedo.b - max(albedo.r, albedo.g));
-        vec3 v = normalize(-vWorld);
-        vec3 r = reflect(-normalize(uLightDir), n);
-        col += vec3(1.0, 0.95, 0.85) * pow(max(dot(r, v), 0.0), 40.0) * water * 0.6 * step(0.0, dot(n, normalize(uLightDir)));
+        vec3 v = safeNormalize(-vWorld);
+        vec3 r = reflect(-safeNormalize(uLightDir), n);
+        col += vec3(1.0, 0.95, 0.85) * pow(max(dot(r, v), 0.0), 40.0) * water * 0.6 * step(0.0, dot(n, safeNormalize(uLightDir)));
     }
     if (uHasNight == 1) {
-        float night = 1.0 - smoothstep(-0.05, 0.15, dot(n, normalize(uLightDir)));
+        float night = 1.0 - smoothstep(-0.05, 0.15, dot(n, safeNormalize(uLightDir)));
         col += texture(uNight, vUv).rgb * night * 0.9;
     }
     oColor = vec4(col, 1.0);
@@ -289,9 +293,9 @@ uniform float uStrength;
 out vec4 oColor;
 void main() {
     vec3 n = normalize(vNormal);
-    vec3 v = normalize(-vWorld);
+    vec3 v = safeNormalize(-vWorld);
     float rim = 1.0 - abs(dot(n, v));
-    float lit = smoothstep(-0.3, 0.4, dot(n, normalize(uLightDir)));
+    float lit = smoothstep(-0.3, 0.4, dot(n, safeNormalize(uLightDir)));
     float a = pow(rim, 3.0) * lit * uStrength;
     oColor = vec4(uColorA * a, 1.0);
     writeDepth();
@@ -429,7 +433,7 @@ void main() {
     float shadow = 1.0;
     if (along > 0.0) {
         vec3 closest = toP - uLightDir * along;
-        shadow = smoothstep(uPlanetRadius * 0.95, uPlanetRadius * 1.05, length(closest));
+        shadow = smoothstep(uPlanetRadius * 0.95, uPlanetRadius * 1.05, safeLength(closest));
     }
     vec3 c = t.rgb * (0.15 + 0.85 * shadow);
     oColor = vec4(c, t.a);
@@ -504,16 +508,16 @@ void main() {
         col *= 0.82 + 0.36 * detail;
         col = mix(col, col * vec3(0.75, 0.72, 0.7), smoothstep(0.25, 0.6, slope));
     }
-    vec3 l = normalize(uLightDir);
+    vec3 l = safeNormalize(uLightDir);
     float diff = max(dot(n, l), 0.0);
     float horizon = smoothstep(-0.12, 0.08, dot(up, l));   // terrain behind the terminator stays dark
     vec3 lit = col * (0.03 + 0.97 * diff * horizon);
     if (water) {
-        vec3 v = normalize(-vWorld);
+        vec3 v = safeNormalize(-vWorld);
         vec3 r = reflect(-l, n);
         lit += vec3(0.9, 0.9, 0.85) * pow(max(dot(r, v), 0.0), 60.0) * horizon * 0.6;
     }
-    float dist = length(vWorld);
+    float dist = safeLength(vWorld);
     float f = 1.0 - exp(-dist * uFogDensity);
     oColor = vec4(mix(lit, uFogColor, clamp(f, 0.0, 1.0)), 1.0);
     writeDepth();
