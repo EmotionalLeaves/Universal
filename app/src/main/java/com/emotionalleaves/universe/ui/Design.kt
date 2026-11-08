@@ -33,6 +33,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 
 // ---------------------------------------------------------------------------- palette
 
@@ -195,9 +197,14 @@ private fun DrawScope.drawGlyph(g: G, c: Color) {
 
 /** Round glass button with an icon (top bar, card actions). */
 @Composable
-fun IconButton(g: G, modifier: Modifier = Modifier, size: Dp = 44.dp, tint: Color = TextMain, active: Boolean = false, onClick: () -> Unit) {
+fun IconButton(g: G, modifier: Modifier = Modifier, size: Dp = 44.dp, tint: Color = TextMain, active: Boolean = false, label: String? = null, onClick: () -> Unit) {
+    val desc = label ?: when (g) {
+        G.HOME -> "Home"; G.SEARCH -> "Search"; G.MENU -> "Menu"; G.FLY -> "Free flight"; G.CLOSE -> "Close"
+        G.UP -> "Zoom out"; G.BOOKMARK -> "Bookmark"; G.BACK -> "Back"; else -> g.name.lowercase()
+    }
     Box(
         modifier
+            .semantics { contentDescription = desc }
             .size(size)
             .background(if (active) Accent else PanelBg, CircleShape)
             .border(1.dp, if (active) Color.Transparent else PanelBorder, CircleShape)

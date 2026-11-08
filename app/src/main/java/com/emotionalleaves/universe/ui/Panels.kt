@@ -40,6 +40,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import com.emotionalleaves.universe.engine.Engine
 
 
@@ -334,7 +336,8 @@ fun TimeBar(engine: Engine, modifier: Modifier = Modifier) {
 
 @Composable
 private fun TimeButton(g: G, onClick: () -> Unit) {
-    Box(Modifier.size(36.dp).clickable { onClick() }, contentAlignment = Alignment.Center) { Glyph(g, size = 15.dp) }
+    val desc = when (g) { G.REW -> "Slower"; G.FWD -> "Faster"; G.PLAY -> "Play"; else -> "Pause" }
+    Box(Modifier.size(36.dp).semantics { contentDescription = desc }.clickable { onClick() }, contentAlignment = Alignment.Center) { Glyph(g, size = 15.dp) }
 }
 
 
