@@ -518,18 +518,34 @@ class Engine(val context: Context) {
     private fun autopilotStep(dt: Double): Boolean {
         val b = autopilot ?: return false
         if (thrust != 0 || camera.userLooked) { autopilot = null; camera.userLooked = false; return false }
-        val rel = b.position(jd) - camera.position()
+        val centre = b.position(jd)
+        val cam = camera.position()
+        val rel = centre - cam
         val dist = rel.length()
         val stop = arrivalDistance(b)
         if (dist <= 0) { autopilot = null; return false }
         val dir = rel / dist
         camera.turnToward(dir, kotlin.math.min(1.0, dt * 3.0))
-        val remain = dist - stop
-        if (kotlin.math.abs(remain) <= stop * 0.02 + 1.0) { autopilot = null; cruise = 0.0; return false }
+        // Where to end up: on the side you came from, swung towards the day side for planets and
+        // moons (arriving over the night side showed a black disc).
+        val light: UPos? = when (b) {
+            is SolarBody -> if (b.kind == Kind.STAR) null else UPos.ZERO
+            is PlanetBody -> b.star.pos
+            else -> null
+        }
+        var side = -dir
+        if (light != null) {
+            val toLight = (light - centre).let { if (it.lengthSq() > 0) it.normalized() else side }
+            side = (side + toLight * 2.5).let { if (it.lengthSq() < 1e-9) toLight else it.normalized() }
+        }
+        val goal = centre + side * stop
+        val gap = goal - cam
+        val remain = gap.length()
+        if (remain <= stop * 0.02 + 1.0) { autopilot = null; cruise = 0.0; return false }
         // Close a share of the remaining gap every second, a bigger share the more orders of magnitude
         // are left: about 3–8 s whether it is a moon next door or a galaxy billions of light years away.
         val k = 2.0 + 0.25 * kotlin.math.ln(kotlin.math.max(remain / stop, 1.0))
-        camera.shift(dir * (remain * (1 - kotlin.math.exp(-dt * k))))
+        camera.shift(gap * (1 - kotlin.math.exp(-dt * k)))
         keepInsideUniverse()
         return true
     }
