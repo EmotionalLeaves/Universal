@@ -354,3 +354,17 @@ Phone checklist:
 - [x] Auto speed: ~ distance to the nearest surface per 1.5 s (planets, stars, generated stars, rocks, remnants, galaxies, field galaxies), capped at 30 Mpc so it cannot run away; never flies into a surface at ×1. Warp ×100 / ×10,000 / ×1,000,000.
 - [x] Hard edge at the modelled universe's boundary (9,000× or 3× the observable radius) keeps positions exact.
 - [x] Headless test: eases from 14,000 km to ~60 km above Earth without hitting it; roams the beyond region at warp without escaping it.
+
+## Pass 15: tested like a person would (emulator + headless renderer)
+How it was tested: an Android emulator on GitHub (ui-test.yml + tools/ui_test.sh) taps through the app and screenshots every step; a headless renderer on the dev machine (Java 21 foreign-function bridge to Mesa llvmpipe, real shaders and data) screenshots any camera position. The emulator ignores gl_PointSize (stars and galaxies show as 1-px dots there), so rendering is judged on the headless renderer and UI flow on the emulator.
+- [x] Far from home the sky went black between 1 Mpc and a few Gpc (the pre-made web is too sparse there). New WebLod: cosmic-web cells around whatever you look at, sized to the zoom level, anywhere in the observable universe.
+- [x] Whole-universe view was a white blob (1.2M additive points at full brightness). Shared Exposure curve grows slower past 30 Mpc; quasars dimmer; Universe preset backs off so the ball fits a phone screen.
+- [x] Field galaxies brighter (+1.5 mag) so neighbourhoods show.
+- [x] After "Fly to" the card shrank and never came back, so Land and the facts were unreachable: it returns on arrival (but stays small after Land, a drag or free flight).
+- [x] Labels and taps of things behind a planet (Rosette Nebula printed on Mars) and below the horizon when landed are hidden (line of sight through the world).
+- [x] World labels kept off the zoom scale.
+- [x] Free flight: warp ×1/×10/×100/×1000 (×10,000 flung you out of the universe in 3 s); holding Forward speeds up gently to ×10.
+- [x] Search: the keyboard's search key opens the best match. Menu button always opens the menu.
+- [x] Landed ground had no detail (photo maps are km per pixel): procedural soil/rock patches at ~2 km and ~150 m.
+- [x] GPU upload and per-layer GL errors are logged (UniverseProblem/UniverseDiag) and kept in the problem report.
+- [ ] Emulator showed rectangular holes in the ground just after landing (not reproduced on the headless renderer).
