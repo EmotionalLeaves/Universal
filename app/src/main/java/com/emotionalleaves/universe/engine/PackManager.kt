@@ -37,7 +37,7 @@ data class PackState(
  */
 class PackManager(private val context: Context, private val world: World, private val settings: Settings) {
     /**
-     * Downloadable data: catalogues from the public data repo (EmotionalLeaves/Universal-data), plus
+     * Downloadable data: catalogues from the repo's sky-v1 release, plus
      * the asteroid list the app builds from the Minor Planet Center. All of them install by themselves
      * on the first run (on Wi-Fi unless "Wi-Fi only" is off).
      */
@@ -295,8 +295,8 @@ class PackManager(private val context: Context, private val world: World, privat
         const val ASTEROIDS = "asteroids-mpc"
         const val GALAXIES = "galaxies-glade"
         const val QUASARS = "quasars-milliquas"
-        /** Public data repo release with every downloadable file. */
-        const val DATA_BASE = "https://github.com/EmotionalLeaves/Universal-data/releases/download/sky-v1/"
+        /** The (public) repo's release with every downloadable data file. */
+        const val DATA_BASE = "https://github.com/EmotionalLeaves/Universal/releases/download/sky-v1/"
         const val RELEASE_API = "https://api.github.com/repos/EmotionalLeaves/Universal/releases/tags/data-v1"
     }
 }

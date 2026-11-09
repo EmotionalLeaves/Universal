@@ -30,6 +30,8 @@ TAP = "https://gea.esac.esa.int/tap-server/tap"
 TIERS = [(1, 50.0, 0.0, 1200.0), (2, 250.0, 1200.0, 6000.0), (3, 1000.0, 6000.0, 40000.0)]
 REC = struct.Struct("<HHHHhq")
 PAGE = 2_500_000
+THREADS = 8
+BUDGET_S = 290 * 60
 HPX12 = 12 * 4 ** 12
 
 
@@ -132,66 +134,96 @@ def gaia(out, work, gmax):
     cols = ("g.source_id, g.ra, g.dec, g.parallax, g.parallax_over_error, g.ruwe, g.phot_g_mean_mag, g.bp_rp, "
             "d.r_med_geo, d.r_med_photogeo")
     buckets = Buckets(os.path.join(work, "buckets"))
-    pending = [(i * HPX12 // 96, (i + 1) * HPX12 // 96) for i in range(96)]
-    total = 0
-    tmp = os.path.join(work, "job.csv")
+    # The archive returns at most 50,000 rows per query (sync or async, for anonymous users), so the
+    # sky is cut into thousands of source_id ranges (HEALPix pixels), split further where crowded,
+    # and queried several at a time.
+    import concurrent.futures as cf
+    import threading
+    CAP = 50000
+    pending = [(i * HPX12 // 4096, (i + 1) * HPX12 // 4096) for i in range(4096)]
+    total = [0]
+    done = [0]
+    lock = threading.Lock()
     t_start = time.time()
-    while pending:
-        a, b = pending.pop(0)
+
+    def run(rng):
+        a, b = rng
         lo, hi = a * (1 << 35), b * (1 << 35) - 1
-        q = (f"SELECT TOP {PAGE} {cols} FROM gaiadr3.gaia_source AS g JOIN external.gaiaedr3_distance AS d "
+        q = (f"SELECT {cols} FROM gaiadr3.gaia_source AS g JOIN external.gaiaedr3_distance AS d "
              f"ON g.source_id = d.source_id WHERE g.source_id BETWEEN {lo} AND {hi} AND g.phot_g_mean_mag < {gmax}")
-        t0 = time.time()
-        async_query(q, tmp)
-        n = 0
+        url = TAP + "/sync?" + urllib.parse.urlencode({"REQUEST": "doQuery", "LANG": "ADQL", "FORMAT": "csv", "QUERY": q})
+        for attempt in range(6):
+            try:
+                with http(url, timeout=900) as r:
+                    text = r.read().decode("utf-8", "replace")
+                if not text.startswith("source_id"):
+                    raise RuntimeError(text[:200])
+                return rng, text.split("\n")[1:]
+            except Exception as e:
+                time.sleep(10 * (attempt + 1))
+                last = e
+        raise RuntimeError(f"range {a}-{b} failed: {last}")
+
+    def keep(lines):
         kept = 0
-        with open(tmp, "r") as f:
-            header = f.readline().strip().split(",")
-            for line in f:
-                n += 1
-        if n >= PAGE and b - a > 1:
-            m = (a + b) // 2
-            pending[:0] = [(a, m), (m, b)]
-            log(f"  range {a}-{b}: {n} rows (capped), splitting")
-            continue
-        with open(tmp, "r") as f:
-            f.readline()
-            for line in f:
-                p = line.rstrip("\n").split(",")
-                try:
-                    sid = int(p[0]); ra = float(p[1]); dec = float(p[2]); g = float(p[6])
-                except Exception:
+        for line in lines:
+            if not line:
+                continue
+            p = line.rstrip("\r").split(",")
+            try:
+                sid = int(p[0]); ra = float(p[1]); dec = float(p[2]); g = float(p[6])
+            except Exception:
+                continue
+            plx = float(p[3]) if p[3] else float("nan")
+            poe = float(p[4]) if p[4] else 0.0
+            ruwe = float(p[5]) if p[5] else 9.0
+            # Already in the built-in near-Sun file (same selection as gaia_near).
+            if plx > 10 and poe > 10 and ruwe < 1.4:
+                continue
+            dist = p[9] or p[8]
+            if not dist:
+                if plx > 0 and poe > 5:
+                    dist = 1000.0 / plx
+                else:
                     continue
-                plx = float(p[3]) if p[3] else float("nan")
-                poe = float(p[4]) if p[4] else 0.0
-                ruwe = float(p[5]) if p[5] else 9.0
-                # Already in the built-in near-Sun file (same selection as gaia_near).
-                if plx > 10 and poe > 10 and ruwe < 1.4:
+            d = float(dist)
+            if not (d > 0) or d > TIERS[-1][3]:
+                continue
+            for tier, size, dmin, dmax in TIERS:
+                if dmin <= d < dmax or (tier == 1 and d < dmin):
+                    break
+            x, y, z = place(ra, dec, d)
+            cell = (math.floor(x / size), math.floor(y / size), math.floor(z / size))
+            qx = min(65535, int((x / size - cell[0]) * 65535 + 0.5))
+            qy = min(65535, int((y / size - cell[1]) * 65535 + 0.5))
+            qz = min(65535, int((z / size - cell[2]) * 65535 + 0.5))
+            bp = p[7]
+            bpi = -32768 if not bp else max(-32767, min(32767, int(float(bp) * 1000)))
+            buckets.add(tier, cell, REC.pack(qx, qy, qz, int(min(65.5, max(0.0, g)) * 1000), bpi, sid))
+            kept += 1
+        return kept
+
+    with cf.ThreadPoolExecutor(max_workers=THREADS) as ex:
+        futs = {ex.submit(run, r) for r in pending}
+        while futs:
+            finished, futs = cf.wait(futs, return_when=cf.FIRST_COMPLETED)
+            for f in finished:
+                (a, b), lines = f.result()
+                rows = sum(1 for l in lines if l)
+                if rows >= CAP - 1 and b - a > 1:
+                    m = (a + b) // 2
+                    futs |= {ex.submit(run, (a, m)), ex.submit(run, (m, b))}
                     continue
-                dist = p[9] or p[8]
-                if not dist:
-                    if plx > 0 and poe > 5:
-                        dist = 1000.0 / plx
-                    else:
-                        continue
-                d = float(dist)
-                if not (d > 0) or d > TIERS[-1][3]:
-                    continue
-                for tier, size, dmin, dmax in TIERS:
-                    if dmin <= d < dmax or (tier == 1 and d < dmin):
-                        break
-                x, y, z = place(ra, dec, d)
-                cell = (math.floor(x / size), math.floor(y / size), math.floor(z / size))
-                qx = min(65535, int((x / size - cell[0]) * 65535 + 0.5))
-                qy = min(65535, int((y / size - cell[1]) * 65535 + 0.5))
-                qz = min(65535, int((z / size - cell[2]) * 65535 + 0.5))
-                bp = p[7]
-                bpi = -32768 if not bp else max(-32767, min(32767, int(float(bp) * 1000)))
-                buckets.add(tier, cell, REC.pack(qx, qy, qz, int(min(65.5, max(0.0, g)) * 1000), bpi, sid))
-                kept += 1
-        total += kept
-        log(f"  range {a}-{b}: {n} rows, kept {kept}, total {total:,} ({time.time() - t0:.0f} s; {len(pending)} ranges left; "
-            f"{(time.time() - t_start) / 60:.0f} min so far)")
+                total[0] += keep(lines)
+                done[0] += 1
+                if done[0] % 100 == 0:
+                    log(f"  {done[0]} ranges done, {len(futs)} in flight/queued, {total[0]:,} stars, {(time.time() - t_start) / 60:.0f} min")
+            if time.time() - t_start > BUDGET_S:
+                log("  time budget reached: stopping (the tiles will cover only what was fetched)")
+                for f in futs:
+                    f.cancel()
+                break
+    log(f"  fetched {total[0]:,} stars in {(time.time() - t_start) / 60:.0f} min")
     buckets.close()
     # Write one file per tier: index sorted by cell, then records cell by cell.
     for tier, size, _, _ in TIERS:

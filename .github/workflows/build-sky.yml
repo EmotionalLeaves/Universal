@@ -3,7 +3,7 @@ on:
   workflow_dispatch:
     inputs:
       only:
-        description: "Comma-separated: gaia,milliquas"
+        description: "Comma-separated: gaia,milliquas,packs"
         default: "gaia,milliquas"
       gmax:
         description: "Faintest Gaia G magnitude"
@@ -26,3 +26,9 @@ jobs:
           mkdir -p build; touch build/sky-build.log
           gh release view sky-v1 >/dev/null 2>&1 || gh release create sky-v1 --title "Sky data (staging)" --notes "Built by build-sky.yml; copied to the public Universal-data repo" --prerelease
           for f in build/sky/*.bin build/sky/*.txt build/sky-build.log; do [ -f "$f" ] && gh release upload sky-v1 "$f" --clobber; done
+          # Downloadable packs the app installs whole (zips).
+          if [ -f build/sky/milliquas.bin ]; then (cd build/sky && zip -q pack-quasars-milliquas.zip milliquas.bin milliquas_names.txt) && gh release upload sky-v1 build/sky/pack-quasars-milliquas.zip --clobber; fi
+          if [[ "${{ inputs.only }}" == *packs* ]]; then
+            mkdir -p /tmp/p && gh release download data-v1 -p pack-galaxies-glade.zip -D /tmp/p && gh release upload sky-v1 /tmp/p/pack-galaxies-glade.zip --clobber
+            if [ ! -f build/sky/milliquas.bin ]; then gh release download sky-v1 -p milliquas.bin -p milliquas_names.txt -D /tmp/p && (cd /tmp/p && zip -q pack-quasars-milliquas.zip milliquas.bin milliquas_names.txt) && gh release upload sky-v1 /tmp/p/pack-quasars-milliquas.zip --clobber; fi
+          fi
