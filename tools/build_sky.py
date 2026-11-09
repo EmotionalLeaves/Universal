@@ -265,6 +265,156 @@ def gaia(out, work, gmax):
         log(f"wrote {dest}: {len(index):,} cells, {offset // REC.size:,} stars, {os.path.getsize(dest) / 1e6:.0f} MB")
 
 
+GLADE_MIRRORS = ["https://vizier.cfa.harvard.edu", "https://vizier.idia.ac.za", "https://vizier.cds.unistra.fr"]
+GTIERS = [(1, 20.0, 0.0, 300.0), (2, 100.0, 300.0, 1e9)]
+GREC = struct.Struct("<HHHhi")
+OVERVIEW_ABS = -20.5
+
+
+def glade(out, work):
+    """All of GLADE+ (22.5 million galaxies): the bright ones (absolute B < OVERVIEW_ABS, or unknown) go in
+    glade.bin (the pack the app downloads whole, UXGL format: float32 x, y, z Mpc, absB), the rest in
+    galaxy_t1/t2.bin cells (UXTS format, 12-byte records: uint16 qx, qy, qz, int16 absB*100, int32 PGC)
+    that the app streams around the camera."""
+    import concurrent.futures as cf
+    boxes = []
+    step = 4.0
+    dec = -90.0
+    while dec < 90.0:
+        d1 = min(90.0, dec + step)
+        mid = max(abs(dec), abs(d1))
+        w = step / max(0.05, math.cos(math.radians(min(89.0, mid))))
+        n = max(1, int(math.ceil(360.0 / w)))
+        for i in range(n):
+            boxes.append((360.0 * i / n, 360.0 * (i + 1) / n, dec, d1))
+        dec = d1
+    log(f"glade: {len(boxes)} sky boxes")
+
+    def fetch(box):
+        ra0, ra1, de0, de1 = box
+        cra, cde = (ra0 + ra1) / 2, (de0 + de1) / 2
+        # A box a little larger than ours (VizieR's boxes are not exact at high declination); rows are
+        # then kept only if they fall inside [ra0, ra1) x [de0, de1).
+        wdeg = (ra1 - ra0) * math.cos(math.radians(cde)) + 1.0
+        if abs(cde) > 80:
+            q = f"-c={cra:.4f}%20{cde:+.4f}&-c.r={(de1 - de0) + (ra1 - ra0) * math.cos(math.radians(min(abs(de0), abs(de1)))) + 1:.3f}&-c.u=deg"
+        else:
+            q = f"-c={cra:.4f}%20{cde:+.4f}&-c.bd={wdeg:.4f}x{(de1 - de0) + 1.0:.4f}&-c.u=deg"
+        for attempt in range(8):
+            base = GLADE_MIRRORS[attempt % len(GLADE_MIRRORS)]
+            url = f"{base}/viz-bin/asu-tsv?-source=VII/291/gladep&{q}&-out=RAJ2000,DEJ2000,dL,zcmb,Bmag,PGC&-out.max=unlimited"
+            try:
+                with http(url, timeout=600) as r:
+                    text = r.read().decode("latin-1")
+                if "RAJ2000" not in text:
+                    raise RuntimeError("no table: " + text[:120])
+                rows = []
+                for line in text.split("\n"):
+                    if not line or line[0] in "#-RD" or line.startswith(" ") and not line.strip():
+                        continue
+                    p = line.split("\t")
+                    if len(p) < 6:
+                        continue
+                    try:
+                        ra = float(p[0]); de = float(p[1])
+                    except Exception:
+                        continue
+                    if not (ra0 <= ra < ra1 and (de0 <= de < de1 or (de1 == 90.0 and de == 90.0))):
+                        continue
+                    rows.append(p)
+                return box, rows
+            except Exception as e:
+                last = e
+                time.sleep(5 * (attempt + 1))
+        raise RuntimeError(f"box {box} failed: {last}")
+
+    buckets = Buckets(os.path.join(work, "gbuckets"))
+    ov = open(os.path.join(out, "glade.bin"), "wb")
+    ov.write(b"UXGL")
+    ov.write(struct.pack("<i", 1))
+    n_ov = n_tile = n_all = 0
+    t0 = time.time()
+    with cf.ThreadPoolExecutor(max_workers=6) as ex:
+        futs = [ex.submit(fetch, b) for b in boxes]
+        for k, f in enumerate(cf.as_completed(futs)):
+            box, rows = f.result()
+            for p in rows:
+                try:
+                    ra = float(p[0]); de = float(p[1]); dl = float(p[2])
+                except Exception:
+                    continue
+                if not (dl > 0):
+                    continue
+                z = float(p[3]) if p[3].strip() else float("nan")
+                dc = dl / (1 + z) if z == z and z > 0 else dl / (1 + dl / 4400.0)
+                b = float(p[4]) if p[4].strip() else float("nan")
+                absb = b - 5 * math.log10(dl * 1e6 / 10) if b == b else float("nan")
+                pgc = int(p[5]) if p[5].strip().isdigit() else 0
+                x, y, zz = place(ra, de, dc)
+                n_all += 1
+                if not (absb == absb):
+                    absb = -19.5   # no B magnitude (infrared-only): a typical galaxy, streamed with the faint ones
+                if absb < OVERVIEW_ABS:
+                    ov.write(struct.pack("<ffff", x, y, zz, absb))
+                    n_ov += 1
+                    continue
+                for tier, size, dmin, dmax in GTIERS:
+                    if dmin <= dc < dmax:
+                        break
+                cell = (math.floor(x / size), math.floor(y / size), math.floor(zz / size))
+                if max(abs(c) for c in cell) > 32000:
+                    continue
+                q = [min(65535, int((v / size - c) * 65535 + 0.5)) for v, c in zip((x, y, zz), cell)]
+                buckets.add(tier, cell, GREC.pack(q[0], q[1], q[2], int(max(-32767, min(32767, absb * 100))), pgc) + b"\0" * 6)
+                n_tile += 1
+            if (k + 1) % 100 == 0:
+                log(f"  {k + 1}/{len(boxes)} boxes, {n_all:,} galaxies ({n_ov:,} overview, {n_tile:,} tiles), {(time.time() - t0) / 60:.0f} min")
+    ov.close()
+    buckets.close()
+    log(f"glade: {n_all:,} galaxies; overview {n_ov:,}; tiles {n_tile:,}")
+    write_tiles(out, buckets.root, "galaxy", GTIERS, GREC.size, pad=6, sort_key=lambda r: struct.unpack_from("<h", r, 6)[0])
+
+
+def write_tiles(out, root, prefix, tiers, rec_size, pad=0, sort_key=None):
+    """Turns spilled bucket files into one cell file per tier (UXTS format)."""
+    raw_size = 6 + rec_size + pad
+    for tier, size, _, _ in tiers:
+        files = sorted(fn for fn in os.listdir(root) if fn.startswith(f"t{tier}_"))
+        index = []
+        dest = os.path.join(out, f"{prefix}_t{tier}.bin")
+        body = dest + ".body"
+        offset = 0
+        with open(body, "wb") as bf:
+            for fn in files:
+                raw = open(os.path.join(root, fn), "rb").read()
+                groups = {}
+                for i in range(0, len(raw) - raw_size + 1, raw_size):
+                    cx, cy, cz = struct.unpack_from("<hhh", raw, i)
+                    groups.setdefault((cx, cy, cz), []).append(raw[i + 6:i + 6 + rec_size])
+                for cell in sorted(groups):
+                    recs = groups[cell]
+                    if sort_key:
+                        recs.sort(key=sort_key)
+                    blob = b"".join(recs)
+                    bf.write(blob)
+                    index.append((cell, len(recs), offset))
+                    offset += len(blob)
+        start = 24 + 20 * len(index)
+        with open(dest, "wb") as f:
+            f.write(b"UXTS")
+            f.write(struct.pack("<iifii", 1, tier, size, rec_size, len(index)))
+            for (cx, cy, cz), n, off in index:
+                f.write(struct.pack("<hhhhiq", cx, cy, cz, 0, n, start + off))
+            with open(body, "rb") as bf:
+                while True:
+                    b = bf.read(1 << 22)
+                    if not b:
+                        break
+                    f.write(b)
+        os.remove(body)
+        log(f"wrote {dest}: {len(index):,} cells, {offset // rec_size:,} records, {os.path.getsize(dest) / 1e6:.0f} MB")
+
+
 def milliquas(out, work):
     url = "https://heasarc.gsfc.nasa.gov/FTP/heasarc/dbase/tdat_files/heasarc_milliquas.tdat.gz"
     path = os.path.join(work, "milliquas.tdat.gz")
@@ -326,6 +476,8 @@ def main():
         milliquas(a.out, work)
     if "gaia" in only:
         gaia(a.out, work, a.gmax)
+    if "glade" in only:
+        glade(a.out, work)
 
 
 if __name__ == "__main__":

@@ -17,16 +17,17 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Build
-        run: mkdir -p build && python3 tools/build_sky.py --out build/sky --only "${{ inputs.only }}" --gmax "${{ inputs.gmax }}" 2>&1 | tee build/sky-build.log || true
+        run: mkdir -p build && python3 tools/build_sky.py --out build/sky --only "${{ inputs.only }}" --gmax "${{ inputs.gmax }}" 2>&1 | tee build/sky-build-${{ inputs.only }}.log || true
       - name: Publish
         if: always()
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          mkdir -p build; touch build/sky-build.log
+          mkdir -p build
           gh release view sky-v1 >/dev/null 2>&1 || gh release create sky-v1 --title "Sky data (staging)" --notes "Built by build-sky.yml; copied to the public Universal-data repo" --prerelease
-          for f in build/sky/*.bin build/sky/*.txt build/sky-build.log; do if [ -s "$f" ]; then gh release upload sky-v1 "$f" --clobber; fi; done
+          for f in build/sky/*.bin build/sky/*.txt build/sky-build-*.log; do if [ -s "$f" ] && [ "$(basename $f)" != glade.bin ]; then gh release upload sky-v1 "$f" --clobber; fi; done
           # Downloadable packs the app installs whole (zips).
+          if [ -f build/sky/glade.bin ]; then (cd build/sky && zip -q pack-galaxies-glade.zip glade.bin) && gh release upload sky-v1 build/sky/pack-galaxies-glade.zip --clobber; fi
           if [ -f build/sky/milliquas.bin ]; then (cd build/sky && zip -q pack-quasars-milliquas.zip milliquas.bin milliquas_names.txt) && gh release upload sky-v1 build/sky/pack-quasars-milliquas.zip --clobber; fi
           if [[ "${{ inputs.only }}" == *packs* ]]; then
             mkdir -p /tmp/p && gh release download data-v1 -p pack-galaxies-glade.zip -D /tmp/p && gh release upload sky-v1 /tmp/p/pack-galaxies-glade.zip --clobber
