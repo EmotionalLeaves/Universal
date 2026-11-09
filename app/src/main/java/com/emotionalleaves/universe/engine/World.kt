@@ -175,7 +175,7 @@ class World(private val engine: Engine) {
     private var genGalaxy: String? = null
     private var genTimer = 0.0
 
-    fun galaxyById(id: String): GalaxyBody? = galaxyIndex[id] ?: (if (id.startsWith("gal:")) find(id) as? GalaxyBody else null)
+    fun galaxyById(id: String): GalaxyBody? = galaxyIndex[id] ?: (if (id.startsWith("gal:") || id.startsWith("glade:")) find(id) as? GalaxyBody else null)
 
     fun isRegistered(id: String) = galaxyIndex.containsKey(id)
 
@@ -248,10 +248,20 @@ class World(private val engine: Engine) {
         private set
 
     /** Reloads everything that depends on installed packs (call from any thread). */
+    /** Every quasar in Milliquas (once its pack is installed). */
+    @Volatile var milliquas: MilliquasDb? = null
+    private var builtInStarsLoaded = false
+
     fun packsChanged() {
+        loader3.execute {
+            milliquas = MilliquasDb.load(engine.context.filesDir)
+            searchStale = true
+            loaded("milliquas (${milliquas?.count ?: 0})")
+        }
         loader.execute {
             val rs = realStars
-            if (rs != null) {
+            if (rs != null && !builtInStarsLoaded) {
+                builtInStarsLoaded = true
                 // AT-HYG (750,000 real stars to magnitude 11, from Tycho-2 and Gaia) ships inside the app.
                 rs.packs = try {
                     listOfNotNull(StarFiles.open(engine.context, "stars/athyg.bin")?.use { StarFiles.read(it, "AT-HYG") })
@@ -260,8 +270,7 @@ class World(private val engine: Engine) {
                 // Real Gaia stars within 330 light years, also shipped with the app (deduplicated against the above).
                 try { rs.gaia = gaia; gaia.loadSeeds(engine.context); gaia.loadNear(engine.context, rs); loaded("gaia near (${gaia.near?.count ?: 0})") } catch (e: Throwable) { ErrorLog.record("loading Gaia stars", e) }
                 // A deeper real catalogue means generated stars must stay fainter (rule 2).
-                StarField.catalogLimit = if (rs.packs.isNotEmpty()) 10.5 else 8.0
-                genLocal = null
+                updateCatalogLimit()
             }
         }
         reloadLargeScale()
@@ -282,7 +291,7 @@ class World(private val engine: Engine) {
     /** (Re)loads the GLADE+ pack and regenerates the cosmic web beyond whatever real data we have. */
     fun reloadLargeScale() {
         webExec.execute {
-            val maxPts = when (engine.settings.quality) { 0 -> 400_000; 2 -> 3_000_000; else -> 1_200_000 }
+            val maxPts = when (engine.settings.quality) { 0 -> 600_000; 2 -> 5_000_000; else -> 2_500_000 }
             glade = GladePack.load(engine.context, maxPts)
             // With millions of real galaxies installed, generated ones must be fainter (rule 2).
             GalaxyField.catalogLimit = if (glade != null) 17.0 else 14.0
@@ -713,6 +722,20 @@ class World(private val engine: Engine) {
 
     /** Real Gaia DR3 stars streamed around the camera. */
     val gaia = GaiaStream(engine.context.cacheDir)
+    /** Every Gaia star brighter than G = 15, anywhere in the Milky Way (streamed cells). */
+    val gaiaTiles = GaiaTiles(engine.context.cacheDir, gaia)
+
+    /** How bright a generated star may look from the Sun: real catalogues own everything brighter (rule 2). */
+    private fun updateCatalogLimit() {
+        val rs = realStars
+        StarField.catalogLimit = when {
+            gaiaTiles.ready && engine.settings.gaiaStream -> 15.0
+            rs != null && rs.packs.isNotEmpty() -> 10.5
+            else -> 8.0
+        }
+        gaia.minG = if (gaiaTiles.ready && engine.settings.gaiaStream) 15.0 else -99.0
+        genLocal = null
+    }
     private var gaiaTimer = 0.0
 
     private fun updateGaia(cam: UPos, dt: Double) {
@@ -722,6 +745,11 @@ class World(private val engine: Engine) {
         val rs = realStars ?: return
         rs.gaia = gaia
         val nearSphere = if (gaia.near != null) milkyWay.toLocal(UPos.ZERO).let { doubleArrayOf(it.x, it.y, it.z, GaiaStream.NEAR_PC) } else null
+        rs.tiles = if (engine.settings.gaiaStream) gaiaTiles else null
+        if (engine.settings.gaiaStream) {
+            if (!gaiaTiles.ready) gaiaTiles.start { updateCatalogLimit() }
+            gaiaTiles.update(cam, rs) { }
+        } else if (StarField.catalogLimit == 15.0) updateCatalogLimit()
         if (!engine.settings.gaiaStream) {
             if (gaia.bubble != null) { gaia.clear(); genLocal = null }
             val want = listOfNotNull(nearSphere)
@@ -755,6 +783,12 @@ class World(private val engine: Engine) {
         if (id.startsWith("fam:")) return Famous.find(id)
         byId[id]?.let { return it }
         byIdConcurrent[id]?.let { return it }
+        if (id.startsWith("glade:") && !id.contains("/")) {
+            val g = glade ?: return null
+            val i = id.removePrefix("glade:").toIntOrNull() ?: return null
+            if (i !in 0 until g.count) return null
+            return (galaxyIndex[id] ?: g.galaxy(i).also { registerExtraGalaxy(it) })
+        }
         if (id.startsWith("gal:out")) {
             galaxyIndex[id]?.let { return it }
             val i = id.removePrefix("gal:out").toIntOrNull() ?: return null
@@ -778,6 +812,10 @@ class World(private val engine: Engine) {
             return db.indexOfPacked(id.removePrefix("ast:"))?.let { asteroidBody(it) }
         }
         if (id.startsWith("net:")) return Online.find(id)
+        if (id.startsWith("mq:")) {
+            val db = milliquas ?: return null
+            return db.indexOf(id.removePrefix("mq:"))?.let { db.body(it) }
+        }
         if (id.startsWith("psr:") || id.startsWith("qso:") || id.startsWith("gcl:")) return exotic.find(id)
         if (id.startsWith("rem:")) return Remnants.fromId(id) { galaxyById(it) }
         if (id.startsWith("gal:f")) {
@@ -788,7 +826,7 @@ class World(private val engine: Engine) {
         if (id.startsWith("gs:") && !id.contains("/")) return StarField.fromId(id) { galaxyById(it) }
         if (id.startsWith("gaia:") && !id.contains("/")) {
             val src = id.removePrefix("gaia:").toLongOrNull() ?: return null
-            for (cat in listOfNotNull(gaia.near, gaia.bubble?.catalog)) {
+            for (cat in listOfNotNull(gaia.near, gaia.bubble?.catalog) + gaiaTiles.catalogs) {
                 for (t in cat.tiles) for (i in 0 until t.count) if (gaia.sourceOf[t.ids[i]] == src) return realStars?.bodyFrom(t, i)
             }
             return gaia.lookup(src)

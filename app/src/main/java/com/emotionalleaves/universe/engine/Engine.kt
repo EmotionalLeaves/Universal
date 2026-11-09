@@ -50,6 +50,12 @@ class Engine(val context: Context) {
                             if (seen.add(b.id)) more.add(SearchHit(b.id, b.name, b.subtitle, 95))
                         }
                     }
+                    world.milliquas?.let { db ->
+                        for (i in db.search(q, 6)) {
+                            val b = db.body(i)
+                            if (seen.add(b.id)) more.add(SearchHit(b.id, b.name, "Quasar", 94))
+                        }
+                    }
                     if (gen != searchGen) return@execute
                     if (more.isNotEmpty()) main.post { if (gen == searchGen) done(r + more) }
                     val nq = normalize(q)
@@ -144,6 +150,8 @@ class Engine(val context: Context) {
         ErrorLog.init(context)
         Online.init(context)
         world.start()
+        // Fetch the big catalogues in the background once the app has settled.
+        android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({ packs.autoInstall() }, 8000)
         val home = world.homeBody()
         // Open on the sunlit side (it opened on whatever side was night at the time).
         camera.jumpTo(home, home.position(jd), home.viewDistance(), arrivalView(home))

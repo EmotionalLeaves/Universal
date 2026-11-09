@@ -221,13 +221,28 @@ class ExoticLayer : Layer {
         }
     }
 
+    private var mq: com.emotionalleaves.universe.engine.MilliquasDb? = null
+
     override fun update(frame: Frame, rc: RenderContext) {
+        val m = rc.engine.world.milliquas
+        if (m !== mq) {
+            mq = m
+            qso?.release()
+            qso = if (m != null) {
+                val d = FloatArray(m.count * 7)
+                for (i in 0 until m.count) {
+                    d[i * 7] = m.xyz[i * 3]; d[i * 7 + 1] = m.xyz[i * 3 + 1]; d[i * 7 + 2] = m.xyz[i * 3 + 2]
+                    d[i * 7 + 3] = 0.78f; d[i * 7 + 4] = 0.85f; d[i * 7 + 5] = 1f; d[i * 7 + 6] = m.absMag(i).toFloat()
+                }
+                PointBatch.upload(UPos.ZERO, Units.MPC, d)
+            } else src?.let { upload(it.quasars, Units.MPC, ::absMag) }
+        }
         val ex = rc.engine.world.exotic
         if (ex === src) return
         src = ex
         psr?.release(); qso?.release(); gcl?.release()
         psr = upload(ex.pulsars, Units.PC, ::absMag)
-        qso = upload(ex.quasars, Units.MPC, ::absMag)
+        if (mq == null) qso = upload(ex.quasars, Units.MPC, ::absMag)
         gcl = upload(ex.clusters, Units.MPC, ::absMag)
     }
 
@@ -284,7 +299,24 @@ class ExoticLayer : Layer {
         val exp = exposure(frame)
         var best: ExoticBody? = null
         var bestScore = Double.MAX_VALUE
-        for (list in listOf(ex.clusters, ex.quasars, ex.pulsars)) for (b in list) {
+        // With Milliquas installed, its million quasars replace the built-in 56,000.
+        val m = mq
+        if (m != null) {
+            val camMpc = (frame.camPos - UPos.ZERO) / Units.MPC
+            var bi = -1
+            for (i in 0 until m.count) {
+                val rel = Vec3d(m.xyz[i * 3] - camMpc.x, m.xyz[i * 3 + 1] - camMpc.y, m.xyz[i * 3 + 2] - camMpc.z)
+                val app = m.absMag(i) + 5 * log10(max(rel.length() * 1e6, 1.0)) - 5
+                if (app > exp + 0.5) continue
+                val s = frame.project(rel * Units.MPC) ?: continue
+                val px = hypot((s.first - x).toDouble(), (s.second - y).toDouble())
+                if (px > reach) continue
+                val score = px + (app - exp) * 2
+                if (score < bestScore) { bestScore = score; bi = i }
+            }
+            if (bi >= 0) best = m.body(bi)
+        }
+        for (list in listOf(ex.clusters, if (m == null) ex.quasars else emptyList(), ex.pulsars)) for (b in list) {
             val rel = frame.rel(b.position(0.0))
             val dist = rel.length()
             if (b.kind == Kind.PULSAR && pulsarMarkers(frame) < 0.3f && (b.position(0.0) - frame.camPos).length() > 30 * Units.PC) continue

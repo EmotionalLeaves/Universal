@@ -37,10 +37,22 @@ data class PackState(
  */
 class PackManager(private val context: Context, private val world: World, private val settings: Settings) {
     /**
-     * Packs the app builds itself from public servers (no hosting needed). The old GitHub-hosted
-     * packs (AT-HYG, GLADE+) are replaced by streaming Gaia DR3 and GLADE+ straight from VizieR.
+     * Downloadable data: catalogues from the public data repo (EmotionalLeaves/Universal-data), plus
+     * the asteroid list the app builds from the Minor Planet Center. All of them install by themselves
+     * on the first run (on Wi-Fi unless "Wi-Fi only" is off).
      */
     val packs = listOf(
+        PackInfo(
+            GALAXIES, "Galaxies: GLADE+ (4.4 million)",
+            "Every GLADE+ galaxy within 800 million light years and a sample of the rest out to 6.5 billion, " +
+                "each in its measured place. Replaces generated galaxies wherever real ones are known.",
+            "pack-galaxies-glade.zip", 64,
+        ),
+        PackInfo(
+            QUASARS, "Quasars: Milliquas (1 million)",
+            "Every quasar and active galaxy in the Million Quasars catalogue (v8) with a redshift, placed at its distance. Tap and search any of them.",
+            "pack-quasars-milliquas.zip", 30,
+        ),
         PackInfo(
             ASTEROIDS, "Every known asteroid",
             "All ~1.5 million asteroids with known orbits, straight from the Minor Planet Center (updated daily; NASA JPL " +
@@ -78,9 +90,27 @@ class PackManager(private val context: Context, private val world: World, privat
             caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_NOT_METERED)
     }
 
+    private val queue = ArrayDeque<String>()
+
+    /** First run (and after an update adds packs): install everything not installed yet, one at a time. */
+    fun autoInstall() {
+        if (!settings.autoDownload) return
+        if (settings.wifiOnly && !onWifi()) return
+        main.post {
+            for (p in packs) if (!installed(p.id) && p.id !in queue && active != p.id && errors[p.id] == null) queue.add(p.id)
+            next()
+        }
+    }
+
+    private fun next() {
+        if (active != null) return
+        val id = queue.removeFirstOrNull() ?: return
+        download(id)
+    }
+
     fun download(id: String) {
         val p = packs.firstOrNull { it.id == id } ?: return
-        if (active != null) return
+        if (active != null) { if (id !in queue) queue.add(id); notifyUi(); return }
         if (settings.wifiOnly && !onWifi()) {
             errors[id] = "Not on Wi-Fi. Turn off \"Wi-Fi only\" to download on mobile data."
             notifyUi()
@@ -105,14 +135,13 @@ class PackManager(private val context: Context, private val world: World, privat
                 dir(p.id).deleteRecursively()
                 val msg = when {
                     cancelId == id -> "Cancelled"
-                    e is java.io.FileNotFoundException ->
-                        "Can't reach the pack. If the GitHub repo is private, the app can't download from it: make the repo public, or install the pack manually."
+                        e is java.io.FileNotFoundException -> "This pack isn't on the data server yet."
                     e is java.net.UnknownHostException -> "No internet connection."
                     else -> e.message ?: e.javaClass.simpleName
                 }
                 main.post { errors[id] = msg }
             } finally {
-                main.post { active = null; notifyUi() }
+                main.post { active = null; notifyUi(); next() }
             }
         }
     }
@@ -137,7 +166,7 @@ class PackManager(private val context: Context, private val world: World, privat
             }
             main.post { errors[id] = msg }
         } finally {
-            main.post { active = null; notifyUi() }
+            main.post { active = null; notifyUi(); next() }
         }
     }
 
@@ -186,7 +215,11 @@ class PackManager(private val context: Context, private val world: World, privat
     }
 
     /** Looks up the download URL of a release file through the GitHub API. */
-    private fun assetUrl(name: String): String? {
+    /** Files live in the public data repo's release (the app repo itself is private). */
+    private fun assetUrl(name: String): String? = DATA_BASE + name
+
+    @Suppress("unused")
+    private fun assetUrlFromApi(name: String): String? {
         val conn = URL(RELEASE_API).openConnection() as HttpURLConnection
         conn.setRequestProperty("Accept", "application/vnd.github+json")
         conn.setRequestProperty("User-Agent", "UniverseExplorer-app")
@@ -260,6 +293,10 @@ class PackManager(private val context: Context, private val world: World, privat
 
     companion object {
         const val ASTEROIDS = "asteroids-mpc"
+        const val GALAXIES = "galaxies-glade"
+        const val QUASARS = "quasars-milliquas"
+        /** Public data repo release with every downloadable file. */
+        const val DATA_BASE = "https://github.com/EmotionalLeaves/Universal-data/releases/download/sky-v1/"
         const val RELEASE_API = "https://api.github.com/repos/EmotionalLeaves/Universal/releases/tags/data-v1"
     }
 }

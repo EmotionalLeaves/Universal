@@ -38,6 +38,9 @@ class Settings(context: Context) {
     /** Stream real GLADE+ galaxies around you between the galaxies. */
     @Volatile var gladeStream = prefs.getBoolean("gladeStream", true)
         set(v) { field = v; prefs.edit().putBoolean("gladeStream", v).apply() }
+    /** Install the downloadable catalogues by themselves (first run, and when new ones appear). */
+    @Volatile var autoDownload = prefs.getBoolean("autoDownload", true)
+        set(v) { field = v; prefs.edit().putBoolean("autoDownload", v).apply() }
     @Volatile var wifiOnly = prefs.getBoolean("wifiOnly", true)
         set(v) { field = v; prefs.edit().putBoolean("wifiOnly", v).apply() }
     // Key bumped when the tour changes, so everyone sees the new features once.

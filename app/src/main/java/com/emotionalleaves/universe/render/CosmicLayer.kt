@@ -107,7 +107,30 @@ class CosmicLayer : Layer {
     }
 
     override fun pickAt(frame: Frame, rc: RenderContext, x: Float, y: Float, reach: Float): Body? =
-        pickIn(web, frame, rc, x, y, reach) ?: pickIn(outer, frame, rc, x, y, reach)
+        pickGlade(frame, rc, x, y, reach) ?: pickIn(web, frame, rc, x, y, reach) ?: pickIn(outer, frame, rc, x, y, reach)
+
+    /** Real GLADE+ galaxies (when the pack is installed) win over generated ones. */
+    private fun pickGlade(frame: Frame, rc: RenderContext, x: Float, y: Float, reach: Float): Body? {
+        val g = glade ?: return null
+        val exp = exposure(frame) + 1.5f
+        val cam = (frame.camPos - UPos.ZERO) / Units.MPC
+        var best = -1
+        var bestScore = Double.MAX_VALUE
+        val d = g.data
+        for (i in 0 until g.count) {
+            val dx = d[i * 7] - cam.x; val dy = d[i * 7 + 1] - cam.y; val dz = d[i * 7 + 2] - cam.z
+            val dist = kotlin.math.sqrt(dx * dx + dy * dy + dz * dz)
+            val m = d[i * 7 + 6] + 5 * log10(max(dist * 1e6, 1.0)) - 5
+            if (m > exp + 0.5) continue
+            val s = frame.project(Vec3d(dx, dy, dz) * Units.MPC) ?: continue
+            val px = hypot((s.first - x).toDouble(), (s.second - y).toDouble())
+            if (px > reach) continue
+            val score = px + (m - exp) * 2
+            if (score < bestScore) { bestScore = score; best = i }
+        }
+        if (best < 0) return null
+        return g.galaxy(best).also { rc.engine.world.registerExtraGalaxy(it) }
+    }
 
     private fun pickIn(w: CosmicWebData?, frame: Frame, rc: RenderContext, x: Float, y: Float, reach: Float): Body? {
         w ?: return null

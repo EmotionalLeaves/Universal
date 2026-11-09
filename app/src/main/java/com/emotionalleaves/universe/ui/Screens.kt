@@ -139,14 +139,21 @@ fun DataScreen(engine: Engine) {
         )
         Spacer(Modifier.height(12.dp))
         StreamToggle("Real stars wherever you fly (Gaia DR3)",
-            "Every Gaia star within 330 light years and 750,000 bright real stars beyond are built in (no waiting). Further out, " +
-                "ESA Gaia's fainter stars stream in around you up to ~8,000 light years from the Sun; the neighbourhood you're flying to " +
-                "starts loading as soon as the trip begins. Generated stars only fill in what Gaia can't see.",
+            "Every Gaia star brighter than magnitude 15 anywhere in the Milky Way (tens of millions, placed with measured distances) " +
+                "streams in around you, and fainter ones too within ~8,000 light years. The stars within 330 light years and around 150 " +
+                "famous places are built in. Generated stars only fill in what Gaia can't see.",
             engine.settings.gaiaStream) { engine.settings.gaiaStream = it }
         if (engine.settings.gaiaStream) {
             val st = engine.world.gaia.status
             if (st.isNotEmpty()) Text(st, color = if (st.startsWith("Gaia:")) Danger else RealGreen, fontSize = 12.sp, modifier = Modifier.padding(start = 2.dp))
         }
+        if (engine.settings.gaiaStream) {
+            val ts = engine.world.gaiaTiles.status
+            if (ts.isNotEmpty()) Text(ts, color = if (ts.contains("couldn't") || ts.contains("offline")) Danger else RealGreen, fontSize = 12.sp, modifier = Modifier.padding(start = 2.dp))
+        }
+        StreamToggle("Download catalogues by themselves",
+            "Installs the galaxy, quasar and asteroid catalogues below in the background the first time the app runs (on Wi-Fi unless \"Wi-Fi only\" is off).",
+            engine.settings.autoDownload) { engine.settings.autoDownload = it; if (it) engine.packs.autoInstall() }
         StreamToggle("Look up anything by name",
             "Search asks SIMBAD (20 million stars, galaxies and nebulae), NED and NASA JPL (every asteroid and comet) when " +
                 "something isn't in the app, then flies you there.",

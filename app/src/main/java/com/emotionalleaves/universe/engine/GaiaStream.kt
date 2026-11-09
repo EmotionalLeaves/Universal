@@ -56,7 +56,7 @@ class GaiaStream(private val cacheDir: File) {
     private val idOf = ConcurrentHashMap<Long, Int>()
     private var nextId = 30_000_000
 
-    private fun idFor(source: Long): Int = idOf.getOrPut(source) { synchronized(this) { nextId++ }.also { sourceOf[it] = source } }
+    fun idFor(source: Long): Int = idOf.getOrPut(source) { synchronized(this) { nextId++ }.also { sourceOf[it] = source } }
 
     /** Reads the bundled near-Sun stars (call on a background thread after the HYG stars load). */
     fun loadNear(context: android.content.Context, rs: RealStars) {
@@ -312,27 +312,17 @@ class GaiaStream(private val cacheDir: File) {
         for (f in files) { if (total < 150L shl 20) break; total -= f.length(); f.delete() }
     }
 
-    /** Turns rows into a star tile: keeps those inside the bubble, drops ones the HYG catalogue already has. */
+    /** One Gaia star ready to place: position (pc from the Sun), G, BP-RP, source id. */
+    class Pt(val pos: Vec3d, val g: Double, val bprp: Double, val sid: Long)
+
+    /** Stars fainter than this come from here; brighter ones from the all-sky tiles (when installed). */
+    @Volatile var minG = -99.0
+
+    /** Turns rows into a star tile: keeps those inside the bubble, drops ones other catalogues already have. */
     private fun build(rows: List<DoubleArray>, c: Vec3d, r: Double, rs: RealStars): StarCatalog {
         val skipNear = near != null
-        // HYG stars inside the bubble, on a 1 pc grid, to skip duplicates.
-        val grid = HashMap<Long, MutableList<Pair<Vec3d, Double>>>()
-        fun cell(v: Vec3d) = (floor(v.x).toLong() and 0x1FFFFF shl 42) or (floor(v.y).toLong() and 0x1FFFFF shl 21) or (floor(v.z).toLong() and 0x1FFFFF)
-        for (cat in rs.allCatalogs()) {
-            if (cat === near || cat === bubble?.catalog) continue
-            for (tile in cat.tiles) {
-            val a = tile.anchorPc
-            if (kotlin.math.abs(a.x - c.x) > 101 + r || kotlin.math.abs(a.y - c.y) > 101 + r || kotlin.math.abs(a.z - c.z) > 101 + r) continue
-            for (i in 0 until tile.count) {
-                val pp = tile.posPc(i)
-                if ((pp - c).length() > r + 2) continue
-                val dSun = max(pp.length(), 0.01)
-                grid.getOrPut(cell(pp)) { ArrayList(2) }.add(pp to tile.absMag(i) + 5 * log10(dSun) - 5)
-            }
-            }
-        }
-        val stars = ArrayList<FloatArray>(rows.size)
-        val ids = ArrayList<Int>(rows.size)
+        val pts = ArrayList<Pt>(rows.size)
+        val gMin = if (skipNear) minG else -99.0   // the near-Sun file itself keeps every star
         for (row in rows) {
             val plx = row[3]
             if (plx <= 0) continue
@@ -341,28 +331,58 @@ class GaiaStream(private val cacheDir: File) {
             if ((pos - c).length() > r) continue
             // Already among the built-in stars near the Sun.
             if (skipNear && dpc < NEAR_PC) continue
-            val g = row[4]
-            // Already in HYG? (same place within the parallax error, similar brightness)
-            if (g < 11.5) {
+            if (row[4] < gMin) continue
+            pts.add(Pt(pos, row[4], row[5], java.lang.Double.doubleToRawLongBits(row[0])))
+        }
+        return makeCatalog(pts, c, r, rs, setOfNotNull(near, bubble?.catalog))
+    }
+
+    /**
+     * Builds a star catalogue from Gaia stars inside the sphere ([c], [r]) and skips those already in
+     * HYG / AT-HYG (same place within the distance error, similar brightness). [skip]: catalogues not to
+     * compare against (other Gaia sets).
+     */
+    fun makeCatalog(pts: List<Pt>, c: Vec3d, r: Double, rs: RealStars, skip: Set<StarCatalog>): StarCatalog {
+        val grid = HashMap<Long, MutableList<Pair<Vec3d, Double>>>()
+        fun key(x: Long, y: Long, z: Long) = (x and 0x1FFFFF shl 42) or (y and 0x1FFFFF shl 21) or (z and 0x1FFFFF)
+        for (cat in rs.allCatalogs()) {
+            if (cat in skip || cat.label == "Gaia DR3") continue
+            for (tile in cat.tiles) {
+                val a = tile.anchorPc
+                if (kotlin.math.abs(a.x - c.x) > 101 + r || kotlin.math.abs(a.y - c.y) > 101 + r || kotlin.math.abs(a.z - c.z) > 101 + r) continue
+                for (i in 0 until tile.count) {
+                    val pp = tile.posPc(i)
+                    if ((pp - c).length() > r + 2) continue
+                    val dSun = max(pp.length(), 0.01)
+                    grid.getOrPut(key(floor(pp.x).toLong(), floor(pp.y).toLong(), floor(pp.z).toLong())) { ArrayList(2) }
+                        .add(pp to tile.absMag(i) + 5 * log10(dSun) - 5)
+                }
+            }
+        }
+        val stars = ArrayList<FloatArray>(pts.size)
+        val ids = ArrayList<Int>(pts.size)
+        for (pt in pts) {
+            val pos = pt.pos
+            val dpc = max(pos.length(), 0.01)
+            val g = pt.g
+            if (g < 11.5 && grid.isNotEmpty()) {
                 val tol = max(0.08, dpc * 0.03)
                 var dup = false
                 val cx = floor(pos.x).toLong(); val cy = floor(pos.y).toLong(); val cz = floor(pos.z).toLong()
                 val span = if (tol > 1) 2 else 1
                 loop@ for (dx in -span..span) for (dy in -span..span) for (dz in -span..span) {
-                    val key = ((cx + dx) and 0x1FFFFF shl 42) or ((cy + dy) and 0x1FFFFF shl 21) or ((cz + dz) and 0x1FFFFF)
-                    for ((hp, hm) in grid[key] ?: continue) {
+                    for ((hp, hm) in grid[key(cx + dx, cy + dy, cz + dz)] ?: continue) {
                         if ((hp - pos).length() < tol && kotlin.math.abs(hm - g) < 1.8) { dup = true; break@loop }
                     }
                 }
                 if (dup) continue
             }
-            val absMag = g + 5 * log10(plx) - 10
-            val teff = teffFromBpRp(row[5])
+            val absMag = g - 5 * log10(dpc) + 5
+            val teff = teffFromBpRp(pt.bprp)
             val col = StarBody.tempColor(teff)
             stars.add(floatArrayOf(pos.x.toFloat(), pos.y.toFloat(), pos.z.toFloat(), col[0], col[1], col[2], absMag.toFloat()))
-            val sid = java.lang.Double.doubleToRawLongBits(row[0])
-            ids.add(idFor(sid))
-            teffs[sid] = teff.toFloat()
+            ids.add(idFor(pt.sid))
+            teffs[pt.sid] = teff.toFloat()
         }
         return StarCatalog.fromStars(stars, ids.toIntArray(), "Gaia DR3")
     }

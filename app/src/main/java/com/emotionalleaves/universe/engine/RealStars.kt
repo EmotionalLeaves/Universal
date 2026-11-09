@@ -55,7 +55,10 @@ class RealStars(
     /** Real Gaia DR3 stars streamed around the camera (see [GaiaStream]). */
     @Volatile var gaia: GaiaStream? = null
 
-    fun allCatalogs(): List<StarCatalog> = listOfNotNull(base, exoHosts, gaia?.near, gaia?.bubble?.catalog) + packs
+    /** Every Gaia star to G = 15, streamed in cells (see [GaiaTiles]). */
+    @Volatile var tiles: GaiaTiles? = null
+
+    fun allCatalogs(): List<StarCatalog> = listOfNotNull(base, exoHosts, gaia?.near, gaia?.bubble?.catalog) + packs + (tiles?.catalogs ?: emptyList())
 
     /** Adds names for stars from other sources (exoplanet hosts). Call before publishing them. */
     fun addInfo(extra: Collection<StarInfo>) {
