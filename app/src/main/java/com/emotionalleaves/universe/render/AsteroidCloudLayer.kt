@@ -28,6 +28,8 @@ class AsteroidCloudLayer : Layer {
     private val worker = Executors.newSingleThreadExecutor { r -> Thread(r, "asteroid-positions").also { it.priority = Thread.MIN_PRIORITY } }
     @Volatile private var busy = false
     @Volatile private var posAu = FloatArray(0)
+    /** The buffer the background pass writes into next (swapped with [posAu]; no new 19 MB arrays). */
+    private var spare = FloatArray(0)
     @Volatile private var posJd = Double.NaN
     @Volatile private var near = IntArray(0)
     private var lastWall = 0L
@@ -92,7 +94,7 @@ class AsteroidCloudLayer : Layer {
         val n = drawCount(rc, db)
         worker.execute {
             try {
-                val out = if (posAu.size == n * 3) posAu.copyOf() else FloatArray(n * 3)
+                val out = if (spare.size == n * 3) spare else FloatArray(n * 3)
                 val dt = jd - db.jdRef
                 val close = ArrayList<Int>()
                 for (i in 0 until n) {
@@ -100,6 +102,7 @@ class AsteroidCloudLayer : Layer {
                     val dx = out[i * 3] - cam.x; val dy = out[i * 3 + 1] - cam.y; val dz = out[i * 3 + 2] - cam.z
                     if (dx * dx + dy * dy + dz * dz < 0.02 * 0.02 && close.size < 64) close.add(i)
                 }
+                spare = posAu
                 posAu = out
                 posJd = jd
                 near = close.toIntArray()

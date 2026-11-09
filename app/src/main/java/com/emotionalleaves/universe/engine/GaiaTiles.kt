@@ -54,6 +54,17 @@ class GaiaTiles(private val cacheDir: File, private val gaia: GaiaStream) {
                 for ((id, radius, domain) in listOf(Triple(1, 120.0, 1300.0), Triple(2, 650.0, 7000.0), Triple(3, 3000.0, 60000.0))) {
                     val file = "gaia_t$id.bin"
                     val idx = File(dir(), "$file.idx")
+                    // The data can be rebuilt on the server: if the file's size changed, start the cache afresh.
+                    val sizeFile = File(dir(), "$file.size")
+                    try {
+                        val total = totalSize(file)
+                        if (total > 0 && sizeFile.exists() && sizeFile.readText().trim().toLongOrNull() != total) {
+                            idx.delete(); File(dir(), "t$id").deleteRecursively()
+                        }
+                        if (total > 0) sizeFile.writeText(total.toString())
+                    } catch (e: Exception) {
+                        if (!idx.exists()) throw e   // offline with nothing cached
+                    }
                     if (!idx.exists() || idx.length() < 24) {
                         status = "Getting the map of every Gaia star…"
                         val head = range(file, 0, 24)
@@ -239,6 +250,20 @@ class GaiaTiles(private val cacheDir: File, private val gaia: GaiaStream) {
             }
         }
         throw last ?: IllegalStateException("download failed")
+    }
+
+    /** The file's full size (from a 1-byte range request's Content-Range). */
+    private fun totalSize(file: String): Long {
+        val conn = URL(resolvedUrl(file, true)).openConnection() as HttpURLConnection
+        conn.setRequestProperty("User-Agent", "UniverseExplorer-app")
+        conn.setRequestProperty("Range", "bytes=0-0")
+        conn.connectTimeout = 15_000
+        conn.readTimeout = 30_000
+        return try {
+            if (conn.responseCode != 206) -1 else conn.getHeaderField("Content-Range")?.substringAfter('/')?.trim()?.toLongOrNull() ?: -1
+        } finally {
+            conn.disconnect()
+        }
     }
 
     private fun resolvedUrl(file: String, fresh: Boolean): String {

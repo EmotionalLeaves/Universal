@@ -167,12 +167,14 @@ class GladePack(val data: FloatArray, val maxMpc: Double) {
         fun load(context: Context, maxPoints: Int): GladePack? = try {
             val f = File(context.filesDir, PATH)
             if (!f.exists()) null else {
-                val bytes = f.readBytes()
-                val b = ByteBuffer.wrap(bytes).order(ByteOrder.LITTLE_ENDIAN)
+                // Mapped, not read: the file is 64 MB and the heap is busy with everything else.
+                val b = java.io.RandomAccessFile(f, "r").use { it.channel.map(java.nio.channels.FileChannel.MapMode.READ_ONLY, 0, it.length()) }
+                    .order(ByteOrder.LITTLE_ENDIAN)
+                val fileSize = f.length().toInt()
                 val magic = ByteArray(4).also { b.get(it) }
                 require(String(magic) == "UXGL")
                 b.int
-                val total = (bytes.size - 8) / 16
+                val total = (fileSize - 8) / 16
                 val step = maxOf(1, (total + maxPoints - 1) / maxPoints)
                 val n = total / step
                 val out = FloatArray(n * 7)
@@ -188,7 +190,8 @@ class GladePack(val data: FloatArray, val maxMpc: Double) {
                 }
                 GladePack(out, maxD)
             }
-        } catch (_: Exception) {
+        } catch (e: Throwable) {
+            ErrorLog.record("loading GLADE+ galaxies", e)
             null
         }
     }

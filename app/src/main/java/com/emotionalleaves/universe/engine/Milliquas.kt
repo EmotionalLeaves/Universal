@@ -95,8 +95,8 @@ class MilliquasDb private constructor(
             val bin = File(d, "milliquas.bin")
             val names = File(d, "milliquas_names.txt")
             if (!bin.exists() || !names.exists()) null else {
-                val bytes = bin.readBytes()
-                val b = java.nio.ByteBuffer.wrap(bytes).order(java.nio.ByteOrder.LITTLE_ENDIAN)
+                val b = RandomAccessFile(bin, "r").use { it.channel.map(java.nio.channels.FileChannel.MapMode.READ_ONLY, 0, it.length()) }
+                    .order(java.nio.ByteOrder.LITTLE_ENDIAN)
                 require(b.int == 0x514D5855) // "UXMQ"
                 b.int
                 val n = b.int
