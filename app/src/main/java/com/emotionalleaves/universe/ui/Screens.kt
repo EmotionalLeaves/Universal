@@ -151,6 +151,13 @@ fun DataScreen(engine: Engine) {
             val ts = engine.world.gaiaTiles.status
             if (ts.isNotEmpty()) Text(ts, color = if (ts.contains("couldn't") || ts.contains("offline")) Danger else RealGreen, fontSize = 12.sp, modifier = Modifier.padding(start = 2.dp))
         }
+        StreamToggle("Every known galaxy (GLADE+, 22.5 million)",
+            "The brightest galaxies come in the galaxy pack below; the other ~20 million stream in around you as you fly between galaxies.",
+            engine.settings.gladeStream) { engine.settings.gladeStream = it }
+        if (engine.settings.gladeStream) {
+            val gs = engine.world.galaxyTiles.status
+            if (gs.isNotEmpty()) Text(gs, color = if (gs.contains("couldn't") || gs.contains("offline")) Danger else RealGreen, fontSize = 12.sp, modifier = Modifier.padding(start = 2.dp))
+        }
         StreamToggle("Download catalogues by themselves",
             "Installs the galaxy, quasar and asteroid catalogues below in the background the first time the app runs (on Wi-Fi unless \"Wi-Fi only\" is off).",
             engine.settings.autoDownload) { engine.settings.autoDownload = it; if (it) engine.packs.autoInstall() }

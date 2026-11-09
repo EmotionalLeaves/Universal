@@ -128,7 +128,34 @@ object CosmicWeb {
     }
 }
 
-/** The optional GLADE+ galaxy pack: millions of real galaxies as points (Mpc). */
+/**
+ * A real GLADE+ galaxy as a body you can fly into: GLADE+ gives its place and brightness (and its PGC
+ * number when it has one); its shape and the stars inside are generated from those.
+ */
+fun realGalaxy(id: String, p: Vec3d, absMag: Double, pgc: Int): GalaxyBody {
+    val seed = Rng.hash(0x61ADEL, (p.x * 1e4).toLong(), (p.y * 1e4).toLong() xor (p.z * 1e4).toLong())
+    val rng = Rng(seed)
+    val type = GalaxyType.fromHubble("", seed)
+    val radiusKpc = (11.0 * 10.0.pow(-0.2 * (absMag + 21.0)) * (0.7 + rng.nextDouble() * 0.6)).coerceIn(0.6, 60.0)
+    val n = rng.unitVector()
+    val x = Vec3d.perpendicular(n)
+    val frame = Quatd.fromBasis(x, n.cross(x).normalized(), n)
+    val ra = Math.toDegrees(kotlin.math.atan2(p.y, p.x)).let { if (it < 0) it + 360 else it }
+    val dec = Math.toDegrees(kotlin.math.asin((p.z / p.length()).coerceIn(-1.0, 1.0)))
+    val name = if (pgc > 0) "PGC $pgc" else String.format(Locale.US, "GLADE+ J%07.3f%+07.3f", ra, dec)
+    return GalaxyBody(
+        id, name, UPos.ZERO + p * Units.MPC, frame, GalaxyModel.forGalaxy(type, radiusKpc, seed), radiusKpc * 1000,
+        p.length() * 3.2616, Source.REAL,
+        listOf(
+            "Where" to String.format(Locale.US, "RA %.3f°, Dec %+.3f°", ra, dec),
+            "Brightness" to String.format(Locale.US, "absolute magnitude %.1f (B)", absMag),
+            "Data" to "GLADE+ galaxy catalogue (position, distance, brightness)" + (if (pgc > 0) "; HyperLEDA PGC $pgc" else "") + "; its shape is generated",
+        ),
+        seed, absMag,
+    )
+}
+
+/** The GLADE+ galaxy pack: the brightest real galaxies everywhere, as points (Mpc). */
 class GladePack(val data: FloatArray, val maxMpc: Double) {
     val count get() = data.size / 7
 
@@ -136,30 +163,8 @@ class GladePack(val data: FloatArray, val maxMpc: Double) {
      * Galaxy [i] as a body you can fly into. GLADE+ gives its place and brightness; its shape and
      * the stars inside are generated from those (no name in the pack).
      */
-    fun galaxy(i: Int): GalaxyBody {
-        val p = Vec3d(data[i * 7].toDouble(), data[i * 7 + 1].toDouble(), data[i * 7 + 2].toDouble())
-        val seed = Rng.hash(0x61ADEL, i.toLong(), (p.x * 1000).toLong())
-        val rng = Rng(seed)
-        val absMag = data[i * 7 + 6].toDouble()
-        val type = GalaxyType.fromHubble("", seed)
-        val radiusKpc = (11.0 * 10.0.pow(-0.2 * (absMag + 21.0)) * (0.7 + rng.nextDouble() * 0.6)).coerceIn(0.6, 60.0)
-        val n = rng.unitVector()
-        val x = Vec3d.perpendicular(n)
-        val frame = Quatd.fromBasis(x, n.cross(x).normalized(), n)
-        val ra = Math.toDegrees(kotlin.math.atan2(p.y, p.x)).let { if (it < 0) it + 360 else it }
-        val dec = Math.toDegrees(kotlin.math.asin((p.z / p.length()).coerceIn(-1.0, 1.0)))
-        val name = String.format(Locale.US, "GLADE+ J%07.3f%+07.3f", ra, dec)
-        return GalaxyBody(
-            "glade:$i", name, UPos.ZERO + p * Units.MPC, frame, GalaxyModel.forGalaxy(type, radiusKpc, seed), radiusKpc * 1000,
-            p.length() * 3.2616, Source.REAL,
-            listOf(
-                "Where" to String.format(Locale.US, "RA %.3f°, Dec %+.3f°", ra, dec),
-                "Brightness" to String.format(Locale.US, "absolute magnitude %.1f (B)", absMag),
-                "Data" to "GLADE+ galaxy catalogue (position, distance, brightness); its shape is generated",
-            ),
-            seed, absMag,
-        )
-    }
+    fun galaxy(i: Int): GalaxyBody =
+        realGalaxy("glade:$i", Vec3d(data[i * 7].toDouble(), data[i * 7 + 1].toDouble(), data[i * 7 + 2].toDouble()), data[i * 7 + 6].toDouble(), 0)
 
     companion object {
         const val PATH = "packs/galaxies-glade/glade.bin"

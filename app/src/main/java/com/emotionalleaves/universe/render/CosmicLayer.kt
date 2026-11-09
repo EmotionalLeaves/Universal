@@ -24,6 +24,8 @@ class CosmicLayer : Layer {
     private var outer: CosmicWebData? = null
     private var outerBatch: PointBatch? = null
     private var gladeBatch: PointBatch? = null
+    /** Streamed faint GLADE+ galaxies, one batch per loaded group. */
+    private val tileBatches = LinkedHashMap<com.emotionalleaves.universe.engine.GalaxyTiles.Group, PointBatch>()
     var daylight = 0f
     var drawFraction = 1.0
 
@@ -45,6 +47,14 @@ class CosmicLayer : Layer {
             outerBatch?.release()
             outerBatch = o?.let { PointBatch.upload(UPos.ZERO, Units.MPC, it.data) }
             outer = o
+        }
+        val groups = rc.engine.world.galaxyTiles.groups
+        if (groups.size != tileBatches.size || groups.any { it !in tileBatches }) {
+            val keep = groups.toSet()
+            val it = tileBatches.entries.iterator()
+            while (it.hasNext()) { val e = it.next(); if (e.key !in keep) { e.value.release(); it.remove() } }
+            // One upload per frame keeps the frame rate smooth.
+            groups.firstOrNull { it !in tileBatches }?.let { tileBatches[it] = PointBatch.upload(UPos.ZERO, Units.MPC, it.data) }
         }
         val g = rc.engine.world.glade
         if (g !== glade) {
@@ -101,13 +111,40 @@ class CosmicLayer : Layer {
         outerBatch?.let { it.limit = if (low) it.count / 2 else it.count }
         rc.drawer.beginAdditive()
         gladeBatch?.let { rc.drawer.points(frame, it, exp + 1.5f, 2.2f, 0.85f * day, minSize = 1.3f, maxSize = 5f) }
+        for (b in tileBatches.values) rc.drawer.points(frame, b, exp + 1.5f, 2.2f, 0.85f * day, minSize = 1.3f, maxSize = 5f)
         webBatch?.let { rc.drawer.points(frame, it, exp + 1.5f + boost, 2.2f, 0.95f * day, minSize = 1.3f, maxSize = 5f) }
         outerBatch?.let { rc.drawer.points(frame, it, exp + 1.5f + boost, 2.2f, 0.9f * day, minSize = 1.3f, maxSize = 5f) }
         rc.drawer.end()
     }
 
     override fun pickAt(frame: Frame, rc: RenderContext, x: Float, y: Float, reach: Float): Body? =
-        pickGlade(frame, rc, x, y, reach) ?: pickIn(web, frame, rc, x, y, reach) ?: pickIn(outer, frame, rc, x, y, reach)
+        pickGlade(frame, rc, x, y, reach) ?: pickTiles(frame, rc, x, y, reach) ?: pickIn(web, frame, rc, x, y, reach) ?: pickIn(outer, frame, rc, x, y, reach)
+
+    private fun pickTiles(frame: Frame, rc: RenderContext, x: Float, y: Float, reach: Float): Body? {
+        val exp = exposure(frame) + 1.5f
+        val cam = (frame.camPos - UPos.ZERO) / Units.MPC
+        var best: com.emotionalleaves.universe.engine.GalaxyTiles.Group? = null
+        var bi = -1
+        var bestScore = Double.MAX_VALUE
+        for (g in tileBatches.keys) {
+            val d = g.data
+            for (i in 0 until g.count) {
+                val dx = d[i * 7] - cam.x; val dy = d[i * 7 + 1] - cam.y; val dz = d[i * 7 + 2] - cam.z
+                val dist = kotlin.math.sqrt(dx * dx + dy * dy + dz * dz)
+                val m = d[i * 7 + 6] + 5 * log10(max(dist * 1e6, 1.0)) - 5
+                if (m > exp + 0.5) continue
+                val s = frame.project(Vec3d(dx, dy, dz) * Units.MPC) ?: continue
+                val px = hypot((s.first - x).toDouble(), (s.second - y).toDouble())
+                if (px > reach) continue
+                val score = px + (m - exp) * 2
+                if (score < bestScore) { bestScore = score; best = g; bi = i }
+            }
+        }
+        val g = best ?: return null
+        val p = Vec3d(g.data[bi * 7].toDouble(), g.data[bi * 7 + 1].toDouble(), g.data[bi * 7 + 2].toDouble())
+        val id = if (g.pgc[bi] > 0) "pgc:${g.pgc[bi]}" else String.format(java.util.Locale.US, "gladep:%.4f,%.4f,%.4f,%.2f", p.x, p.y, p.z, g.data[bi * 7 + 6])
+        return com.emotionalleaves.universe.engine.realGalaxy(id, p, g.data[bi * 7 + 6].toDouble(), g.pgc[bi]).also { rc.engine.world.registerExtraGalaxy(it) }
+    }
 
     /** Real GLADE+ galaxies (when the pack is installed) win over generated ones. */
     private fun pickGlade(frame: Frame, rc: RenderContext, x: Float, y: Float, reach: Float): Body? {

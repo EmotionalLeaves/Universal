@@ -43,9 +43,9 @@ class PackManager(private val context: Context, private val world: World, privat
      */
     val packs = listOf(
         PackInfo(
-            GALAXIES, "Galaxies: GLADE+ (4.4 million)",
-            "Every GLADE+ galaxy within 800 million light years and a sample of the rest out to 6.5 billion, " +
-                "each in its measured place. Replaces generated galaxies wherever real ones are known.",
+            GALAXIES, "Galaxies: GLADE+ (the bright ones)",
+            "The brightest galaxies of GLADE+ everywhere out to billions of light years, each in its measured place " +
+                "(the fainter ones stream in as you fly). Replaces generated galaxies wherever real ones are known.",
             "pack-galaxies-glade.zip", 64,
         ),
         PackInfo(

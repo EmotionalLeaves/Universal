@@ -175,7 +175,7 @@ class World(private val engine: Engine) {
     private var genGalaxy: String? = null
     private var genTimer = 0.0
 
-    fun galaxyById(id: String): GalaxyBody? = galaxyIndex[id] ?: (if (id.startsWith("gal:") || id.startsWith("glade:")) find(id) as? GalaxyBody else null)
+    fun galaxyById(id: String): GalaxyBody? = galaxyIndex[id] ?: (if (id.startsWith("gal:") || id.startsWith("glade:") || id.startsWith("pgc:") || id.startsWith("gladep:")) find(id) as? GalaxyBody else null)
 
     fun isRegistered(id: String) = galaxyIndex.containsKey(id)
 
@@ -722,6 +722,9 @@ class World(private val engine: Engine) {
 
     /** Real Gaia DR3 stars streamed around the camera. */
     val gaia = GaiaStream(engine.context.cacheDir)
+    /** The fainter GLADE+ galaxies, streamed in cells around the camera. */
+    val galaxyTiles = GalaxyTiles(engine.context.cacheDir)
+
     /** Every Gaia star brighter than G = 15, anywhere in the Milky Way (streamed cells). */
     val gaiaTiles = GaiaTiles(engine.context.cacheDir, gaia)
 
@@ -742,6 +745,11 @@ class World(private val engine: Engine) {
         gaiaTimer += dt
         if (gaiaTimer < 0.5) return
         gaiaTimer = 0.0
+        if (engine.settings.gladeStream) {
+            if (!galaxyTiles.ready) galaxyTiles.start()
+            // Galaxies only matter once you are out of the Milky Way.
+            if ((cam - UPos.ZERO).length() > 30_000 * Units.PC) galaxyTiles.update(cam)
+        }
         val rs = realStars ?: return
         rs.gaia = gaia
         val nearSphere = if (gaia.near != null) milkyWay.toLocal(UPos.ZERO).let { doubleArrayOf(it.x, it.y, it.z, GaiaStream.NEAR_PC) } else null
@@ -783,6 +791,19 @@ class World(private val engine: Engine) {
         if (id.startsWith("fam:")) return Famous.find(id)
         byId[id]?.let { return it }
         byIdConcurrent[id]?.let { return it }
+        if ((id.startsWith("pgc:") || id.startsWith("gladep:")) && !id.contains("/")) {
+            galaxyIndex[id]?.let { return it }
+            for (g in galaxyTiles.groups) for (i in 0 until g.count) {
+                val p = Vec3d(g.data[i * 7].toDouble(), g.data[i * 7 + 1].toDouble(), g.data[i * 7 + 2].toDouble())
+                val gid = if (g.pgc[i] > 0) "pgc:${g.pgc[i]}" else String.format(java.util.Locale.US, "gladep:%.4f,%.4f,%.4f,%.2f", p.x, p.y, p.z, g.data[i * 7 + 6])
+                if (gid == id) return realGalaxy(id, p, g.data[i * 7 + 6].toDouble(), g.pgc[i]).also { registerExtraGalaxy(it) }
+            }
+            if (id.startsWith("gladep:")) {
+                val v = id.removePrefix("gladep:").split(',').mapNotNull { it.toDoubleOrNull() }
+                if (v.size == 4) return realGalaxy(id, Vec3d(v[0], v[1], v[2]), v[3], 0).also { registerExtraGalaxy(it) }
+            }
+            return null
+        }
         if (id.startsWith("glade:") && !id.contains("/")) {
             val g = glade ?: return null
             val i = id.removePrefix("glade:").toIntOrNull() ?: return null
