@@ -517,6 +517,10 @@ class World(private val engine: Engine) {
                 loaded("stars")
                 realStars?.let { RealStars.loadNames(engine.context, it) }
                 searchStale = true
+                // Real Gaia stars within 330 light years, shipped with the app (instant, no download).
+                realStars?.let { rs ->
+                    try { rs.gaia = gaia; gaia.loadNear(engine.context, rs); loaded("gaia near (${gaia.near?.count ?: 0})") } catch (e: Throwable) { ErrorLog.record("loading Gaia stars", e) }
+                }
             } catch (e: Throwable) {
                 ErrorLog.record("loading stars", e)
             }
@@ -717,14 +721,18 @@ class World(private val engine: Engine) {
         gaiaTimer = 0.0
         val rs = realStars ?: return
         rs.gaia = gaia
+        val nearSphere = if (gaia.near != null) milkyWay.toLocal(UPos.ZERO).let { doubleArrayOf(it.x, it.y, it.z, GaiaStream.NEAR_PC) } else null
         if (!engine.settings.gaiaStream) {
-            if (gaia.bubble != null || StarField.gaiaBubble != null) { gaia.clear(); StarField.gaiaBubble = null; genLocal = null }
+            if (gaia.bubble != null) { gaia.clear(); genLocal = null }
+            val want = listOfNotNull(nearSphere)
+            if (StarField.gaiaSpheres.size != want.size) { StarField.gaiaSpheres = want; genLocal = null }
             return
         }
+        if (StarField.gaiaSpheres.isEmpty() && nearSphere != null) { StarField.gaiaSpheres = listOf(nearSphere); genLocal = null }
         gaia.update(cam, rs) {
-            val b = gaia.bubble ?: return@update
-            val c = milkyWay.toLocal(UPos.ZERO + b.centerPc * Units.PC)
-            StarField.gaiaBubble = doubleArrayOf(c.x, c.y, c.z, b.radiusPc)
+            val b = gaia.bubble
+            val bs = b?.let { val c = milkyWay.toLocal(UPos.ZERO + it.centerPc * Units.PC); doubleArrayOf(c.x, c.y, c.z, it.radiusPc) }
+            StarField.gaiaSpheres = listOfNotNull(nearSphere, bs)
             genLocal = null   // regenerate without the stars Gaia now provides
         }
     }
@@ -780,7 +788,7 @@ class World(private val engine: Engine) {
         if (id.startsWith("gs:") && !id.contains("/")) return StarField.fromId(id) { galaxyById(it) }
         if (id.startsWith("gaia:") && !id.contains("/")) {
             val src = id.removePrefix("gaia:").toLongOrNull() ?: return null
-            gaia.bubble?.catalog?.let { cat ->
+            for (cat in listOfNotNull(gaia.near, gaia.bubble?.catalog)) {
                 for (t in cat.tiles) for (i in 0 until t.count) if (gaia.sourceOf[t.ids[i]] == src) return realStars?.bodyFrom(t, i)
             }
             return gaia.lookup(src)

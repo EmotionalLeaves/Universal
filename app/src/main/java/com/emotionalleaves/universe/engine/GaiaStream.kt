@@ -25,12 +25,29 @@ class GaiaStream(private val cacheDir: File) {
 
     @Volatile var bubble: Bubble? = null
         private set
+    /** Every Gaia star within [NEAR_PC] of the Sun, shipped with the app (no download, no wait). */
+    @Volatile var near: StarCatalog? = null
+        private set
     @Volatile var status = ""
         private set
     @Volatile private var busy = false
     private var failures = 0
     private var retryAt = 0L
     private val exec = java.util.concurrent.Executors.newSingleThreadExecutor { r -> Thread(r, "gaia").also { it.priority = Thread.MIN_PRIORITY } }
+    /**
+     * Downloads: the archive slows right down when one phone sends several queries at once, so the
+     * neighbourhoods ahead are fetched one at a time, and the one you are in never waits behind more than one.
+     */
+    private val net = java.util.concurrent.Executors.newFixedThreadPool(2) { r -> Thread(r, "gaia-net").also { it.priority = Thread.MIN_PRIORITY; it.isDaemon = true } }
+    @Volatile private var prefetching = 0
+    private val inFlight = ConcurrentHashMap<String, java.util.concurrent.Future<String>>()
+    /** Recently built neighbourhoods, so flying back and forth is instant. */
+    private val built = object : LinkedHashMap<String, Bubble>(8, 0.75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, Bubble>?) = size > 6
+    }
+    private var lastP: Vec3d? = null
+    private var lastT = 0L
+    private var heading: Vec3d? = null
 
     /** Synthetic catalogue ids (30,000,000+) <-> Gaia source ids. */
     val sourceOf = ConcurrentHashMap<Int, Long>()
@@ -39,54 +56,154 @@ class GaiaStream(private val cacheDir: File) {
 
     private fun idFor(source: Long): Int = idOf.getOrPut(source) { synchronized(this) { nextId++ }.also { sourceOf[it] = source } }
 
-    /** Called often with the camera position; starts a download when you reach a new neighbourhood. */
+    /** Reads the bundled near-Sun stars (call on a background thread after the HYG stars load). */
+    fun loadNear(context: android.content.Context, rs: RealStars) {
+        val input = StarFiles.open(context, "stars/gaia_near.bin") ?: return
+        val bytes = input.use { it.readBytes() }
+        val b = java.nio.ByteBuffer.wrap(bytes).order(java.nio.ByteOrder.LITTLE_ENDIAN)
+        if (bytes.size < 12 || b.int != 0x4E475855) return   // "UXGN"
+        b.int
+        val n = b.int
+        val rows = ArrayList<DoubleArray>(n)
+        for (i in 0 until n) {
+            val ra = b.float.toDouble(); val dec = b.float.toDouble(); val plx = b.float.toDouble()
+            val g = b.float.toDouble(); val bprp = b.float.toDouble(); val sid = b.long
+            rows.add(doubleArrayOf(java.lang.Double.longBitsToDouble(sid), ra, dec, plx, g, bprp))
+        }
+        near = build(rows, Vec3d.ZERO, NEAR_PC, rs)
+        status = String.format(Locale.US, "%,d Gaia stars near the Sun (built in)", near?.count ?: 0)
+    }
+
+    /** Key and centre of the neighbourhood containing [p] (centres snap to a grid so caches are shared). */
+    private fun cell(p: Vec3d, r: Double): Pair<String, Vec3d> {
+        val step = r * 0.3
+        val c = Vec3d(floor(p.x / step + 0.5) * step, floor(p.y / step + 0.5) * step, floor(p.z / step + 0.5) * step)
+        return String.format(Locale.US, "r%d_%d_%d_%d", r.toInt(), (c.x / step).toLong(), (c.y / step).toLong(), (c.z / step).toLong()) to c
+    }
+
+    /** True where the built-in stars already cover a neighbourhood. */
+    private fun coveredByNear(c: Vec3d, r: Double) = near != null && c.length() + r * 0.6 < NEAR_PC
+
+    /** Called often with the camera position; loads the neighbourhood you are in and the ones ahead. */
     fun update(cam: UPos, rs: RealStars?, onLoaded: () -> Unit) {
-        if (busy || rs == null) return
+        if (rs == null) return
         val p = (cam - UPos.ZERO) / Units.PC
+        val now = System.nanoTime()
+        // Which way are we going? (for loading ahead)
+        lastP?.let { lp ->
+            val dt = (now - lastT) / 1e9
+            val v = (p - lp) / dt.coerceAtLeast(1e-3)
+            if (v.length() > 0.5) heading = v else if (v.length() < 0.01) heading = null
+        }
+        lastP = p; lastT = now
         val d = p.length()
         if (d > MAX_PC) return
         val r = radiusFor(d)
+        val (key, c) = cell(p, r)
+        // Load ahead: the next neighbourhoods along the way (also during autopilot trips).
+        heading?.let { h ->
+            val dir = h.normalized()
+            for (k in 1..3) {
+                val q = p + dir * (r * 0.6 * k)
+                if (q.length() > MAX_PC) break
+                val rr = radiusFor(q.length())
+                val (k2, c2) = cell(q, rr)
+                if (!coveredByNear(c2, rr)) prefetch(k2, c2, rr)
+            }
+        }
+        if (coveredByNear(c, r)) {
+            if (bubble != null) { bubble = null; onLoaded() }
+            return
+        }
         val cur = bubble
         if (cur != null && (cur.centerPc - p).length() < cur.radiusPc * 0.35 && cur.radiusPc == r) return
+        if (cur?.key == key || busy) return
+        synchronized(built) { built[key] }?.let { b -> bubble = b; status = statusFor(b); onLoaded(); return }
         if (System.currentTimeMillis() < retryAt) return
-        // Quantise the centre so nearby positions share a cached bubble.
-        val step = r * 0.3
-        val c = Vec3d(floor(p.x / step + 0.5) * step, floor(p.y / step + 0.5) * step, floor(p.z / step + 0.5) * step)
-        val key = String.format(Locale.US, "r%d_%d_%d_%d", r.toInt(), (c.x / step).toLong(), (c.y / step).toLong(), (c.z / step).toLong())
-        if (cur?.key == key) return
         busy = true
         exec.execute {
             try {
-                val rows = fetch(key, c, r)
-                bubble = Bubble(key, c, r, build(rows, c, r, rs))
+                val rows = parse(download(key, c, r).get())
+                val b = Bubble(key, c, r, build(rows, c, r, rs))
+                synchronized(built) { built[key] = b }
+                bubble = b
                 failures = 0
-                status = String.format(Locale.US, "%,d Gaia stars around you", bubble?.catalog?.count ?: 0)
+                status = statusFor(b)
                 onLoaded()
             } catch (e: Exception) {
                 failures++
-                retryAt = System.currentTimeMillis() + min(120_000L, 5_000L shl min(failures, 5))
-                status = if (e is java.net.UnknownHostException) "Gaia: offline" else "Gaia: couldn't load (${e.message ?: e.javaClass.simpleName})"
-                try { android.util.Log.w("UniverseDiag", "gaia $key failed: $e") } catch (_: Throwable) {}
+                retryAt = System.currentTimeMillis() + min(60_000L, 2_000L shl min(failures, 5))
+                val cause = (e as? java.util.concurrent.ExecutionException)?.cause ?: e
+                status = if (cause is java.net.UnknownHostException) "Gaia: offline" else "Gaia: couldn't load (${cause.message ?: cause.javaClass.simpleName})"
             } finally {
                 busy = false
             }
         }
     }
 
+    private fun statusFor(b: Bubble) = String.format(Locale.US, "%,d Gaia stars around you", b.catalog.count)
+
     fun clear() { bubble = null }
 
-    /** Raw rows: source_id, ra, dec, parallax, G, BP-RP (from the cache or the archive). */
-    private fun fetch(key: String, c: Vec3d, r: Double): List<DoubleArray> {
-        val dir = File(cacheDir, "gaia").also { it.mkdirs() }
-        val f = File(dir, "$key.csv")
-        val text = if (f.exists() && f.length() > 0) f.readText() else {
-            status = "Loading real Gaia stars around you…"
-            val (code, body) = Online.get(TAP + java.net.URLEncoder.encode(query(c, r), "UTF-8"), 60_000)
-            if (code != 200 || !body.startsWith("source_id")) throw IllegalStateException("archive answered $code")
-            File(dir, "$key.tmp").also { it.writeText(body); it.renameTo(f) }
-            trimCache(dir)
-            body
+    private fun prefetch(key: String, c: Vec3d, r: Double) {
+        if (inFlight.containsKey(key) || synchronized(built) { built.containsKey(key) }) return
+        if (File(File(cacheDir, "gaia"), "$key.csv").exists()) return
+        if (prefetching > 0 || busy) return
+        prefetching++
+        val f = download(key, c, r)
+        Thread { try { f.get() } catch (_: Exception) {} finally { prefetching-- } }.also { it.isDaemon = true; it.start() }
+    }
+
+    /** The CSV for a neighbourhood: from the phone if fetched before, else from the fastest archive. */
+    private fun download(key: String, c: Vec3d, r: Double): java.util.concurrent.Future<String> {
+        inFlight[key]?.let { return it }
+        val f = net.submit<String> {
+            try {
+                val dir = File(cacheDir, "gaia").also { it.mkdirs() }
+                val file = File(dir, "$key.csv")
+                if (file.exists() && file.length() > 0) file.readText() else {
+                    if (bubble?.key != key) status = "Loading real Gaia stars around you…"
+                    val body = race(query(c, r))
+                    File(dir, "$key.tmp").also { it.writeText(body); it.renameTo(file) }
+                    trimCache(dir)
+                    body
+                }
+            } finally {
+                inFlight.remove(key)
+            }
         }
+        inFlight[key] = f
+        return f
+    }
+
+    /**
+     * Asks the Gaia archives at once and takes whichever answers first (they differ a lot in speed
+     * from hour to hour); the slower request is abandoned.
+     */
+    private fun race(adql: String): String {
+        val q = java.net.URLEncoder.encode(adql, "UTF-8")
+        val done = java.util.concurrent.ArrayBlockingQueue<Result<String>>(TAPS.size)
+        val threads = TAPS.mapIndexed { i, base ->
+            Thread {
+                // The backup only starts if the first is slow, so a quick answer costs nothing extra.
+                if (i > 0) try { Thread.sleep(6000L * i) } catch (_: InterruptedException) { return@Thread }
+                val r = try {
+                    val (code, body) = Online.get(base + q, 45_000)
+                    if (code == 200 && body.startsWith("source_id")) Result.success(body) else Result.failure(IllegalStateException("archive answered $code"))
+                } catch (e: Exception) { Result.failure(e) }
+                done.offer(r)
+            }.also { it.isDaemon = true; it.start() }
+        }
+        var last: Throwable? = null
+        repeat(TAPS.size) {
+            val r = done.poll(50, java.util.concurrent.TimeUnit.SECONDS) ?: return@repeat
+            r.onSuccess { body -> threads.forEach { it.interrupt() }; return body }
+            last = r.exceptionOrNull()
+        }
+        throw (last as? Exception) ?: IllegalStateException("no archive answered")
+    }
+
+    private fun parse(text: String): List<DoubleArray> {
         val out = ArrayList<DoubleArray>(8192)
         for (line in text.lineSequence().drop(1)) {
             if (line.isEmpty()) continue
@@ -111,10 +228,13 @@ class GaiaStream(private val cacheDir: File) {
 
     /** Turns rows into a star tile: keeps those inside the bubble, drops ones the HYG catalogue already has. */
     private fun build(rows: List<DoubleArray>, c: Vec3d, r: Double, rs: RealStars): StarCatalog {
+        val skipNear = near != null
         // HYG stars inside the bubble, on a 1 pc grid, to skip duplicates.
         val grid = HashMap<Long, MutableList<Pair<Vec3d, Double>>>()
         fun cell(v: Vec3d) = (floor(v.x).toLong() and 0x1FFFFF shl 42) or (floor(v.y).toLong() and 0x1FFFFF shl 21) or (floor(v.z).toLong() and 0x1FFFFF)
-        for (cat in rs.allCatalogs()) for (tile in cat.tiles) {
+        for (cat in rs.allCatalogs()) {
+            if (cat === near || cat === bubble?.catalog) continue
+            for (tile in cat.tiles) {
             val a = tile.anchorPc
             if (kotlin.math.abs(a.x - c.x) > 101 + r || kotlin.math.abs(a.y - c.y) > 101 + r || kotlin.math.abs(a.z - c.z) > 101 + r) continue
             for (i in 0 until tile.count) {
@@ -122,6 +242,7 @@ class GaiaStream(private val cacheDir: File) {
                 if ((pp - c).length() > r + 2) continue
                 val dSun = max(pp.length(), 0.01)
                 grid.getOrPut(cell(pp)) { ArrayList(2) }.add(pp to tile.absMag(i) + 5 * log10(dSun) - 5)
+            }
             }
         }
         val stars = ArrayList<FloatArray>(rows.size)
@@ -132,6 +253,8 @@ class GaiaStream(private val cacheDir: File) {
             val dpc = 1000.0 / plx
             val pos = Vec3d.fromRaDec(row[1], row[2]) * dpc
             if ((pos - c).length() > r) continue
+            // Already among the built-in stars near the Sun.
+            if (skipNear && dpc < NEAR_PC) continue
             val g = row[4]
             // Already in HYG? (same place within the parallax error, similar brightness)
             if (g < 11.5) {
@@ -164,11 +287,9 @@ class GaiaStream(private val cacheDir: File) {
 
     /** A Gaia star by source id: from the loaded bubble, or looked up in the archive (blocking). */
     fun lookup(source: Long): StarBody? {
-        val (code, body) = try {
-            Online.get(TAP + java.net.URLEncoder.encode(
-                "SELECT source_id, ra, dec, parallax, phot_g_mean_mag, bp_rp FROM gaiadr3.gaia_source WHERE source_id = $source", "UTF-8"), 20_000)
+        val body = try {
+            race("SELECT source_id, ra, dec, parallax, phot_g_mean_mag, bp_rp FROM gaiadr3.gaia_source WHERE source_id = $source")
         } catch (_: Exception) { return null }
-        if (code != 200) return null
         val p = body.lineSequence().drop(1).firstOrNull { it.isNotBlank() }?.split(',') ?: return null
         val ra = p.getOrNull(1)?.toDoubleOrNull() ?: return null
         val dec = p.getOrNull(2)?.toDoubleOrNull() ?: return null
@@ -180,7 +301,13 @@ class GaiaStream(private val cacheDir: File) {
     }
 
     companion object {
-        const val TAP = "https://gea.esac.esa.int/tap-server/tap/sync?REQUEST=doQuery&LANG=ADQL&FORMAT=csv&QUERY="
+        /** Gaia archives, fastest first: ESA's own (2–4 s a neighbourhood), Heidelberg's mirror as the backup. */
+        val TAPS = listOf(
+            "https://gea.esac.esa.int/tap-server/tap/sync?REQUEST=doQuery&LANG=ADQL&FORMAT=csv&QUERY=",
+            "https://gaia.ari.uni-heidelberg.de/tap/sync?REQUEST=doQuery&LANG=ADQL&FORMAT=csv&QUERY=",
+        )
+        /** Radius of the built-in Gaia stars around the Sun (pc). */
+        const val NEAR_PC = 100.0
         /** Beyond this the parallaxes are too rough to place stars well. */
         const val MAX_PC = 2500.0
         /** Gaia (with the parallax cut used) is complete to about this magnitude seen from the Sun. */

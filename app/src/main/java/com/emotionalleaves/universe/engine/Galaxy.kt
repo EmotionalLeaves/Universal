@@ -324,8 +324,8 @@ object StarField {
     const val LUMINOUS_LIMIT = 1.5   // absolute magnitude
     /** Brightest apparent magnitude (seen from the Sun) the real catalogue is complete to. */
     @Volatile var catalogLimit = 8.0
-    /** The streamed Gaia neighbourhood in Milky Way coordinates (x, y, z, radius pc), or null. */
-    @Volatile var gaiaBubble: DoubleArray? = null
+    /** Regions covered by real Gaia stars, in Milky Way coordinates (x, y, z, radius pc each). */
+    @Volatile var gaiaSpheres: List<DoubleArray> = emptyList()
 
     private class Kind(val p: Double, val tMin: Double, val tMax: Double, val mBright: Double, val mFaint: Double, val spect: String)
 
@@ -440,7 +440,7 @@ object StarField {
         gaiaFilter: Boolean = true,
         emit: (local: Vec3d, absMag: Double, teff: Double, index: Int) -> Unit,
     ) {
-        val gb = if (gaiaFilter && sunLocal != null) gaiaBubble else null
+        val spheres = if (gaiaFilter && sunLocal != null) gaiaSpheres else emptyList()
         val size = cellSize(tier)
         val base = baseOf(tier)
         val luminous = base == 1
@@ -462,10 +462,10 @@ object StarField {
                 val app = m + 5 * log10(max(d, 0.01)) - 5
                 if (app < catalogLimit) continue
                 // Inside the streamed Gaia bubble, real stars stand in for everything Gaia can see.
-                if (gb != null && app < GaiaStream.LIMIT_MAG) {
-                    val bx = local.x - gb[0]; val by = local.y - gb[1]; val bz = local.z - gb[2]
-                    if (bx * bx + by * by + bz * bz < gb[3] * gb[3]) continue
-                }
+                if (spheres.isNotEmpty() && app < GaiaStream.LIMIT_MAG && spheres.any { gb ->
+                        val bx = local.x - gb[0]; val by = local.y - gb[1]; val bz = local.z - gb[2]
+                        bx * bx + by * by + bz * bz < gb[3] * gb[3]
+                    }) continue
             }
             emit(local, m, t, i)
         }

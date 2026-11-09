@@ -252,6 +252,70 @@ def write_star_tiles(stars, path, tile_pc):
     return len(keys)
 
 
+GAIA_TAPS = [
+    "https://gaia.ari.uni-heidelberg.de/tap/sync",
+    "https://gea.esac.esa.int/tap-server/tap/sync",
+]
+GAIA_NEAR_PC = 100.0
+
+
+def gaia_csv(adql, timeout=600):
+    """Runs a synchronous ADQL query on the first Gaia archive that answers; returns CSV rows."""
+    last = None
+    for base in GAIA_TAPS:
+        url = base + "?REQUEST=doQuery&LANG=ADQL&FORMAT=csv&QUERY=" + urllib.parse.quote(adql)
+        try:
+            text = fetch(url, timeout=timeout).decode("utf-8", "replace")
+            lines = text.strip().split("\n")
+            if not lines or not lines[0].startswith("source_id"):
+                raise RuntimeError("bad reply: " + text[:200])
+            return [l.split(",") for l in lines[1:] if l]
+        except Exception as e:
+            last = e
+            log(f"  {base} failed: {e}")
+    raise last
+
+
+def build_gaia_near(base):
+    """Every Gaia DR3 star within GAIA_NEAR_PC of the Sun (parallax good to 10%), shipped in the app
+    so the neighbourhood of the Sun shows real stars instantly. Queried in RA slices (sync limit 50k).
+    File stars/gaia_near.bin: 'UXGN', int32 version=1, int32 count, then per star
+    float32 ra, dec, parallax(mas), G, BP-RP (NaN if missing), int64 source_id."""
+    cols = "source_id, ra, dec, parallax, phot_g_mean_mag, bp_rp"
+    rows = []
+    def slice_rows(a, b):
+        q = (f"SELECT {cols} FROM gaiadr3.gaia_source WHERE parallax > {1000.0 / GAIA_NEAR_PC} "
+             f"AND parallax_over_error > 10 AND ra >= {a} AND ra < {b}")
+        r = gaia_csv(q)
+        if len(r) >= 49999 and b - a > 1:
+            m = (a + b) / 2
+            return slice_rows(a, m) + slice_rows(m, b)
+        return r
+    step = 15
+    for a in range(0, 360, step):
+        r = slice_rows(a, a + step)
+        log(f"  RA {a}-{a + step}: {len(r)} stars")
+        rows += r
+    out = os.path.join(base, "stars", "gaia_near.bin")
+    os.makedirs(os.path.dirname(out), exist_ok=True)
+    n = 0
+    with open(out, "wb") as f:
+        f.write(b"UXGN")
+        f.write(struct.pack("<ii", 1, 0))
+        for r in rows:
+            try:
+                sid = int(r[0]); ra = float(r[1]); de = float(r[2]); plx = float(r[3]); g = float(r[4])
+            except Exception:
+                continue
+            bprp = fnum(r[5], float("nan")) if len(r) > 5 else float("nan")
+            f.write(struct.pack("<fffffq", ra, de, plx, g, bprp, sid))
+            n += 1
+        f.seek(8)
+        f.write(struct.pack("<i", n))
+    log(f"  wrote {out}: {n} Gaia stars within {GAIA_NEAR_PC:.0f} pc ({os.path.getsize(out) / 1e6:.1f} MB)")
+    return {"gaia_near": n}
+
+
 def build_hyg(base):
     log("Stars: HYG v4.4")
     raw = gzip.decompress(fetch(HYG_URL)).decode("utf-8")
@@ -1239,6 +1303,8 @@ def main():
     steps = []
     if want("stars"):
         steps.append(("stars", lambda: build_hyg(base)))
+    if want("gaianear"):
+        steps.append(("gaianear", lambda: build_gaia_near(base)))
     if want("constellations"):
         steps.append(("constellations", lambda: build_constellations(base)))
     if want("planets"):
