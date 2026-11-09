@@ -1,0 +1,28 @@
+name: Build sky data
+on:
+  workflow_dispatch:
+    inputs:
+      only:
+        description: "Comma-separated: gaia,milliquas"
+        default: "gaia,milliquas"
+      gmax:
+        description: "Faintest Gaia G magnitude"
+        default: "15"
+permissions:
+  contents: write
+jobs:
+  sky:
+    runs-on: ubuntu-latest
+    timeout-minutes: 350
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build
+        run: mkdir -p build && python3 tools/build_sky.py --out build/sky --only "${{ inputs.only }}" --gmax "${{ inputs.gmax }}" 2>&1 | tee build/sky-build.log || true
+      - name: Publish
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p build; touch build/sky-build.log
+          gh release view sky-v1 >/dev/null 2>&1 || gh release create sky-v1 --title "Sky data (staging)" --notes "Built by build-sky.yml; copied to the public Universal-data repo" --prerelease
+          for f in build/sky/*.bin build/sky/*.txt build/sky-build.log; do [ -f "$f" ] && gh release upload sky-v1 "$f" --clobber; done
