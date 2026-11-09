@@ -110,6 +110,8 @@ tap_text "Search"; sleep 3
 adb shell input text "Pleiades"; sleep 4; adb shell input keyevent 66; log "enter"; sleep 10; shot gaia_pleiades; texts
 tap_text "Search"; sleep 3
 adb shell input text "Orion%sNebula"; sleep 4; adb shell input keyevent 66; log "enter"; sleep 10; shot gaia_orion; texts
+tap_text "Search"; sleep 3
+adb shell input text "Deneb"; sleep 4; adb shell input keyevent 66; log "enter"; sleep 20; shot gaia_deneb; texts
 
 # Every known object: online name lookup (not in the app), the asteroid download, Gaia streaming.
 tap_text "Search"; sleep 3

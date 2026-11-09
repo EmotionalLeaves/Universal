@@ -82,9 +82,11 @@ class GaiaTiles(private val cacheDir: File, private val gaia: GaiaStream) {
                 }
                 tiers = list
                 status = "Every Gaia star brighter than magnitude 15: ready"
+                try { android.util.Log.i("UniverseDiag", "gaia tiles ready: ${list.sumOf { it.index.size }} cells") } catch (_: Throwable) {}
                 onReady()
             } catch (e: Exception) {
                 status = if (e is java.net.UnknownHostException) "Gaia map: offline" else "Gaia map: couldn't load (${e.message ?: e.javaClass.simpleName})"
+                try { android.util.Log.w("UniverseDiag", "gaia tiles index failed: $e") } catch (_: Throwable) {}
             } finally {
                 starting = false
             }
@@ -192,11 +194,13 @@ class GaiaTiles(private val cacheDir: File, private val gaia: GaiaStream) {
             }
             failures = 0
             status = String.format(Locale.US, "%,d real Gaia stars loaded around you", starsLoaded)
+            try { android.util.Log.i("UniverseDiag", "gaia tiles t${t.id}: ${keys.size} cells, ${cat.count} stars (${missing.size} downloaded); loaded $starsLoaded") } catch (_: Throwable) {}
             onChange()
         } catch (e: Exception) {
             failures++
             retryAt = System.currentTimeMillis() + minOf(60_000L, 2_000L shl minOf(failures, 5))
             status = if (e is java.net.UnknownHostException) "Gaia stars: offline" else "Gaia stars: couldn't load (${e.message ?: e.javaClass.simpleName})"
+            try { android.util.Log.w("UniverseDiag", "gaia tiles failed: $e") } catch (_: Throwable) {}
         } finally {
             busy = false
         }
