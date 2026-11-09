@@ -258,7 +258,7 @@ class World(private val engine: Engine) {
                 } catch (_: Throwable) { emptyList() }
                 loaded("AT-HYG (${rs.packs.sumOf { it.count }})")
                 // Real Gaia stars within 330 light years, also shipped with the app (deduplicated against the above).
-                try { rs.gaia = gaia; gaia.loadNear(engine.context, rs); loaded("gaia near (${gaia.near?.count ?: 0})") } catch (e: Throwable) { ErrorLog.record("loading Gaia stars", e) }
+                try { rs.gaia = gaia; gaia.loadSeeds(engine.context); gaia.loadNear(engine.context, rs); loaded("gaia near (${gaia.near?.count ?: 0})") } catch (e: Throwable) { ErrorLog.record("loading Gaia stars", e) }
                 // A deeper real catalogue means generated stars must stay fainter (rule 2).
                 StarField.catalogLimit = if (rs.packs.isNotEmpty()) 10.5 else 8.0
                 genLocal = null

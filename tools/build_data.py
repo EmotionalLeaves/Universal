@@ -316,6 +316,115 @@ def build_gaia_near(base):
     return {"gaia_near": n}
 
 
+def gaia_radius(d):
+    """Must match GaiaStream.radiusFor in the app."""
+    return 20.0 if d < 150 else (30.0 if d < 600 else 45.0)
+
+
+def gaia_bubble_query(c, r):
+    """Must match GaiaStream.query in the app."""
+    d = math.sqrt(c[0] ** 2 + c[1] ** 2 + c[2] ** 2)
+    cols = "source_id, ra, dec, parallax, phot_g_mean_mag, bp_rp"
+    poe = 5 if d < 200 else 10
+    ra = math.degrees(math.atan2(c[1], c[0])) % 360
+    dec = math.degrees(math.asin(max(-1, min(1, c[2] / d))))
+    rad = math.degrees(math.asin(min(1.0, r / d)))
+    return (f"SELECT TOP 50000 {cols} FROM gaiadr3.gaia_source WHERE 1=CONTAINS(POINT('ICRS',ra,dec),CIRCLE('ICRS',{ra:.5f},{dec:.5f},{rad:.5f})) "
+            f"AND parallax BETWEEN {1000.0 / (d + r):.5f} AND {1000.0 / (d - r):.5f} AND parallax_over_error > {poe} AND ruwe < 1.4")
+
+
+def read_hyg_positions(path):
+    pos = {}
+    with open(path, "rb") as f:
+        data = f.read()
+    n_tiles = struct.unpack_from("<i", data, 8)[0]
+    off = 16
+    tiles = []
+    for t in range(n_tiles):
+        ax, ay, az, first, count = struct.unpack_from("<dddii", data, off)
+        off += 32
+        tiles.append((ax, ay, az, count))
+    for ax, ay, az, count in tiles:
+        for i in range(count):
+            dx, dy, dz, m, r, g, b, fl, sid = struct.unpack_from("<ffffBBBBi", data, off)
+            off += 24
+            pos[sid] = (ax + dx, ay + dy, az + dz)
+    return pos
+
+
+def build_gaia_seeds(base):
+    """Gaia neighbourhoods around famous places 100-2500 pc away (Messier objects, named nebulae and
+    clusters, named stars), shipped in the app so flying to them shows real stars at once.
+    File stars/gaia_seeds.bin: 'UXGS', int32 version=1, int32 seedCount, then per seed float64 x, y, z
+    (pc), float32 radius, int32 count, int64 byteOffset; then the stars, 28 bytes each as in gaia_near."""
+    targets = []   # (priority, name, (x, y, z))
+    for row in read_tsv(os.path.join(base, "dso", "dso.tsv")):
+        if not (row.get("messier") or row.get("common")):
+            continue
+        dly = fnum(row.get("dist_ly"))
+        if not dly:
+            continue
+        dpc = dly / 3.26156
+        if not (100 <= dpc <= 2500):
+            continue
+        ra, de = math.radians(float(row["ra"])), math.radians(float(row["dec"]))
+        targets.append((0 if row.get("messier") else 1, row["name"], (dpc * math.cos(de) * math.cos(ra), dpc * math.cos(de) * math.sin(ra), dpc * math.sin(de))))
+    pos = read_hyg_positions(os.path.join(base, "stars", "hyg.bin"))
+    for row in read_tsv(os.path.join(base, "stars", "hyg_names.tsv")):
+        if not row.get("proper"):
+            continue
+        dpc = fnum(row.get("dist_pc"))
+        mag = fnum(row.get("mag"), 99)
+        p = pos.get(int(row["id"]))
+        if p and dpc and 100 <= dpc <= 2500 and mag < 3.0:   # the famous bright ones (Rigel, Deneb, Betelgeuse…)
+            targets.append((2, row["proper"], p))
+    targets.sort(key=lambda t: t[0])
+    seeds = []
+    for pri, name, c in targets:
+        d = math.sqrt(sum(v * v for v in c))
+        r = gaia_radius(d)
+        if any(math.dist(c, s[1]) < 0.5 * r for s in seeds):
+            continue
+        seeds.append((name, c, r))
+    log(f"  {len(seeds)} seed neighbourhoods from {len(targets)} famous places")
+    out = os.path.join(base, "stars", "gaia_seeds.bin")
+    blobs = []
+    t0 = time.time()
+    for k, (name, c, r) in enumerate(seeds):
+        if time.time() - t0 > 3.5 * 3600:
+            log("  time budget used up; stopping early")
+            break
+        try:
+            rows = gaia_csv(gaia_bubble_query(c, r), timeout=180)
+        except Exception as e:
+            log(f"  {name}: failed ({e})")
+            continue
+        b = bytearray()
+        n = 0
+        for row in rows:
+            try:
+                sid = int(row[0]); ra = float(row[1]); de = float(row[2]); plx = float(row[3]); g = float(row[4])
+            except Exception:
+                continue
+            bprp = fnum(row[5], float("nan")) if len(row) > 5 else float("nan")
+            b += struct.pack("<fffffq", ra, de, plx, g, bprp, sid)
+            n += 1
+        blobs.append((c, r, n, bytes(b)))
+        log(f"  [{k + 1}/{len(seeds)}] {name}: {n} stars")
+    header = 12 + len(blobs) * 40
+    with open(out, "wb") as f:
+        f.write(b"UXGS")
+        f.write(struct.pack("<ii", 1, len(blobs)))
+        offset = header
+        for c, r, n, b in blobs:
+            f.write(struct.pack("<dddfiq", c[0], c[1], c[2], r, n, offset))
+            offset += len(b)
+        for c, r, n, b in blobs:
+            f.write(b)
+    log(f"  wrote {out}: {len(blobs)} neighbourhoods ({os.path.getsize(out) / 1e6:.1f} MB)")
+    return {"gaia_seeds": len(blobs)}
+
+
 def build_hyg(base):
     log("Stars: HYG v4.4")
     raw = gzip.decompress(fetch(HYG_URL)).decode("utf-8")
@@ -1305,6 +1414,8 @@ def main():
         steps.append(("stars", lambda: build_hyg(base)))
     if want("gaianear"):
         steps.append(("gaianear", lambda: build_gaia_near(base)))
+    if want("gaiaseeds"):
+        steps.append(("gaiaseeds", lambda: build_gaia_seeds(base)))
     if want("constellations"):
         steps.append(("constellations", lambda: build_constellations(base)))
     if want("planets"):

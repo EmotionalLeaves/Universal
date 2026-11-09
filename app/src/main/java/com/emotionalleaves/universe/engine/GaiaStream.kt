@@ -78,6 +78,63 @@ class GaiaStream(private val cacheDir: File) {
         status = String.format(Locale.US, "%,d Gaia stars near the Sun (built in)", near?.count ?: 0)
     }
 
+    /** Neighbourhoods around famous places, shipped with the app (centre pc, radius, count, byte offset). */
+    private class Seed(val center: Vec3d, val r: Double, val count: Int, val offset: Long)
+    @Volatile private var seeds: List<Seed> = emptyList()
+    private var appContext: android.content.Context? = null
+
+    /** Reads the index of built-in neighbourhoods (small; the stars are read when you get there). */
+    fun loadSeeds(context: android.content.Context) {
+        appContext = context.applicationContext ?: context
+        try {
+            context.assets.open("stars/gaia_seeds.bin").use { input ->
+                val head = ByteArray(12)
+                if (input.read(head) != 12) return
+                val hb = java.nio.ByteBuffer.wrap(head).order(java.nio.ByteOrder.LITTLE_ENDIAN)
+                if (hb.int != 0x53475855) return   // "UXGS"
+                hb.int
+                val n = hb.int
+                val idx = ByteArray(n * 40)
+                var got = 0
+                while (got < idx.size) { val k = input.read(idx, got, idx.size - got); if (k < 0) break; got += k }
+                val b = java.nio.ByteBuffer.wrap(idx).order(java.nio.ByteOrder.LITTLE_ENDIAN)
+                seeds = List(n) { Seed(Vec3d(b.double, b.double, b.double), b.float.toDouble(), b.int, b.long) }
+            }
+        } catch (_: Exception) {
+        }
+    }
+
+    private fun seedNear(p: Vec3d, r: Double): Int = seeds.indexOfFirst { it.r == r && (it.center - p).length() < r * 0.45 }
+
+    private fun readSeed(i: Int): List<DoubleArray> {
+        val sd = seeds[i]
+        val ctx = appContext ?: return emptyList()
+        val bytes = ByteArray(sd.count * 28)
+        ctx.assets.open("stars/gaia_seeds.bin").use { input ->
+            var skip = sd.offset
+            while (skip > 0) { val k = input.skip(skip); if (k <= 0) break; skip -= k }
+            var got = 0
+            while (got < bytes.size) { val k = input.read(bytes, got, bytes.size - got); if (k < 0) break; got += k }
+        }
+        val b = java.nio.ByteBuffer.wrap(bytes).order(java.nio.ByteOrder.LITTLE_ENDIAN)
+        return List(sd.count) {
+            val ra = b.float.toDouble(); val dec = b.float.toDouble(); val plx = b.float.toDouble()
+            val g = b.float.toDouble(); val bprp = b.float.toDouble(); val sid = b.long
+            doubleArrayOf(java.lang.Double.longBitsToDouble(sid), ra, dec, plx, g, bprp)
+        }
+    }
+
+    /** In-flight downloads' centres, so arriving a few pc off-centre reuses the one already coming. */
+    private val inFlightAt = ConcurrentHashMap<String, Pair<Vec3d, Double>>()
+
+    /** An already built, built-in or downloading neighbourhood covering [p], if any (key, centre). */
+    private fun existingNear(p: Vec3d, r: Double): Pair<String, Vec3d>? {
+        synchronized(built) { built.values.firstOrNull { it.radiusPc == r && (it.centerPc - p).length() < r * 0.4 } }?.let { return it.key to it.centerPc }
+        seedNear(p, r).takeIf { it >= 0 }?.let { return "seed$it" to seeds[it].center }
+        inFlightAt.entries.firstOrNull { it.value.second == r && (it.value.first - p).length() < r * 0.4 }?.let { return it.key to it.value.first }
+        return null
+    }
+
     /** Key and centre of the neighbourhood containing [p] (centres snap to a grid so caches are shared). */
     private fun cell(p: Vec3d, r: Double): Pair<String, Vec3d> {
         val step = r * 0.3
@@ -104,11 +161,11 @@ class GaiaStream(private val cacheDir: File) {
         if (d > MAX_PC) return
         if (nearPending && d < NEAR_PC + 50) return
         val r = radiusFor(d)
-        val (key, c) = cell(p, r)
+        val (key, c) = existingNear(p, r) ?: cell(p, r)
         // Passing through faster than a neighbourhood could load (a long trip): don't queue downloads
         // for places you'll have left by the time they arrive. The destination is already loading.
         val speed = heading?.length() ?: 0.0
-        if (speed > r * 0.4 && synchronized(built) { !built.containsKey(key) } && !File(File(cacheDir, "gaia"), "$key.csv").exists()) return
+        if (speed > r * 0.4 && !key.startsWith("seed") && synchronized(built) { !built.containsKey(key) } && !File(File(cacheDir, "gaia"), "$key.csv").exists()) return
         // Load ahead: the next neighbourhoods along the way (also during autopilot trips).
         heading?.let { h ->
             val dir = h.normalized()
@@ -133,7 +190,7 @@ class GaiaStream(private val cacheDir: File) {
         val t0 = System.nanoTime()
         exec.execute {
             try {
-                val rows = parse(download(key, c, r).get())
+                val rows = if (key.startsWith("seed")) readSeed(key.removePrefix("seed").toInt()) else parse(download(key, c, r).get())
                 val b = Bubble(key, c, r, build(rows, c, r, rs))
                 synchronized(built) { built[key] = b }
                 bubble = b
@@ -161,8 +218,9 @@ class GaiaStream(private val cacheDir: File) {
         val d = p.length()
         if (d > MAX_PC) return
         val r = radiusFor(d)
+        if (existingNear(p, r) != null) return
         val (key, c) = cell(p, r)
-        if (coveredByNear(c, r) || synchronized(built) { built.containsKey(key) }) return
+        if (coveredByNear(c, r)) return
         download(key, c, r)
     }
 
@@ -171,6 +229,7 @@ class GaiaStream(private val cacheDir: File) {
     fun clear() { bubble = null }
 
     private fun prefetch(key: String, c: Vec3d, r: Double) {
+        if (existingNear(c, r) != null) return
         if (inFlight.containsKey(key) || synchronized(built) { built.containsKey(key) }) return
         if (File(File(cacheDir, "gaia"), "$key.csv").exists()) return
         if (prefetching > 0 || busy) return
@@ -182,6 +241,7 @@ class GaiaStream(private val cacheDir: File) {
     /** The CSV for a neighbourhood: from the phone if fetched before, else from the fastest archive. */
     private fun download(key: String, c: Vec3d, r: Double): java.util.concurrent.Future<String> {
         inFlight[key]?.let { return it }
+        inFlightAt[key] = c to r
         val f = net.submit<String> {
             try {
                 val dir = File(cacheDir, "gaia").also { it.mkdirs() }
@@ -195,6 +255,7 @@ class GaiaStream(private val cacheDir: File) {
                 }
             } finally {
                 inFlight.remove(key)
+                inFlightAt.remove(key)
             }
         }
         inFlight[key] = f
