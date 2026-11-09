@@ -104,7 +104,7 @@ class GaiaStream(private val cacheDir: File) {
         }
     }
 
-    private fun seedNear(p: Vec3d, r: Double): Int = seeds.indexOfFirst { it.r == r && (it.center - p).length() < r * 0.45 }
+    private fun seedNear(p: Vec3d, r: Double): Int = seeds.indexOfFirst { it.r == r && (it.center - p).length() < r * 0.7 }
 
     private fun readSeed(i: Int): List<DoubleArray> {
         val sd = seeds[i]
@@ -129,9 +129,9 @@ class GaiaStream(private val cacheDir: File) {
 
     /** An already built, built-in or downloading neighbourhood covering [p], if any (key, centre). */
     private fun existingNear(p: Vec3d, r: Double): Pair<String, Vec3d>? {
-        synchronized(built) { built.values.firstOrNull { it.radiusPc == r && (it.centerPc - p).length() < r * 0.4 } }?.let { return it.key to it.centerPc }
+        synchronized(built) { built.values.firstOrNull { it.radiusPc == r && (it.centerPc - p).length() < r * 0.7 } }?.let { return it.key to it.centerPc }
         seedNear(p, r).takeIf { it >= 0 }?.let { return "seed$it" to seeds[it].center }
-        inFlightAt.entries.firstOrNull { it.value.second == r && (it.value.first - p).length() < r * 0.4 }?.let { return it.key to it.value.first }
+        inFlightAt.entries.firstOrNull { it.value.second == r && (it.value.first - p).length() < r * 0.7 }?.let { return it.key to it.value.first }
         return null
     }
 
@@ -182,7 +182,7 @@ class GaiaStream(private val cacheDir: File) {
             return
         }
         val cur = bubble
-        if (cur != null && (cur.centerPc - p).length() < cur.radiusPc * 0.35 && cur.radiusPc == r) return
+        if (cur != null && (cur.centerPc - p).length() < cur.radiusPc * 0.7 && cur.radiusPc == r) return
         if (cur?.key == key || busy) return
         synchronized(built) { built[key] }?.let { b -> bubble = b; status = statusFor(b); onLoaded(); return }
         if (System.currentTimeMillis() < retryAt) return
