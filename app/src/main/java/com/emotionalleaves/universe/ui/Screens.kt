@@ -133,14 +133,15 @@ fun DataScreen(engine: Engine) {
     Panel("Data packs", { Nav.screen = Screen.NONE }) {
         @Suppress("UNUSED_EXPRESSION") tick
         Text(
-            "Built in: 109,000 stars, 6,400 exoplanets, 52,000 asteroids, every known comet and moon, 62,000 galaxies, " +
+            "Built in: 860,000 real stars plus every Gaia star within 330 light years, 6,400 exoplanets, 52,000 asteroids, every known comet and moon, 62,000 galaxies, " +
                 "56,000 quasars and more. Everything else that is known comes from the big public catalogues below.",
             color = TextDim, fontSize = 13.sp,
         )
         Spacer(Modifier.height(12.dp))
         StreamToggle("Real stars wherever you fly (Gaia DR3)",
-            "Streams ESA Gaia's 1.8 billion stars around you anywhere within ~8,000 light years of the Sun, a neighbourhood at a time " +
-                "(about 1–5 MB each, kept on your phone). Generated stars only fill in what Gaia can't see.",
+            "Every Gaia star within 330 light years and 750,000 bright real stars beyond are built in (no waiting). Further out, " +
+                "ESA Gaia's fainter stars stream in around you up to ~8,000 light years from the Sun; the neighbourhood you're flying to " +
+                "starts loading as soon as the trip begins. Generated stars only fill in what Gaia can't see.",
             engine.settings.gaiaStream) { engine.settings.gaiaStream = it }
         if (engine.settings.gaiaStream) {
             val st = engine.world.gaia.status

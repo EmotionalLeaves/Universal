@@ -323,6 +323,7 @@ class Engine(val context: Context) {
 
     fun flyTo(body: Body) {
         prefetch(body)
+        if (settings.gaiaStream) try { world.gaia.prepare(body.position(jd)) } catch (_: Exception) {}
         // In free flight every trip stays a free trip: travel there without snapping into orbit.
         if (camera.freeFlight) { freeTravelTo(body); return }
         synchronized(camera) {

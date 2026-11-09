@@ -252,10 +252,13 @@ class World(private val engine: Engine) {
         loader.execute {
             val rs = realStars
             if (rs != null) {
-                val f = java.io.File(engine.context.filesDir, "packs/stars-athyg/athyg.bin")
-                rs.packs = if (f.exists()) {
-                    try { listOf(f.inputStream().use { StarFiles.read(it, "AT-HYG") }) } catch (_: Throwable) { emptyList() }
-                } else emptyList()
+                // AT-HYG (750,000 real stars to magnitude 11, from Tycho-2 and Gaia) ships inside the app.
+                rs.packs = try {
+                    listOfNotNull(StarFiles.open(engine.context, "stars/athyg.bin")?.use { StarFiles.read(it, "AT-HYG") })
+                } catch (_: Throwable) { emptyList() }
+                loaded("AT-HYG (${rs.packs.sumOf { it.count }})")
+                // Real Gaia stars within 330 light years, also shipped with the app (deduplicated against the above).
+                try { rs.gaia = gaia; gaia.loadNear(engine.context, rs); loaded("gaia near (${gaia.near?.count ?: 0})") } catch (e: Throwable) { ErrorLog.record("loading Gaia stars", e) }
                 // A deeper real catalogue means generated stars must stay fainter (rule 2).
                 StarField.catalogLimit = if (rs.packs.isNotEmpty()) 10.5 else 8.0
                 genLocal = null
@@ -517,10 +520,7 @@ class World(private val engine: Engine) {
                 loaded("stars")
                 realStars?.let { RealStars.loadNames(engine.context, it) }
                 searchStale = true
-                // Real Gaia stars within 330 light years, shipped with the app (instant, no download).
-                realStars?.let { rs ->
-                    try { rs.gaia = gaia; gaia.loadNear(engine.context, rs); loaded("gaia near (${gaia.near?.count ?: 0})") } catch (e: Throwable) { ErrorLog.record("loading Gaia stars", e) }
-                }
+
             } catch (e: Throwable) {
                 ErrorLog.record("loading stars", e)
             }

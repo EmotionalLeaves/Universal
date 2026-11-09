@@ -58,6 +58,7 @@ class GaiaStream(private val cacheDir: File) {
 
     /** Reads the bundled near-Sun stars (call on a background thread after the HYG stars load). */
     fun loadNear(context: android.content.Context, rs: RealStars) {
+        near = null
         val input = StarFiles.open(context, "stars/gaia_near.bin") ?: return
         val bytes = input.use { it.readBytes() }
         val b = java.nio.ByteBuffer.wrap(bytes).order(java.nio.ByteOrder.LITTLE_ENDIAN)
@@ -141,6 +142,20 @@ class GaiaStream(private val cacheDir: File) {
                 busy = false
             }
         }
+    }
+
+    /**
+     * Starts downloading the neighbourhood around a destination as soon as a trip begins, so the
+     * stars are usually there when you arrive.
+     */
+    fun prepare(target: UPos) {
+        val p = (target - UPos.ZERO) / Units.PC
+        val d = p.length()
+        if (d > MAX_PC) return
+        val r = radiusFor(d)
+        val (key, c) = cell(p, r)
+        if (coveredByNear(c, r) || synchronized(built) { built.containsKey(key) }) return
+        download(key, c, r)
     }
 
     private fun statusFor(b: Bubble) = String.format(Locale.US, "%,d Gaia stars around you", b.catalog.count)

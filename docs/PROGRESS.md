@@ -412,3 +412,9 @@ How it was tested: an Android emulator on GitHub (ui-test.yml + tools/ui_test.sh
 - [x] Search looks anything else up online: SIMBAD (Harvard mirror, then Strasbourg), NED for galaxies, JPL for asteroids and comets. Distances from parallax, redshift or SIMBAD's published measurements; results are drawn, labelled, flown to and kept for offline use.
 - [x] The old GitHub-hosted packs (AT-HYG, GLADE+) are replaced, since the private repo can't serve them: Gaia streaming covers the stars; GLADE+ streaming was tested but VizieR's mirrors were unreliable, so galaxies stay at 62,000 catalogued + generated, with any named galaxy findable online.
 - [x] Probe workflow (tools/probe_online.sh) to check the online services' formats and speeds from CI.
+
+## Pass 23: real stars without waiting
+- [x] Every Gaia DR3 star within 100 pc (330 ly, 266,000 stars with good astrometry) ships inside the app: the Sun's neighbourhood shows real stars at once, with no download.
+- [x] AT-HYG (750,000 real stars to magnitude 11, Tycho-2 + Gaia) now ships inside the app too (it could never download from the private repo).
+- [x] Streaming further out: the destination's neighbourhood starts downloading the moment a trip begins, the next ones along your heading load ahead of you (one at a time, since the archive slows down when a phone sends several at once), the last six neighbourhoods stay in memory, ESA answers first (2–4 s a neighbourhood) with Heidelberg's mirror as a backup after 6 s.
+- [x] Stars with unreliable astrometry (RUWE ≥ 1.4) dropped: they had piled up as a false cloud toward the galactic centre.

@@ -38,6 +38,8 @@ jobs:
           mkdir -p app/src/main/assets
           if gh release download data-v1 -p base-data.zip -D /tmp/data 2>/dev/null; then
             unzip -qo /tmp/data/base-data.zip -d app/src/main/assets
+            # AT-HYG (750,000 real stars) ships inside the app too.
+            gh release download data-v1 -p pack-stars-athyg.zip -D /tmp/data && unzip -qo /tmp/data/pack-stars-athyg.zip -d app/src/main/assets/stars || true
             rm -rf app/src/main/assets/heights   # landing was removed: no ground height maps needed
             echo "Bundled data:"; cat app/src/main/assets/manifest.json || true
             du -sh app/src/main/assets
