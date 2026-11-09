@@ -105,6 +105,12 @@ adb shell input keyevent 4; sleep 2; shot after_back; texts
 tap_text "Explore"; sleep 2; tap_text "Black hole"; sleep 12; shot black_hole; texts
 tap_text "Explore"; sleep 2; tap_text "Galaxy"; sleep 12; shot random_galaxy; texts
 
+# Gaia: built-in stars near the Sun, then neighbourhoods streamed on arrival (times in logcat).
+tap_text "Search"; sleep 3
+adb shell input text "Pleiades"; sleep 4; adb shell input keyevent 66; log "enter"; sleep 10; shot gaia_pleiades; texts
+tap_text "Search"; sleep 3
+adb shell input text "Orion%sNebula"; sleep 4; adb shell input keyevent 66; log "enter"; sleep 10; shot gaia_orion; texts
+
 # Every known object: online name lookup (not in the app), the asteroid download, Gaia streaming.
 tap_text "Search"; sleep 3
 adb shell input text "Sirius%sB"; sleep 14; shot search_online; texts

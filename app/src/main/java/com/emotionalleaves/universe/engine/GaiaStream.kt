@@ -121,6 +121,7 @@ class GaiaStream(private val cacheDir: File) {
         synchronized(built) { built[key] }?.let { b -> bubble = b; status = statusFor(b); onLoaded(); return }
         if (System.currentTimeMillis() < retryAt) return
         busy = true
+        val t0 = System.nanoTime()
         exec.execute {
             try {
                 val rows = parse(download(key, c, r).get())
@@ -130,6 +131,7 @@ class GaiaStream(private val cacheDir: File) {
                 failures = 0
                 status = statusFor(b)
                 onLoaded()
+                try { android.util.Log.i("UniverseDiag", "gaia $key: ${b.catalog.count} stars in %.1f s".format((System.nanoTime() - t0) / 1e9)) } catch (_: Throwable) {}
             } catch (e: Exception) {
                 failures++
                 retryAt = System.currentTimeMillis() + min(60_000L, 2_000L shl min(failures, 5))
