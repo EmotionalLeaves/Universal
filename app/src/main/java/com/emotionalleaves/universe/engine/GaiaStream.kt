@@ -45,6 +45,8 @@ class GaiaStream(private val cacheDir: File) {
     private val built = object : LinkedHashMap<String, Bubble>(8, 0.75f, true) {
         override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, Bubble>?) = size > 6
     }
+    /** True until the built-in near-Sun stars have been read (nothing near the Sun is downloaded meanwhile). */
+    @Volatile private var nearPending = true
     private var lastP: Vec3d? = null
     private var lastT = 0L
     private var heading: Vec3d? = null
@@ -59,7 +61,7 @@ class GaiaStream(private val cacheDir: File) {
     /** Reads the bundled near-Sun stars (call on a background thread after the HYG stars load). */
     fun loadNear(context: android.content.Context, rs: RealStars) {
         near = null
-        val input = StarFiles.open(context, "stars/gaia_near.bin") ?: return
+        val input = StarFiles.open(context, "stars/gaia_near.bin") ?: run { nearPending = false; return }
         val bytes = input.use { it.readBytes() }
         val b = java.nio.ByteBuffer.wrap(bytes).order(java.nio.ByteOrder.LITTLE_ENDIAN)
         if (bytes.size < 12 || b.int != 0x4E475855) return   // "UXGN"
@@ -72,6 +74,7 @@ class GaiaStream(private val cacheDir: File) {
             rows.add(doubleArrayOf(java.lang.Double.longBitsToDouble(sid), ra, dec, plx, g, bprp))
         }
         near = build(rows, Vec3d.ZERO, NEAR_PC, rs)
+        nearPending = false
         status = String.format(Locale.US, "%,d Gaia stars near the Sun (built in)", near?.count ?: 0)
     }
 
@@ -99,8 +102,13 @@ class GaiaStream(private val cacheDir: File) {
         lastP = p; lastT = now
         val d = p.length()
         if (d > MAX_PC) return
+        if (nearPending && d < NEAR_PC + 50) return
         val r = radiusFor(d)
         val (key, c) = cell(p, r)
+        // Passing through faster than a neighbourhood could load (a long trip): don't queue downloads
+        // for places you'll have left by the time they arrive. The destination is already loading.
+        val speed = heading?.length() ?: 0.0
+        if (speed > r * 0.4 && synchronized(built) { !built.containsKey(key) } && !File(File(cacheDir, "gaia"), "$key.csv").exists()) return
         // Load ahead: the next neighbourhoods along the way (also during autopilot trips).
         heading?.let { h ->
             val dir = h.normalized()
