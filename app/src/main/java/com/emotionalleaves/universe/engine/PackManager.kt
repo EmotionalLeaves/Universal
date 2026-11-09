@@ -19,6 +19,8 @@ class PackInfo(
     val description: String,
     val asset: String,
     val approxMb: Int,
+    /** Bumped when the pack's data changes: an older install is replaced automatically. */
+    val version: Int = 1,
 )
 
 /** State of one pack for the UI. */
@@ -46,7 +48,7 @@ class PackManager(private val context: Context, private val world: World, privat
             GALAXIES, "Galaxies: GLADE+ (the bright ones)",
             "The brightest galaxies of GLADE+ everywhere out to billions of light years, each in its measured place " +
                 "(the fainter ones stream in as you fly). Replaces generated galaxies wherever real ones are known.",
-            "pack-galaxies-glade.zip", 64,
+            "pack-galaxies-glade.zip", 25, version = 2,
         ),
         PackInfo(
             QUASARS, "Quasars: Milliquas (1 million)",
@@ -75,6 +77,10 @@ class PackManager(private val context: Context, private val world: World, privat
 
     fun installed(id: String) = dir(id).exists() && (dir(id).listFiles()?.isNotEmpty() == true)
 
+    /** Installed, but an older version of the data than the app expects. */
+    private fun outdated(p: PackInfo) = installed(p.id) && p.id != ASTEROIDS &&
+        (java.io.File(dir(p.id), "version.txt").takeIf { it.exists() }?.readText()?.trim()?.toIntOrNull() ?: 1) < p.version
+
     fun states(): List<PackState> = packs.map { p ->
         PackState(p, installed(p.id), sizeOf(dir(p.id)), active == p.id, progress[p.id] ?: 0f, errors[p.id])
     }
@@ -97,7 +103,7 @@ class PackManager(private val context: Context, private val world: World, privat
         if (!settings.autoDownload) return
         if (settings.wifiOnly && !onWifi()) return
         main.post {
-            for (p in packs) if (!installed(p.id) && p.id !in queue && active != p.id && errors[p.id] == null) queue.add(p.id)
+            for (p in packs) if ((!installed(p.id) || outdated(p)) && p.id !in queue && active != p.id && errors[p.id] == null) queue.add(p.id)
             next()
         }
     }
@@ -127,7 +133,9 @@ class PackManager(private val context: Context, private val world: World, privat
                 val url = assetUrl(p.asset) ?: throw IllegalStateException("Pack not published yet")
                 val tmp = File(context.cacheDir, "${p.id}.zip")
                 fetch(url, tmp, p.id)
+                dir(p.id).deleteRecursively()
                 unzip(tmp, dir(p.id))
+                java.io.File(dir(p.id), "version.txt").writeText(p.version.toString())
                 tmp.delete()
                 main.post { progress[id] = 1f }
                 world.packsChanged()
