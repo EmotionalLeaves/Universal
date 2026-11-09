@@ -149,13 +149,47 @@ class PointBatch(
          * Uploads points. [data] holds per point: x, y, z (in [unit] metres relative to [anchor]),
          * then r, g, b (0..1), then absolute magnitude. 7 floats per point.
          */
+        /**
+         * Uploads [count] points whose 7 floats each (x, y, z, r, g, b, absMag) are written by [fill]
+         * into a small reused array, so no full-size copy of a big catalogue is ever made.
+         */
+        fun uploadStrided(anchor: com.emotionalleaves.universe.core.UPos, unit: Double, count: Int, fill: (i: Int, out: FloatArray, at: Int) -> Unit): PointBatch {
+            val vao = Gl.genVao()
+            val vbo = Gl.genBuffer()
+            GLES30.glBindVertexArray(vao)
+            GLES30.glBindBuffer(GLES30.GL_ARRAY_BUFFER, vbo)
+            GLES30.glBufferData(GLES30.GL_ARRAY_BUFFER, count * 28, null, GLES30.GL_STATIC_DRAW)
+            val per = 1 shl 16
+            val tmp = FloatArray(per * 7)
+            val buf = java.nio.ByteBuffer.allocateDirect(per * 28).order(java.nio.ByteOrder.nativeOrder()).asFloatBuffer()
+            var i = 0
+            while (i < count) {
+                val n = minOf(per, count - i)
+                for (k in 0 until n) fill(i + k, tmp, k * 7)
+                buf.clear(); buf.put(tmp, 0, n * 7); buf.position(0)
+                GLES30.glBufferSubData(GLES30.GL_ARRAY_BUFFER, i * 28, n * 28, buf)
+                i += n
+            }
+            Gl.uploadedBytes += count * 28L
+            val stride = 7 * 4
+            GLES30.glEnableVertexAttribArray(0)
+            GLES30.glVertexAttribPointer(0, 3, GLES30.GL_FLOAT, false, stride, 0)
+            GLES30.glEnableVertexAttribArray(1)
+            GLES30.glVertexAttribPointer(1, 3, GLES30.GL_FLOAT, false, stride, 12)
+            GLES30.glVertexAttrib4f(1, 1f, 1f, 1f, 1f)
+            GLES30.glEnableVertexAttribArray(2)
+            GLES30.glVertexAttribPointer(2, 1, GLES30.GL_FLOAT, false, stride, 24)
+            GLES30.glBindVertexArray(0)
+            return PointBatch(anchor, unit, count, vao, vbo)
+        }
+
         fun upload(anchor: com.emotionalleaves.universe.core.UPos, unit: Double, data: FloatArray): PointBatch {
             val count = data.size / 7
             val vao = Gl.genVao()
             val vbo = Gl.genBuffer()
             GLES30.glBindVertexArray(vao)
             GLES30.glBindBuffer(GLES30.GL_ARRAY_BUFFER, vbo)
-            Gl.bufferData(GLES30.GL_ARRAY_BUFFER, data.size * 4, Gl.floatBuffer(data), GLES30.GL_STATIC_DRAW)
+            Gl.uploadFloats(GLES30.GL_ARRAY_BUFFER, data, GLES30.GL_STATIC_DRAW)
             val stride = 7 * 4
             GLES30.glEnableVertexAttribArray(0)
             GLES30.glVertexAttribPointer(0, 3, GLES30.GL_FLOAT, false, stride, 0)

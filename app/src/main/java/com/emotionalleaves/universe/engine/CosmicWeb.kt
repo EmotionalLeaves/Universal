@@ -155,16 +155,16 @@ fun realGalaxy(id: String, p: Vec3d, absMag: Double, pgc: Int): GalaxyBody {
     )
 }
 
-/** The GLADE+ galaxy pack: the brightest real galaxies everywhere, as points (Mpc). */
+/** The GLADE+ galaxy pack: the brightest real galaxies everywhere, as points (Mpc): x, y, z, absolute B. */
 class GladePack(val data: FloatArray, val maxMpc: Double) {
-    val count get() = data.size / 7
+    val count get() = data.size / 4
 
     /**
      * Galaxy [i] as a body you can fly into. GLADE+ gives its place and brightness; its shape and
      * the stars inside are generated from those (no name in the pack).
      */
     fun galaxy(i: Int): GalaxyBody =
-        realGalaxy("glade:$i", Vec3d(data[i * 7].toDouble(), data[i * 7 + 1].toDouble(), data[i * 7 + 2].toDouble()), data[i * 7 + 6].toDouble(), 0)
+        realGalaxy("glade:$i", Vec3d(data[i * 4].toDouble(), data[i * 4 + 1].toDouble(), data[i * 4 + 2].toDouble()), data[i * 4 + 3].toDouble(), 0)
 
     companion object {
         const val PATH = "packs/galaxies-glade/glade.bin"
@@ -182,14 +182,13 @@ class GladePack(val data: FloatArray, val maxMpc: Double) {
                 val total = (fileSize - 8) / 16
                 val step = maxOf(1, (total + maxPoints - 1) / maxPoints)
                 val n = total / step
-                val out = FloatArray(n * 7)
+                val out = FloatArray(n * 4)
                 var maxD = 0.0
                 for (i in 0 until n) {
                     b.position(8 + i * step * 16)
                     val x = b.float; val y = b.float; val z = b.float; val m = b.float
-                    out[i * 7] = x; out[i * 7 + 1] = y; out[i * 7 + 2] = z
-                    out[i * 7 + 3] = 0.92f; out[i * 7 + 4] = 0.9f; out[i * 7 + 5] = 1f
-                    out[i * 7 + 6] = m - 2.5f * log10(step.toFloat())
+                    out[i * 4] = x; out[i * 4 + 1] = y; out[i * 4 + 2] = z
+                    out[i * 4 + 3] = m - 2.5f * log10(step.toFloat())
                     val d = sqrt((x * x + y * y + z * z).toDouble())
                     if (d > maxD) maxD = d
                 }

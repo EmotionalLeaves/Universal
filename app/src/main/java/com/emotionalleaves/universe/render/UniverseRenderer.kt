@@ -380,6 +380,10 @@ class UniverseRenderer(private val context: Context, private val engine: Engine)
         } catch (e: Exception) {
             com.emotionalleaves.universe.engine.ErrorLog.record("${l.javaClass.simpleName}.$what", e)
             rc?.drawer?.end()
+        } catch (e: OutOfMemoryError) {
+            // A layer that can't fit its data is skipped rather than closing the app.
+            com.emotionalleaves.universe.engine.ErrorLog.record("${l.javaClass.simpleName}.$what (out of memory)", e)
+            rc?.drawer?.end()
         }
     }
 

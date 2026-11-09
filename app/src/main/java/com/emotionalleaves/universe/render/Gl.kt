@@ -27,6 +27,28 @@ object Gl {
             put(data); position(0)
         }
 
+    private var staging: FloatBuffer? = null
+
+    /**
+     * Uploads a float array in 4 MB pieces through one reused buffer (one big direct buffer per upload
+     * could need 50 MB of extra memory for the bigger catalogues).
+     */
+    fun uploadFloats(target: Int, data: FloatArray, usage: Int) {
+        GLES30.glBufferData(target, data.size * 4, null, usage)
+        val chunk = 1 shl 20
+        val buf = staging ?: ByteBuffer.allocateDirect(chunk * 4).order(ByteOrder.nativeOrder()).asFloatBuffer().also { staging = it }
+        var off = 0
+        while (off < data.size) {
+            val n = minOf(chunk, data.size - off)
+            buf.clear(); buf.put(data, off, n); buf.position(0)
+            GLES30.glBufferSubData(target, off * 4, n * 4, buf)
+            off += n
+        }
+        uploadedBytes += data.size * 4L
+        val e = GLES30.glGetError()
+        if (e != GLES30.GL_NO_ERROR) { lastGlError = e; Log.w(TAG, "upload of ${data.size * 4} bytes failed: 0x${Integer.toHexString(e)}") }
+    }
+
     /** Bytes of vertex data uploaded so far (for diagnostics). */
     @Volatile var uploadedBytes = 0L
     @Volatile var lastGlError = 0

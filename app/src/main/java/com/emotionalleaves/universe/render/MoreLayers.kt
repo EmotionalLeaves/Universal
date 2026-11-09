@@ -229,12 +229,10 @@ class ExoticLayer : Layer {
             mq = m
             qso?.release()
             qso = if (m != null) {
-                val d = FloatArray(m.count * 7)
-                for (i in 0 until m.count) {
-                    d[i * 7] = m.xyz[i * 3]; d[i * 7 + 1] = m.xyz[i * 3 + 1]; d[i * 7 + 2] = m.xyz[i * 3 + 2]
-                    d[i * 7 + 3] = 0.78f; d[i * 7 + 4] = 0.85f; d[i * 7 + 5] = 1f; d[i * 7 + 6] = m.absMag(i).toFloat()
+                PointBatch.uploadStrided(UPos.ZERO, Units.MPC, m.count) { i, out, at ->
+                    out[at] = m.xyz[i * 3]; out[at + 1] = m.xyz[i * 3 + 1]; out[at + 2] = m.xyz[i * 3 + 2]
+                    out[at + 3] = 0.78f; out[at + 4] = 0.85f; out[at + 5] = 1f; out[at + 6] = m.absMag(i).toFloat()
                 }
-                PointBatch.upload(UPos.ZERO, Units.MPC, d)
             } else src?.let { upload(it.quasars, Units.MPC, ::absMag) }
         }
         val ex = rc.engine.world.exotic
