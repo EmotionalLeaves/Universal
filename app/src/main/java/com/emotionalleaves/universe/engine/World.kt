@@ -513,7 +513,9 @@ class World(private val engine: Engine) {
     private val startNanos = System.nanoTime()
     /** Startup timing in the log (UniverseDiag), so slow loads on a phone can be found. */
     private fun loaded(what: String) {
-        try { android.util.Log.i("UniverseDiag", "loaded $what at %.1f s".format((System.nanoTime() - startNanos) / 1e9)) } catch (_: Throwable) {}
+        val rt = Runtime.getRuntime()
+        val usedMb = (rt.totalMemory() - rt.freeMemory()) / 1_048_576
+        try { android.util.Log.i("UniverseDiag", "loaded $what at %.1f s (heap %d MB of %d)".format((System.nanoTime() - startNanos) / 1e9, usedMb, rt.maxMemory() / 1_048_576)) } catch (_: Throwable) {}
     }
 
     fun start() {
