@@ -326,13 +326,13 @@ class GaiaStream(private val cacheDir: File) {
             val poe = if (d < 200) 5 else 10
             return if (d < r * 1.05) {
                 // Around the Sun: everything closer than the far edge of the bubble (whole sky).
-                "SELECT TOP 50000 $cols FROM gaiadr3.gaia_source WHERE parallax > ${fmt(1000.0 / (d + r))} AND parallax_over_error > $poe"
+                "SELECT TOP 50000 $cols FROM gaiadr3.gaia_source WHERE parallax > ${fmt(1000.0 / (d + r))} AND parallax_over_error > $poe AND ruwe < 1.4"
             } else {
                 val ra = Math.toDegrees(atan2(c.y, c.x)).let { if (it < 0) it + 360 else it }
                 val dec = Math.toDegrees(asin((c.z / d).coerceIn(-1.0, 1.0)))
                 val rad = Math.toDegrees(asin((r / d).coerceAtMost(1.0)))
                 "SELECT TOP 50000 $cols FROM gaiadr3.gaia_source WHERE 1=CONTAINS(POINT('ICRS',ra,dec),CIRCLE('ICRS',${fmt(ra)},${fmt(dec)},${fmt(rad)})) " +
-                    "AND parallax BETWEEN ${fmt(1000.0 / (d + r))} AND ${fmt(1000.0 / (d - r))} AND parallax_over_error > $poe"
+                    "AND parallax BETWEEN ${fmt(1000.0 / (d + r))} AND ${fmt(1000.0 / (d - r))} AND parallax_over_error > $poe AND ruwe < 1.4"
             }
         }
 

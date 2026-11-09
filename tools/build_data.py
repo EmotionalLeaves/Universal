@@ -285,7 +285,7 @@ def build_gaia_near(base):
     rows = []
     def slice_rows(a, b):
         q = (f"SELECT {cols} FROM gaiadr3.gaia_source WHERE parallax > {1000.0 / GAIA_NEAR_PC} "
-             f"AND parallax_over_error > 10 AND ra >= {a} AND ra < {b}")
+             f"AND parallax_over_error > 10 AND ruwe < 1.4 AND ra >= {a} AND ra < {b}")
         r = gaia_csv(q)
         if len(r) >= 49999 and b - a > 1:
             m = (a + b) / 2
