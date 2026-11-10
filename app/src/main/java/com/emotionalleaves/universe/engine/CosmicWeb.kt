@@ -594,6 +594,8 @@ object WebLod {
 
     /** Beyond this the streamed real faint galaxies end, so real luminous ones get generated companions. */
     const val COMPANIONS_FROM_MPC = 300.0
+    /** Companions may lie along the line to another real galaxy up to this far away (Mpc). */
+    private const val BRIDGE_MPC = 15.0
     /** Galaxies (as counted by [DENSITY]) per luminous galaxy. */
     private const val PER_LUMINOUS = DENSITY / CosmicWeb.LUMINOUS_DENSITY
 
@@ -647,19 +649,41 @@ object WebLod {
         if (density != null && s <= 64) {
             val lo = Vec3d((ccx - RADIUS) * s, (ccy - RADIUS) * s, (ccz - RADIUS) * s)
             val hi = Vec3d((ccx + RADIUS + 1) * s, (ccy + RADIUS + 1) * s, (ccz + RADIUS + 1) * s)
-            density.inBox(lo, hi) { host ->
-                val h = density.pos(host)
+            val hosts = ArrayList<Int>()
+            density.inBox(lo, hi) { hosts += it }
+            // Neighbours within BRIDGE_MPC, through a 16 Mpc grid, so companions can lie along the
+            // filaments joining real galaxies.
+            val grid = HashMap<Long, MutableList<Int>>()
+            fun key(v: Vec3d) = (kotlin.math.floor(v.x / 16).toLong() and 0xFFFFF) or ((kotlin.math.floor(v.y / 16).toLong() and 0xFFFFF) shl 20) or ((kotlin.math.floor(v.z / 16).toLong() and 0xFFFFF) shl 40)
+            val hp = Array(hosts.size) { density.pos(hosts[it]) }
+            for (k in hosts.indices) grid.getOrPut(key(hp[k])) { ArrayList() } += k
+            for (hk in hosts.indices) {
+                val host = hosts[hk]
+                val h = hp[hk]
                 val r = h.length()
-                if (r < COMPANIONS_FROM_MPC) return@inBox
+                if (r < COMPANIONS_FROM_MPC) continue
                 val comp = density.completeness(h.x, h.y, h.z).toDouble().coerceIn(CosmicWeb.MIN_COMPLETENESS, 1.0)
                 val want = (PER_LUMINOUS * density.weight / comp - 1.0) / represents
                 val rng = Rng(Rng.hash(CosmicWeb.SEED, 0xC0AL, level.toLong(), host.toLong()))
                 val n = want.toInt() + if (rng.nextDouble() < want - want.toInt()) 1 else 0
+                if (n == 0) continue
+                val near = ArrayList<Vec3d>()
+                val gx = kotlin.math.floor(h.x / 16).toLong(); val gy = kotlin.math.floor(h.y / 16).toLong(); val gz = kotlin.math.floor(h.z / 16).toLong()
+                for (ax in -1..1) for (ay in -1..1) for (az in -1..1) {
+                    val kk = ((gx + ax) and 0xFFFFF) or (((gy + ay) and 0xFFFFF) shl 20) or (((gz + az) and 0xFFFFF) shl 40)
+                    grid[kk]?.forEach { o -> if (o != hk) { val d = hp[o] - h; if (d.length() < BRIDGE_MPC) near += d } }
+                }
                 for (k in 0 until n) {
-                    // Most in the host's group (about 1 Mpc), the rest along its filament or wall
-                    // (pair counts growing like d^1.2 out to 10 Mpc, as for real galaxies).
-                    val off = if (rng.nextDouble() < 0.6) Vec3d(rng.gaussian(), rng.gaussian(), rng.gaussian()) * 0.8
-                        else rng.unitVector() * (CosmicWeb.COMPANION_MPC * rng.nextDouble().pow(1.0 / 1.2))
+                    val u = rng.nextDouble()
+                    val off = when {
+                        // In the host's own group.
+                        u < 0.35 -> Vec3d(rng.gaussian(), rng.gaussian(), rng.gaussian()) * 1.0
+                        // Along the filament to a neighbouring real galaxy.
+                        u < 0.75 && near.isNotEmpty() -> near[rng.nextInt(near.size)] * rng.nextDouble() +
+                            Vec3d(rng.gaussian(), rng.gaussian(), rng.gaussian()) * 0.7
+                        // Spread around it like real galaxy pairs (counts growing as d^1.2 out to 10 Mpc).
+                        else -> rng.unitVector() * (CosmicWeb.COMPANION_MPC * rng.nextDouble().pow(1.0 / 1.2))
+                    }
                     val p = h + off
                     val warm = rng.nextDouble().toFloat()
                     val rel = p - anchorMpc

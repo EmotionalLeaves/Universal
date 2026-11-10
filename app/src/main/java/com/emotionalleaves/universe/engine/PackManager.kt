@@ -45,10 +45,11 @@ class PackManager(private val context: Context, private val world: World, privat
      */
     val packs = listOf(
         PackInfo(
-            GALAXIES, "Galaxies: GLADE+ (the bright ones)",
-            "The brightest galaxies of GLADE+ everywhere out to billions of light years, each in its measured place " +
-                "(the fainter ones stream in as you fly). Replaces generated galaxies wherever real ones are known.",
-            "pack-galaxies-glade.zip", 25, version = 3,
+            GALAXIES, "Galaxies: GLADE+, DESI and SDSS (the luminous ones)",
+            "Every luminous galaxy with a known place, out to billions of light years: GLADE+, with the measured redshifts " +
+                "(exact distances) of DESI DR1 and SDSS DR17 and the millions of galaxies only they have. The fainter ones stream " +
+                "in as you fly. Generated galaxies only fill in what no survey has seen.",
+            "pack-galaxies-glade.zip", 91, version = 4,
         ),
         PackInfo(
             QUASARS, "Quasars: Milliquas (1 million)",

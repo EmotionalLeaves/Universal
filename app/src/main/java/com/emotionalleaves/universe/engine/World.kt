@@ -296,7 +296,7 @@ class World(private val engine: Engine) {
     /** (Re)loads the GLADE+ pack and regenerates the cosmic web beyond whatever real data we have. */
     fun reloadLargeScale() {
         webExec.execute {
-            val maxPts = when (engine.settings.quality) { 0 -> 1_500_000; 2 -> 10_000_000; else -> 4_000_000 }
+            val maxPts = when (engine.settings.quality) { 0 -> 1_200_000; 2 -> 10_000_000; else -> 3_000_000 }
             glade = GladePack.load(engine.context, maxPts)
             // With millions of real galaxies installed, generated ones must be fainter (rule 2).
             GalaxyField.catalogLimit = if (glade != null) 17.0 else 14.0

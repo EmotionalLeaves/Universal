@@ -151,8 +151,8 @@ fun DataScreen(engine: Engine) {
             val ts = engine.world.gaiaTiles.status
             if (ts.isNotEmpty()) Text(ts, color = if (ts.contains("couldn't") || ts.contains("offline")) Danger else RealGreen, fontSize = 12.sp, modifier = Modifier.padding(start = 2.dp))
         }
-        StreamToggle("Every known galaxy (GLADE+, 22.5 million)",
-            "The brightest galaxies come in the galaxy pack below; the other ~20 million stream in around you as you fly between galaxies.",
+        StreamToggle("Every known galaxy (GLADE+, DESI, SDSS)",
+            "The luminous galaxies come in the galaxy pack below; the other ~20 million stream in around you as you fly between galaxies. Distances use measured spectra (DESI DR1, SDSS DR17) wherever they exist.",
             engine.settings.gladeStream) { engine.settings.gladeStream = it }
         if (engine.settings.gladeStream) {
             val gs = engine.world.galaxyTiles.status
@@ -557,6 +557,8 @@ fun CreditsScreen(version: String) {
             "Wikipedia" to "\"About\" texts are summaries of Wikipedia articles, CC BY-SA 4.0; each card names its article.",
             "Cosmicflows-4" to "Tully et al. 2023, ApJ 944, 94 (galaxy distances), via VizieR (CDS).",
             "GLADE+" to "Dálya et al. 2022, MNRAS 514, 1403, via VizieR (CDS).",
+            "DESI" to "DESI Collaboration 2025, Data Release 1 (redshift catalogue), data.desi.lbl.gov.",
+            "SDSS" to "Sloan Digital Sky Survey DR17 (Abdurro'uf et al. 2022, ApJS 259, 35), specObj catalogue.",
             "Planck" to "Based on observations obtained with Planck (ESA), SMICA CMB map, via IRSA.",
             "Planet orbits" to "E. M. Standish and J. G. Williams, JPL Approximate Positions of the Planets.",
             "Planet maps" to "three.js example textures (NASA-based), Solar System Scope (CC BY 4.0), Planet Pixel Emporium via threex.planets.",
