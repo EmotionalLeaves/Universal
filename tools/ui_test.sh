@@ -85,7 +85,7 @@ tap_text "Real only"; sleep 1; shot filters_real; tap_text "Back"; sleep 4; shot
 tap_text "Filters"; sleep 2; tap_text "Everything"; sleep 1; tap_text "Back"; sleep 3
 # One structure on its own, then everything again; the in-view list
 tap_text "Filters"; sleep 2; tap_text "Pick a structure"; sleep 2; shot structures; texts
-tap_text "Virgo Supercluster"; sleep 14; shot only_virgo_supercluster; texts
+tap_text "Virgo Cluster"; sleep 14; shot only_virgo_cluster; texts
 tap_text "Show everything"; sleep 3; shot everything_again
 tap_text "In view"; sleep 3; shot in_view; texts
 tap_text "Back"; sleep 2
