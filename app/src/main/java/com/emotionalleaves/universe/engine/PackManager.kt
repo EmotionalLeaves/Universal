@@ -48,7 +48,7 @@ class PackManager(private val context: Context, private val world: World, privat
             GALAXIES, "Galaxies: GLADE+ (the bright ones)",
             "The brightest galaxies of GLADE+ everywhere out to billions of light years, each in its measured place " +
                 "(the fainter ones stream in as you fly). Replaces generated galaxies wherever real ones are known.",
-            "pack-galaxies-glade.zip", 25, version = 2,
+            "pack-galaxies-glade.zip", 25, version = 3,
         ),
         PackInfo(
             QUASARS, "Quasars: Milliquas (1 million)",
