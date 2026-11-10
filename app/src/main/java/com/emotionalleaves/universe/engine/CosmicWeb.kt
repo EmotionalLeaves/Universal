@@ -387,7 +387,11 @@ fun realGalaxy(id: String, p: Vec3d, absMag: Double, pgc: Int): GalaxyBody {
 }
 
 /** Read-only floats, from an array or straight from a mapped file. */
-interface Floats { operator fun get(i: Int): Float }
+interface Floats {
+    operator fun get(i: Int): Float
+    /** Copies [n] floats starting at [at] into [out] (fast path for scanning big sets). */
+    fun read(at: Int, out: FloatArray, n: Int) { for (k in 0 until n) out[k] = get(at + k) }
+}
 
 class ArrayFloats(private val a: FloatArray) : Floats { override fun get(i: Int) = a[i] }
 
@@ -400,6 +404,14 @@ class PackFloats(private val buf: java.nio.FloatBuffer, private val step: Int, p
         val c = i and 3
         val v = buf.get((i ushr 2) * step * 4 + c)
         return if (c == 3) v + magOffset else v
+    }
+
+    override fun read(at: Int, out: FloatArray, n: Int) {
+        if (step != 1 || (at and 3) != 0) { super.read(at, out, n); return }
+        val b = buf.duplicate()
+        b.position(at)
+        b.get(out, 0, n)
+        if (magOffset != 0f) { var k = 3; while (k < n) { out[k] += magOffset; k += 4 } }
     }
 }
 

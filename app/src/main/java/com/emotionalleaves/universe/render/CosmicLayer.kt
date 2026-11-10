@@ -160,12 +160,17 @@ class CosmicLayer : Layer {
         rc.drawer.end()
     }
 
-    override fun pickAt(frame: Frame, rc: RenderContext, x: Float, y: Float, reach: Float): Body? =
-        pickGlade(frame, rc, x, y, reach) ?: pickTiles(frame, rc, x, y, reach) ?: pickIn(web, frame, rc, x, y, reach) ?: pickIn(outer, frame, rc, x, y, reach)
+    override fun pickAt(frame: Frame, rc: RenderContext, x: Float, y: Float, reach: Float): Body? {
+        // Only what is drawn can be tapped (see drawTransparent): close to home none of this shows.
+        if (frame.focusDistance < 2 * Units.MPC && (frame.camPos - UPos.ZERO).length() < 20 * Units.MPC) return null
+        return (if (showReal) pickGlade(frame, rc, x, y, reach) ?: pickTiles(frame, rc, x, y, reach) else null)
+            ?: (if (showGenerated) pickIn(web, frame, rc, x, y, reach) ?: pickIn(outer, frame, rc, x, y, reach) else null)
+    }
 
     private fun pickTiles(frame: Frame, rc: RenderContext, x: Float, y: Float, reach: Float): Body? {
         val exp = exposure(frame) + 1.5f
         val cam = (frame.camPos - UPos.ZERO) / Units.MPC
+        val cone = frame.tapCone(x, y, reach)
         var best: com.emotionalleaves.universe.engine.GalaxyTiles.Group? = null
         var bi = -1
         var bestScore = Double.MAX_VALUE
@@ -173,6 +178,8 @@ class CosmicLayer : Layer {
             val d = g.data
             for (i in 0 until g.count) {
                 val dx = d[i * 4] - cam.x; val dy = d[i * 4 + 1] - cam.y; val dz = d[i * 4 + 2] - cam.z
+                val ct = dx * cone[0] + dy * cone[1] + dz * cone[2]
+                if (ct <= 0 || dx * dx + dy * dy + dz * dz - ct * ct > cone[3] * ct * ct) continue
                 val dist = kotlin.math.sqrt(dx * dx + dy * dy + dz * dz)
                 val m = d[i * 4 + 3] + 5 * log10(max(dist * 1e6, 1.0)) - 5
                 if (m > exp + 0.5) continue
@@ -194,19 +201,31 @@ class CosmicLayer : Layer {
         val g = glade ?: return null
         val exp = exposure(frame) + 1.5f
         val cam = (frame.camPos - UPos.ZERO) / Units.MPC
+        val cone = frame.tapCone(x, y, reach)
         var best = -1
         var bestScore = Double.MAX_VALUE
-        val d = g.data
-        for (i in 0 until (g.count * gladeShare(frame)).toInt()) {
-            val dx = d[i * 4] - cam.x; val dy = d[i * 4 + 1] - cam.y; val dz = d[i * 4 + 2] - cam.z
-            val dist = kotlin.math.sqrt(dx * dx + dy * dy + dz * dz)
-            val m = d[i * 4 + 3] + 5 * log10(max(dist * 1e6, 1.0)) - 5
-            if (m > exp + 0.5) continue
-            val s = frame.project(Vec3d(dx, dy, dz) * Units.MPC) ?: continue
-            val px = hypot((s.first - x).toDouble(), (s.second - y).toDouble())
-            if (px > reach) continue
-            val score = px + (m - exp) * 2
-            if (score < bestScore) { bestScore = score; best = i }
+        // Read in blocks straight from the file: one call per galaxy made a tap take a visible moment.
+        val block = 8192
+        val buf = FloatArray(block * 4)
+        var start = 0
+        while (start < g.count) {
+            val n = minOf(block, g.count - start)
+            g.data.read(start * 4, buf, n * 4)
+            for (k in 0 until n) {
+                val dx = buf[k * 4] - cam.x; val dy = buf[k * 4 + 1] - cam.y; val dz = buf[k * 4 + 2] - cam.z
+                val ct = dx * cone[0] + dy * cone[1] + dz * cone[2]
+                if (ct <= 0) continue
+                val d2 = dx * dx + dy * dy + dz * dz
+                if (d2 - ct * ct > cone[3] * ct * ct) continue
+                val m = buf[k * 4 + 3] + 5 * log10(max(kotlin.math.sqrt(d2) * 1e6, 1.0)) - 5
+                if (m > exp + 0.5) continue
+                val s = frame.project(Vec3d(dx, dy, dz) * Units.MPC) ?: continue
+                val px = hypot((s.first - x).toDouble(), (s.second - y).toDouble())
+                if (px > reach) continue
+                val score = px + (m - exp) * 2
+                if (score < bestScore) { bestScore = score; best = start + k }
+            }
+            start += n
         }
         if (best < 0) return null
         return g.galaxy(best).also { rc.engine.world.registerExtraGalaxy(it) }
@@ -216,11 +235,14 @@ class CosmicLayer : Layer {
         w ?: return null
         val exp = exposure(frame)
         val cam = (frame.camPos - UPos.ZERO) / Units.MPC
+        val cone = frame.tapCone(x, y, reach)
         var best = -1
         var bestScore = Double.MAX_VALUE
         val d = w.data
         for (i in 0 until w.count) {
             val dx = d[i * 7] - cam.x; val dy = d[i * 7 + 1] - cam.y; val dz = d[i * 7 + 2] - cam.z
+                val ct = dx * cone[0] + dy * cone[1] + dz * cone[2]
+                if (ct <= 0 || dx * dx + dy * dy + dz * dz - ct * ct > cone[3] * ct * ct) continue
             val dist = kotlin.math.sqrt(dx * dx + dy * dy + dz * dz)
             val m = d[i * 7 + 6] + 5 * log10(max(dist * 1e6, 1.0)) - 5
             if (m > exp + 0.5) continue

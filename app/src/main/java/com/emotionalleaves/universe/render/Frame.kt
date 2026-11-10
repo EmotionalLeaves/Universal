@@ -51,6 +51,17 @@ class Frame(
         return orientation.rotate(c).normalized()
     }
 
+    /**
+     * A quick test for "is this direction within [reach] pixels of the tap at ([px], [py])": returns
+     * the tap ray (x, y, z) and the squared tangent of the allowed angle (with some slack). Picking
+     * from millions of points checks this first: a few multiplications instead of a logarithm each.
+     */
+    fun tapCone(px: Float, py: Float, reach: Float): DoubleArray {
+        val r = rayThrough(px, py)
+        val a = tan(reach * 1.5 / (height / fovY))
+        return doubleArrayOf(r.x, r.y, r.z, a * a)
+    }
+
     companion object {
         const val FAR = 1.0e33   // beyond the edge of the speculative outer universe (~4e30 m)
     }

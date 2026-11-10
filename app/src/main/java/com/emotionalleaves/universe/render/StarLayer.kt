@@ -118,27 +118,38 @@ class StarLayer : Layer {
         rc.drawer.end()
     }
 
+    private var candAge = 0
+    private var candFor: RealStars? = null
+    private var labelCands: List<Triple<Body, UPos, Double>> = emptyList()
+    private val labelBodies = HashMap<Int, Body>()
+
     override fun collect(frame: Frame, rc: RenderContext, out: MutableList<Pickable>) {
         val rs = stars ?: return
-        // Label the brightest named stars as seen from the camera.
-        val cands = ArrayList<Pair<Int, Double>>()
-        for (id in rs.namedIds) {
-            val (tile, i) = rs.base.locate(id) ?: continue
-            val p = UPos.ZERO + tile.posPc(i) * Units.PC
-            val d = (p - frame.camPos).length()
-            if (d < Units.AU) continue
-            val m = tile.absMag(i) + 5 * log10(d / Units.PC) - 5
-            if (m < 3.2 + rc.engine.settings.starBrightness) cands.add(id to m)
+        // Label the brightest named stars as seen from the camera. Which ones those are changes slowly,
+        // so the list is worked out a few times a second and only their screen positions every frame.
+        if (candAge++ % 12 == 0 || candFor !== rs) {
+            candFor = rs
+            val cands = ArrayList<Pair<Int, Double>>()
+            for (id in rs.namedIds) {
+                val (tile, i) = rs.base.locate(id) ?: continue
+                val p = UPos.ZERO + tile.posPc(i) * Units.PC
+                val d = (p - frame.camPos).length()
+                if (d < Units.AU) continue
+                val m = tile.absMag(i) + 5 * log10(d / Units.PC) - 5
+                if (m < 3.2 + rc.engine.settings.starBrightness) cands.add(id to m)
+            }
+            cands.sortBy { it.second }
+            labelCands = cands.take(90).mapNotNull { (id, m) ->
+                val (tile, i) = rs.base.locate(id) ?: return@mapNotNull null
+                Triple(labelBodies.getOrPut(id) { rs.bodyFrom(tile, i) }, UPos.ZERO + tile.posPc(i) * Units.PC, m)
+            }
+            if (labelBodies.size > 2000) labelBodies.clear()
         }
-        cands.sortBy { it.second }
         var shown = 0
-        for ((id, m) in cands) {
+        for ((body, p, m) in labelCands) {
             if (shown >= 30) break
-            val (tile, i) = rs.base.locate(id) ?: continue
-            val p = UPos.ZERO + tile.posPc(i) * Units.PC
             val s = frame.project(frame.rel(p)) ?: continue
             if (s.first < 0 || s.second < 0 || s.first > frame.width || s.second > frame.height) continue
-            val body = rs.bodyFrom(tile, i)
             out.add(Pickable(body, s.first, s.second, 6f, (3.5 - m).toFloat().coerceAtLeast(0.5f), true, 0xFFB8C8E8.toInt()))
             shown++
         }
@@ -152,19 +163,28 @@ class StarLayer : Layer {
     /** Finds the star nearest a tap, preferring brighter ones. */
     override fun pickAt(frame: Frame, rc: RenderContext, x: Float, y: Float, reach: Float): Body? {
         val rs = stars ?: return null
+        // From far outside the galaxy the stars aren't drawn, so they can't be tapped either.
+        if ((frame.camPos - UPos.ZERO).length() >= 300_000 * Units.LY) return null
         val lim = magLimit + rc.engine.settings.starBrightness
         var best: Pair<com.emotionalleaves.universe.engine.StarTile, Int>? = null
         var bestScore = Double.MAX_VALUE
+        // Plain arithmetic per star and a cheap "near the tap?" test first: this runs over millions of
+        // stars on every tap, and building objects for each one froze the picture for a moment.
+        val camPc = (frame.camPos - UPos.ZERO) / Units.PC
+        val cone = frame.tapCone(x, y, reach)
+        val minPc = 1e9 / Units.PC
         for (c in rs.allCatalogs()) for (tile in c.tiles) {
             val d = tile.data
+            val ax = tile.anchorPc.x - camPc.x; val ay = tile.anchorPc.y - camPc.y; val az = tile.anchorPc.z - camPc.z
             for (i in 0 until tile.count) {
-                val p = UPos.ZERO + tile.posPc(i) * Units.PC
-                val rel = frame.rel(p)
-                val dist = rel.length()
-                if (dist < 1e9) continue
-                val m = d[i * 7 + 6] + 5 * log10(dist / Units.PC) - 5
+                val dx = d[i * 7] + ax; val dy = d[i * 7 + 1] + ay; val dz = d[i * 7 + 2] + az
+                val ct = dx * cone[0] + dy * cone[1] + dz * cone[2]
+                if (ct <= 0) continue
+                val d2 = dx * dx + dy * dy + dz * dz
+                if (d2 - ct * ct > cone[3] * ct * ct || d2 < minPc * minPc) continue
+                val m = d[i * 7 + 6] + 5 * log10(kotlin.math.sqrt(d2)) - 5
                 if (m > lim + 0.5) continue
-                val s = frame.project(rel) ?: continue
+                val s = frame.project(com.emotionalleaves.universe.core.Vec3d(dx, dy, dz) * Units.PC) ?: continue
                 val px = hypot((s.first - x).toDouble(), (s.second - y).toDouble())
                 if (px > reach) continue
                 val score = px + m * 3.0

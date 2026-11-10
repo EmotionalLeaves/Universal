@@ -36,11 +36,17 @@ class MilliquasDb private constructor(
     private fun type(i: Int) = line(i).substringAfter('\t', "")
 
     /** Absolute magnitude for drawing (from R and the luminosity distance). */
-    fun absMag(i: Int): Double {
-        val dc = Vec3d(xyz[i * 3].toDouble(), xyz[i * 3 + 1].toDouble(), xyz[i * 3 + 2].toDouble()).length() * 1e6
-        val m = if (rmag[i].isNaN()) 20.0 else rmag[i].toDouble()
-        return m - 5 * log10(max(dc * (1 + z[i]), 1.0)) + 5
+    /** Absolute magnitudes, worked out once (drawing, indexing and taps all need them for every quasar). */
+    private val absMags: FloatArray by lazy {
+        FloatArray(z.size) { i ->
+            val x = xyz[i * 3].toDouble(); val y = xyz[i * 3 + 1].toDouble(); val zz = xyz[i * 3 + 2].toDouble()
+            val dc = kotlin.math.sqrt(x * x + y * y + zz * zz) * 1e6
+            val m = if (rmag[i].isNaN()) 20.0 else rmag[i].toDouble()
+            (m - 5 * log10(max(dc * (1 + z[i]), 1.0)) + 5).toFloat()
+        }
     }
+
+    fun absMag(i: Int): Double = absMags[i].toDouble()
 
     fun body(i: Int): ExoticBody {
         val name = name(i)

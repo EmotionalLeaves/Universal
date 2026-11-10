@@ -200,17 +200,21 @@ class UniverseRenderer(private val context: Context, private val engine: Engine)
             if (body == null) {
                 for (l in layers.asReversed()) {
                     if (!on(l)) continue
+                    val tPick = if (profile) now() else 0.0
                     body = try { l.pickAt(frame, ctx, tap.x, tap.y, engine.tapReach)?.takeIf { vf.shows(it) && inRegion(it, frame.jd) } } catch (e: Exception) {
                         com.emotionalleaves.universe.engine.ErrorLog.record("${l.javaClass.simpleName}.pickAt", e); null
                     }
+                    if (profile) perfAdd("${l.javaClass.simpleName}.pickAt", tPick)
                     if (body != null) break
                 }
             }
+            val tRay = if (profile) now() else 0.0
             if (body == null) {
                 body = try { engine.world.starAlongRay(frame.camPos, frame.rayThrough(tap.x, tap.y))?.takeIf { vf.shows(it) && inRegion(it, frame.jd) } } catch (e: Exception) {
                     com.emotionalleaves.universe.engine.ErrorLog.record("starAlongRay", e); null
                 }
             }
+            if (profile) perfAdd("starAlongRay.pickAt", tRay)
             engine.applyTap(body, tap.double)
             labelOverlay?.tapped(tap.x, tap.y, body != null)
         }

@@ -304,12 +304,17 @@ class ExoticLayer : Layer {
         var bestScore = Double.MAX_VALUE
         // With Milliquas installed, its million quasars replace the built-in 56,000.
         val m = mq
-        if (m != null) {
+        // Quasars too faint to be drawn right now can't be tapped (and aren't worth scanning a million for).
+        val quasarsShown = showQuasars && (mqLoader.batch?.chunks?.selected ?: 1) > 0
+        if (m != null && quasarsShown) {
             val camMpc = (frame.camPos - UPos.ZERO) / Units.MPC
             var bi = -1
+            val cone = frame.tapCone(x, y, reach)
             for (i in 0 until m.count) {
                 // Plain numbers first: nearly all of the million are too faint, and making an object for each stalled the tap.
                 val dx = m.xyz[i * 3] - camMpc.x; val dy = m.xyz[i * 3 + 1] - camMpc.y; val dz = m.xyz[i * 3 + 2] - camMpc.z
+                val ct = dx * cone[0] + dy * cone[1] + dz * cone[2]
+                if (ct <= 0 || dx * dx + dy * dy + dz * dz - ct * ct > cone[3] * ct * ct) continue
                 val app = m.absMag(i) + 5 * log10(max(kotlin.math.sqrt(dx * dx + dy * dy + dz * dz) * 1e6, 1.0)) - 5
                 if (app > exp + 0.5) continue
                 val rel = Vec3d(dx, dy, dz)

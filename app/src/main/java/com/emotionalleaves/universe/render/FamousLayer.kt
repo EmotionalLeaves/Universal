@@ -73,6 +73,8 @@ class FamousLayer : Layer {
             val big = b.kind == Kind.VOID || b.kind == Kind.SUPERCLUSTER || (b.kind == Kind.GALAXY_CLUSTER && b.radius > 1e22)
             // Others are named once you are zoomed out to a scale where they matter (or are close).
             val label = b == sel || if (big) frame.focusDistance > b.radius * 0.5 && px < 600f else px > 3f || frame.focusDistance > d * 0.02
+            // Nothing invisible to tap: a famous object is a target only while it is named or seen as more than a speck.
+            if (!label && (big || px < 2f)) continue
             // A region's tap target is its name, not its whole extent (it swallowed taps on everything inside).
             out.add(Pickable(b, s.first, s.second, if (big) 10f else kotlin.math.max(px, 7f), if (b == sel) 6f else if (big) 1.5f else 3.5f, label, 0xFF000000.toInt() or b.color))
         }
