@@ -373,20 +373,21 @@ fun InfoCard(engine: Engine, modifier: Modifier = Modifier) {
                     Glyph(if (expanded) G.CHEVRON_UP else G.CHEVRON_DOWN, size = 14.dp, color = Accent)
                 }
             }
-            // Every action says what it does (they used to be bare icons); swipe the row for more.
-            Row(
-                Modifier.padding(top = 10.dp).horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically,
-            ) {
+            // Every action says what it does (they used to be bare icons).
+            Row(Modifier.padding(top = 10.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                 Button("Fly to", glyph = G.FLY, primary = true) { mini = true; expanded = false; restoreOnArrival = true; engine.flyToSelected() }
-                if (Hud.canIsolate) Button("Show only this", glyph = G.TARGET) { mini = true; expanded = false; restoreOnArrival = true; engine.isolateSelected() }
-                if (Hud.selectedWidth > 0) Button("Compare size", glyph = G.RULER) {
-                    ScaleUi.openFor(Triple(Hud.selectedName, Hud.selectedWidth, Hud.selectedId)); Nav.screen = Screen.SCALE
-                }
                 Button("Zoom out", glyph = G.UP) { engine.goUp() }
                 Button("Save", glyph = G.BOOKMARK) {
                     val n = engine.addBookmark()
                     BookmarksUi.toast = "Saved \u201c$n\u201d to bookmarks"
+                }
+            }
+            if (Hud.canIsolate || Hud.selectedWidth > 0) {
+                Row(Modifier.padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    if (Hud.canIsolate) Button("Show only this", glyph = G.TARGET) { mini = true; expanded = false; restoreOnArrival = true; engine.isolateSelected() }
+                    if (Hud.selectedWidth > 0) Button("Compare size", glyph = G.RULER) {
+                        ScaleUi.openFor(Triple(Hud.selectedName, Hud.selectedWidth, Hud.selectedId)); Nav.screen = Screen.SCALE
+                    }
                 }
             }
             if (BookmarksUi.toast.isNotEmpty()) {
