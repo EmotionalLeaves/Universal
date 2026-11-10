@@ -273,7 +273,7 @@ class World(private val engine: Engine) {
             val rs = realStars
             // The basic sky and the galaxies load straight away; these bigger catalogues take turns with
             // the other memory-hungry jobs (see Heavy).
-            if (rs != null && !builtInStarsLoaded) com.emotionalleaves.universe.core.Heavy.run {
+            if (rs != null && !builtInStarsLoaded) com.emotionalleaves.universe.core.Heavy.run(2) {
                 builtInStarsLoaded = true
                 // AT-HYG (750,000 real stars to magnitude 11, from Tycho-2 and Gaia) ships inside the app.
                 rs.packs = try {
@@ -284,6 +284,7 @@ class World(private val engine: Engine) {
                 try { rs.gaia = gaia; gaia.loadSeeds(engine.context); gaia.loadNear(engine.context, rs); loaded("gaia near (${gaia.near?.count ?: 0})") } catch (e: Throwable) { ErrorLog.record("loading Gaia stars", e) }
                 // A deeper real catalogue means generated stars must stay fainter (rule 2).
                 updateCatalogLimit()
+                essentials.countDown()
             }
         }
         reloadLargeScale()
@@ -512,8 +513,12 @@ class World(private val engine: Engine) {
     private val loader2 = java.util.concurrent.Executors.newSingleThreadExecutor()
     /** What you see first (stars, galaxies) gets the CPU first on phones with few cores. */
     private val background = java.util.concurrent.ThreadFactory { r -> Thread(r).apply { priority = Thread.MIN_PRIORITY + 1; isDaemon = true } }
-    private val loader3 = com.emotionalleaves.universe.core.Heavy.turns(java.util.concurrent.Executors.newSingleThreadExecutor(background))
-    private val webExec = com.emotionalleaves.universe.core.Heavy.turns(java.util.concurrent.Executors.newSingleThreadExecutor(background))
+    private val loader3 = com.emotionalleaves.universe.core.Heavy.turns(java.util.concurrent.Executors.newSingleThreadExecutor(background), 2)
+    /** Counted down when the bundled catalogues are in: the (slow) cosmic web is built after them, not ahead of them. */
+    private val essentials = java.util.concurrent.CountDownLatch(2)
+    private val webExec = com.emotionalleaves.universe.core.Heavy.turns(java.util.concurrent.Executors.newSingleThreadExecutor(background), 8) {
+        try { essentials.await(40, java.util.concurrent.TimeUnit.SECONDS) } catch (_: InterruptedException) {}
+    }
     private val fieldExec = java.util.concurrent.Executors.newSingleThreadExecutor()
 
     /**
@@ -630,6 +635,7 @@ class World(private val engine: Engine) {
             } catch (e: Throwable) {
                 ErrorLog.record("loading asteroids, quasars and clusters", e)
             }
+            essentials.countDown()
         }
     }
 
