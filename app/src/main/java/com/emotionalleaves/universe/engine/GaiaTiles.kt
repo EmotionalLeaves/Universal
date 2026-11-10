@@ -19,7 +19,7 @@ import kotlin.math.max
  * camera with HTTP range requests and keeps them on the phone.
  */
 class GaiaTiles(private val cacheDir: File, private val gaia: GaiaStream) {
-    private class Tier(val id: Int, val cellPc: Double, val recordSize: Int, val index: HashMap<Long, LongArray>, val radiusPc: Double, val domainPc: Double)
+    private class Tier(val id: Int, val cellPc: Double, val recordSize: Int, val index: CellIndex, val radiusPc: Double, val domainPc: Double)
 
     /** A batch of cells fetched together and drawn as one catalogue. */
     private class Group(val tier: Int, val keys: List<Long>, val center: Vec3d, val catalog: StarCatalog)
@@ -81,13 +81,14 @@ class GaiaTiles(private val cacheDir: File, private val gaia: GaiaStream) {
                     val cell = b.float.toDouble()
                     val rec = b.int
                     val n = b.int
-                    val map = HashMap<Long, LongArray>(n * 2)
+                    val ks = LongArray(n); val cs = IntArray(n); val os = LongArray(n)
                     for (i in 0 until n) {
                         val cx = b.short.toInt(); val cy = b.short.toInt(); val cz = b.short.toInt(); b.short
-                        val count = b.int
-                        val off = b.long
-                        map[key(cx, cy, cz)] = longArrayOf(count.toLong(), off)
+                        cs[i] = b.int
+                        os[i] = b.long
+                        ks[i] = key(cx, cy, cz)
                     }
+                    val map = CellIndex(ks, cs, os)
                     list.add(Tier(tier, cell, rec, map, radius, domain))
                 }
                 tiers = list

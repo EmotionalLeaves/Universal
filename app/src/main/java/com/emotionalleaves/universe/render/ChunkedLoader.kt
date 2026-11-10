@@ -40,7 +40,7 @@ class ChunkedLoader<K : Any>(private val leaf: Int = 4096, private val perFrame:
             staged?.cancel(); staged = null; ready = null
             working = want
             worker.execute {
-                val idx = try { ChunkIndex.build(count, leaf, x, y, z, mag) } catch (e: Throwable) { ErrorLog.record("indexing points", e); null }
+                val idx = try { com.emotionalleaves.universe.core.Heavy.run { ChunkIndex.build(count, leaf, x, y, z, mag) } } catch (e: Throwable) { ErrorLog.record("indexing points", e); null }
                 ready = want to idx
             }
         }

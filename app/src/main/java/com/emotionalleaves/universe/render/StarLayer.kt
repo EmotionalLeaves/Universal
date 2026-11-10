@@ -63,7 +63,7 @@ class StarLayer : Layer {
             if (uploaded.any { it.catalog === c } || preparing.contains(c)) continue
             preparing.add(c)
             ChunkedLoader.worker.execute {
-                val parts = try { prepare(c) } catch (e: Throwable) { com.emotionalleaves.universe.engine.ErrorLog.record("preparing stars", e); emptyList() }
+                val parts = try { com.emotionalleaves.universe.core.Heavy.run { prepare(c) } } catch (e: Throwable) { com.emotionalleaves.universe.engine.ErrorLog.record("preparing stars", e); emptyList() }
                 prepared.add(c to parts)
             }
         }

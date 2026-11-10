@@ -182,12 +182,16 @@ class StarInfo(
 
         private val row = ThreadLocal.withInitial { TsvRow() }
 
+        /** Spectral types and magnitudes repeat across 110,000 stars: one shared copy of each saves ~10 MB. */
+        private val pool = java.util.concurrent.ConcurrentHashMap<String, String>()
+        private fun shared(s: String): String = if (s.isEmpty()) "" else pool.putIfAbsent(s, s) ?: s
+
         fun parse(line: String): StarInfo? {
             val p = row.get()!!.set(line)
             if (p.size < 11) return null
             return StarInfo(
-                p.int(0) ?: return null, p.str(1), p.str(2), p.str(3), p.str(4), p.str(5), p.str(6),
-                p.num(7) ?: 0.0, p.str(8), p.num(9) ?: 5800.0, p.str(11),
+                p.int(0) ?: return null, p.str(1), p.str(2), p.str(3), p.str(4), p.str(5), shared(p.str(6)),
+                p.num(7) ?: 0.0, shared(p.str(8)), p.num(9) ?: 5800.0, p.str(11),
             )
         }
     }

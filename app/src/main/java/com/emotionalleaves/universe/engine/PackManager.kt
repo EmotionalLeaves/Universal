@@ -140,9 +140,11 @@ class PackManager(private val context: Context, private val world: World, privat
                 tmp.delete()
                 main.post { progress[id] = 1f }
                 world.packsChanged()
-            } catch (e: Exception) {
+            } catch (e: Throwable) {
+                // Also out-of-memory: a failed download must never close the app.
                 dir(p.id).deleteRecursively()
                 val msg = when {
+                    e is OutOfMemoryError -> "Not enough memory right now. Try again in a moment."
                     cancelId == id -> "Cancelled"
                         e is java.io.FileNotFoundException -> "This pack isn't on the data server yet."
                     e is java.net.UnknownHostException -> "No internet connection."

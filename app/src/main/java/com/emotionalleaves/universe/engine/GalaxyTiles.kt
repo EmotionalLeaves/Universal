@@ -14,7 +14,7 @@ import kotlin.math.max
  * cells out to 300 Mpc, 100 Mpc cells beyond). The bright ones are in the downloadable pack.
  */
 class GalaxyTiles(private val cacheDir: File) {
-    private class Tier(val id: Int, val cellPc: Double, val recordSize: Int, val index: HashMap<Long, LongArray>, val radius: Double)
+    private class Tier(val id: Int, val cellPc: Double, val recordSize: Int, val index: CellIndex, val radius: Double)
 
     /** Loaded galaxies: 4 floats each (x, y, z Mpc, absolute B) and PGC numbers. */
     class Group(val tier: Int, val keys: List<Long>, val center: Vec3d, val data: FloatArray, val pgc: IntArray) {
@@ -77,12 +77,14 @@ class GalaxyTiles(private val cacheDir: File) {
                     val cell = b.float.toDouble()
                     val rec = b.int
                     val n = b.int
-                    val map = HashMap<Long, LongArray>(n * 2)
+                    val ks = LongArray(n); val cs = IntArray(n); val os = LongArray(n)
                     for (i in 0 until n) {
                         val cx = b.short.toInt(); val cy = b.short.toInt(); val cz = b.short.toInt(); b.short
-                        val count = b.int
-                        map[key(cx, cy, cz)] = longArrayOf(count.toLong(), b.long)
+                        cs[i] = b.int
+                        os[i] = b.long
+                        ks[i] = key(cx, cy, cz)
                     }
+                    val map = CellIndex(ks, cs, os)
                     list.add(Tier(tier, cell, rec, map, radius))
                 }
                 tiers = list

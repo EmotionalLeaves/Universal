@@ -178,3 +178,29 @@ class ChunkIndex(
         }
     }
 }
+
+/**
+ * Where each cell of a streamed tile file lives (record count and byte offset by cell key), in three
+ * plain arrays. A hash map of these took five times the memory for the 470,000 cells of the sky files.
+ */
+class CellIndex(keysIn: LongArray, countsIn: IntArray, offsetsIn: LongArray) {
+    private val keys = keysIn.copyOf().also { java.util.Arrays.sort(it) }
+    private val counts = IntArray(keys.size)
+    private val offsets = LongArray(keys.size)
+    val size get() = keys.size
+
+    init {
+        for (i in keysIn.indices) {
+            val at = java.util.Arrays.binarySearch(keys, keysIn[i])
+            counts[at] = countsIn[i]; offsets[at] = offsetsIn[i]
+        }
+    }
+
+    fun containsKey(k: Long) = java.util.Arrays.binarySearch(keys, k) >= 0
+
+    /** Record count and byte offset of cell [k], or null if the file has no such cell. */
+    operator fun get(k: Long): LongArray? {
+        val at = java.util.Arrays.binarySearch(keys, k)
+        return if (at < 0) null else longArrayOf(counts[at].toLong(), offsets[at])
+    }
+}

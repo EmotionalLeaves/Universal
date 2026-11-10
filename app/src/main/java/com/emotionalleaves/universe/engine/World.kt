@@ -505,13 +505,13 @@ class World(private val engine: Engine) {
 
     private val byId = HashMap<String, Body>()
     private val byIdConcurrent = java.util.concurrent.ConcurrentHashMap<String, Body>()
-    private val loader = java.util.concurrent.Executors.newSingleThreadExecutor()
+    private val loader = com.emotionalleaves.universe.core.Heavy.turns(java.util.concurrent.Executors.newSingleThreadExecutor())
     /** Startup loads run side by side (stars, galaxies, small bodies, cosmic web) instead of one after another. */
-    private val loader2 = java.util.concurrent.Executors.newSingleThreadExecutor()
+    private val loader2 = com.emotionalleaves.universe.core.Heavy.turns(java.util.concurrent.Executors.newSingleThreadExecutor())
     /** What you see first (stars, galaxies) gets the CPU first on phones with few cores. */
     private val background = java.util.concurrent.ThreadFactory { r -> Thread(r).apply { priority = Thread.MIN_PRIORITY + 1; isDaemon = true } }
-    private val loader3 = java.util.concurrent.Executors.newSingleThreadExecutor(background)
-    private val webExec = java.util.concurrent.Executors.newSingleThreadExecutor(background)
+    private val loader3 = com.emotionalleaves.universe.core.Heavy.turns(java.util.concurrent.Executors.newSingleThreadExecutor(background))
+    private val webExec = com.emotionalleaves.universe.core.Heavy.turns(java.util.concurrent.Executors.newSingleThreadExecutor(background))
     private val fieldExec = java.util.concurrent.Executors.newSingleThreadExecutor()
 
     /**
