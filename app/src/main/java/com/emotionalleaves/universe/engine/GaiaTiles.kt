@@ -206,7 +206,7 @@ class GaiaTiles(private val cacheDir: File, private val gaia: GaiaStream) {
             status = String.format(Locale.US, "%,d real Gaia stars loaded around you", starsLoaded)
             try { android.util.Log.i("UniverseDiag", "gaia tiles t${t.id}: ${keys.size} cells, ${cat.count} stars (${missing.size} downloaded); loaded $starsLoaded") } catch (_: Throwable) {}
             onChange()
-        } catch (e: Exception) {
+        } catch (e: Throwable) {
             failures++
             retryAt = System.currentTimeMillis() + minOf(60_000L, 2_000L shl minOf(failures, 5))
             status = if (e is java.net.UnknownHostException) "Gaia stars: offline" else "Gaia stars: couldn't load (${e.message ?: e.javaClass.simpleName})"

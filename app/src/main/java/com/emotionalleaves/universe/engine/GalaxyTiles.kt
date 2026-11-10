@@ -184,7 +184,7 @@ class GalaxyTiles(private val cacheDir: File) {
             failures = 0
             status = String.format(Locale.US, "%,d more real galaxies loaded around you", loadedCount)
             try { android.util.Log.i("UniverseDiag", "galaxy tiles t${t.id}: ${keys.size} cells, ${g.count} galaxies (${missing.size} downloaded)") } catch (_: Throwable) {}
-        } catch (e: Exception) {
+        } catch (e: Throwable) {
             failures++
             retryAt = System.currentTimeMillis() + minOf(60_000L, 2_000L shl minOf(failures, 5))
             status = if (e is java.net.UnknownHostException) "Galaxies: offline" else "Galaxies: couldn't load (${e.message ?: e.javaClass.simpleName})"

@@ -192,7 +192,7 @@ class GaiaStream(private val cacheDir: File) {
                 status = statusFor(b)
                 onLoaded()
                 try { android.util.Log.i("UniverseDiag", "gaia $key: ${b.catalog.count} stars in %.1f s".format((System.nanoTime() - t0) / 1e9)) } catch (_: Throwable) {}
-            } catch (e: Exception) {
+            } catch (e: Throwable) {
                 failures++
                 retryAt = System.currentTimeMillis() + min(60_000L, 2_000L shl min(failures, 5))
                 val cause = (e as? java.util.concurrent.ExecutionException)?.cause ?: e
