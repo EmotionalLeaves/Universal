@@ -51,12 +51,6 @@ class GaiaStream(private val cacheDir: File) {
     private var lastT = 0L
     private var heading: Vec3d? = null
 
-    /** Synthetic catalogue ids (30,000,000+) <-> Gaia source ids. */
-    val sourceOf = ConcurrentHashMap<Int, Long>()
-    private val idOf = ConcurrentHashMap<Long, Int>()
-    private var nextId = 30_000_000
-
-    fun idFor(source: Long): Int = idOf.getOrPut(source) { synchronized(this) { nextId++ }.also { sourceOf[it] = source } }
 
     /** Reads the bundled near-Sun stars (call on a background thread after the HYG stars load). */
     fun loadNear(context: android.content.Context, rs: RealStars) {
@@ -360,7 +354,8 @@ class GaiaStream(private val cacheDir: File) {
             }
         }
         val stars = ArrayList<FloatArray>(pts.size)
-        val ids = ArrayList<Int>(pts.size)
+        val sidList = LongArray(pts.size)
+        val teffList = FloatArray(pts.size)
         for (pt in pts) {
             val pos = pt.pos
             val dpc = max(pos.length(), 0.01)
@@ -380,16 +375,15 @@ class GaiaStream(private val cacheDir: File) {
             val absMag = g - 5 * log10(dpc) + 5
             val teff = teffFromBpRp(pt.bprp)
             val col = StarBody.tempColor(teff)
+            sidList[stars.size] = pt.sid
+            teffList[stars.size] = teff.toFloat()
             stars.add(floatArrayOf(pos.x.toFloat(), pos.y.toFloat(), pos.z.toFloat(), col[0], col[1], col[2], absMag.toFloat()))
-            ids.add(idFor(pt.sid))
-            teffs[pt.sid] = teff.toFloat()
         }
-        return StarCatalog.fromStars(stars, ids.toIntArray(), "Gaia DR3")
+        val n = stars.size
+        // Ids 30,000,000+ mark Gaia stars; the source id lives in the tile (no big lookup maps).
+        return StarCatalog.fromStars(stars, IntArray(n) { GAIA_ID_BASE + it }, "Gaia DR3", sids = sidList.copyOf(n), teffs = teffList.copyOf(n))
     }
 
-    private val teffs = ConcurrentHashMap<Long, Float>()
-
-    fun teffOf(source: Long) = teffs[source]?.toDouble()
 
     /** A Gaia star by source id: from the loaded bubble, or looked up in the archive (blocking). */
     fun lookup(source: Long): StarBody? {
@@ -407,6 +401,8 @@ class GaiaStream(private val cacheDir: File) {
     }
 
     companion object {
+        const val GAIA_ID_BASE = 30_000_000
+
         /** Gaia archives, fastest first: ESA's own (2–4 s a neighbourhood), Heidelberg's mirror as the backup. */
         val TAPS = listOf(
             "https://gea.esac.esa.int/tap-server/tap/sync?REQUEST=doQuery&LANG=ADQL&FORMAT=csv&QUERY=",

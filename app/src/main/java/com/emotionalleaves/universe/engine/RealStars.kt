@@ -77,12 +77,9 @@ class RealStars(
 
     fun bodyFrom(tile: StarTile, i: Int): StarBody {
         val id = tile.ids[i]
-        if (id >= 30_000_000) {
-            val g = gaia
-            val src = g?.sourceOf?.get(id)
-            if (g != null && src != null) {
-                return GaiaStream.makeBody(src, UPos.ZERO + tile.posPc(i) * Units.PC, tile.absMag(i), g.teffOf(src) ?: 5000.0, null)
-            }
+        val sids = tile.sids
+        if (sids != null) {
+            return GaiaStream.makeBody(sids[i], UPos.ZERO + tile.posPc(i) * Units.PC, tile.absMag(i), tile.teffs?.get(i)?.toDouble() ?: 5000.0, null)
         }
         val inf = info[id]
         val pos = UPos.ZERO + tile.posPc(i) * Units.PC

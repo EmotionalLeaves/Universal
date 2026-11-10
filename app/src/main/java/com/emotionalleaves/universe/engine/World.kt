@@ -828,9 +828,9 @@ class World(private val engine: Engine) {
         if ((id.startsWith("pgc:") || id.startsWith("gladep:")) && !id.contains("/")) {
             galaxyIndex[id]?.let { return it }
             for (g in galaxyTiles.groups) for (i in 0 until g.count) {
-                val p = Vec3d(g.data[i * 7].toDouble(), g.data[i * 7 + 1].toDouble(), g.data[i * 7 + 2].toDouble())
-                val gid = if (g.pgc[i] > 0) "pgc:${g.pgc[i]}" else String.format(java.util.Locale.US, "gladep:%.4f,%.4f,%.4f,%.2f", p.x, p.y, p.z, g.data[i * 7 + 6])
-                if (gid == id) return realGalaxy(id, p, g.data[i * 7 + 6].toDouble(), g.pgc[i]).also { registerExtraGalaxy(it) }
+                val p = Vec3d(g.data[i * 4].toDouble(), g.data[i * 4 + 1].toDouble(), g.data[i * 4 + 2].toDouble())
+                val gid = if (g.pgc[i] > 0) "pgc:${g.pgc[i]}" else String.format(java.util.Locale.US, "gladep:%.4f,%.4f,%.4f,%.2f", p.x, p.y, p.z, g.data[i * 4 + 3])
+                if (gid == id) return realGalaxy(id, p, g.data[i * 4 + 3].toDouble(), g.pgc[i]).also { registerExtraGalaxy(it) }
             }
             if (id.startsWith("gladep:")) {
                 val v = id.removePrefix("gladep:").split(',').mapNotNull { it.toDoubleOrNull() }
@@ -882,7 +882,7 @@ class World(private val engine: Engine) {
         if (id.startsWith("gaia:") && !id.contains("/")) {
             val src = id.removePrefix("gaia:").toLongOrNull() ?: return null
             for (cat in listOfNotNull(gaia.near, gaia.bubble?.catalog) + gaiaTiles.catalogs) {
-                for (t in cat.tiles) for (i in 0 until t.count) if (gaia.sourceOf[t.ids[i]] == src) return realStars?.bodyFrom(t, i)
+                for (t in cat.tiles) { val ss = t.sids ?: continue; for (i in 0 until t.count) if (ss[i] == src) return realStars?.bodyFrom(t, i) }
             }
             return gaia.lookup(src)
         }

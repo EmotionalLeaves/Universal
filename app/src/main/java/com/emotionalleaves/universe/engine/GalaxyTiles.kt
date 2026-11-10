@@ -16,7 +16,7 @@ import kotlin.math.max
 class GalaxyTiles(private val cacheDir: File) {
     private class Tier(val id: Int, val cellPc: Double, val recordSize: Int, val index: HashMap<Long, LongArray>, val radius: Double)
 
-    /** Loaded galaxies: 7 floats each (x, y, z Mpc, colour, absolute B) and PGC numbers. */
+    /** Loaded galaxies: 4 floats each (x, y, z Mpc, absolute B) and PGC numbers. */
     class Group(val tier: Int, val keys: List<Long>, val center: Vec3d, val data: FloatArray, val pgc: IntArray) {
         val count get() = pgc.size
     }
@@ -47,7 +47,7 @@ class GalaxyTiles(private val cacheDir: File) {
         exec.execute {
             try {
                 val list = ArrayList<Tier>()
-                for ((id, radius) in listOf(1 to 60.0, 2 to 400.0)) {
+                for ((id, radius) in listOf(1 to 40.0, 2 to 300.0)) {
                     val file = "galaxy_t$id.bin"
                     val idx = File(dir(), "$file.idx")
                     val sizeFile = File(dir(), "$file.size")
@@ -156,7 +156,7 @@ class GalaxyTiles(private val cacheDir: File) {
             }
             var n = 0
             for (k in keys) n += (t.index[k]?.get(0) ?: 0L).toInt()
-            val data = FloatArray(n * 7)
+            val data = FloatArray(n * 4)
             val pgc = IntArray(n)
             var m = 0
             var cx = 0.0; var cy = 0.0; var cz = 0.0
@@ -169,14 +169,14 @@ class GalaxyTiles(private val cacheDir: File) {
                     val qx = b.short.toInt() and 0xFFFF; val qy = b.short.toInt() and 0xFFFF; val qz = b.short.toInt() and 0xFFFF
                     val absB = b.short / 100f
                     pgc[m] = b.int
-                    data[m * 7] = (x0 + qx * s).toFloat(); data[m * 7 + 1] = (y0 + qy * s).toFloat(); data[m * 7 + 2] = (z0 + qz * s).toFloat()
-                    data[m * 7 + 3] = 0.92f; data[m * 7 + 4] = 0.9f; data[m * 7 + 5] = 1f; data[m * 7 + 6] = absB
+                    data[m * 4] = (x0 + qx * s).toFloat(); data[m * 4 + 1] = (y0 + qy * s).toFloat(); data[m * 4 + 2] = (z0 + qz * s).toFloat()
+                    data[m * 4 + 3] = absB
                     m++
                 }
             }
             val c = keys.size.coerceAtLeast(1)
             val g = Group(t.id, keys, Vec3d(cx / c + t.cellPc / 2, cy / c + t.cellPc / 2, cz / c + t.cellPc / 2),
-                if (m == n) data else data.copyOf(m * 7), if (m == n) pgc else pgc.copyOf(m))
+                if (m == n) data else data.copyOf(m * 4), if (m == n) pgc else pgc.copyOf(m))
             synchronized(loaded) {
                 groups = groups + g
                 for (k in keys) loaded.add(t.id to k)

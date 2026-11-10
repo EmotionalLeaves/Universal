@@ -23,6 +23,9 @@ class StarTile(
     val ids: IntArray,
     val flags: ByteArray,
 ) {
+    /** Gaia source ids and temperatures, for Gaia tiles only (kept here instead of in big maps). */
+    var sids: LongArray? = null
+    var teffs: FloatArray? = null
     val count get() = ids.size
     fun posPc(i: Int) = Vec3d(anchorPc.x + data[i * 7], anchorPc.y + data[i * 7 + 1], anchorPc.z + data[i * 7 + 2])
     fun absMag(i: Int) = data[i * 7 + 6].toDouble()
@@ -32,7 +35,8 @@ class StarTile(
 class StarCatalog(val tiles: List<StarTile>, val label: String) {
     companion object Builder {
         /** Builds an in-memory catalogue from stars given in parsecs. */
-        fun fromStars(stars: List<FloatArray>, ids: IntArray, label: String, tilePc: Double = 200.0): StarCatalog {
+        fun fromStars(stars: List<FloatArray>, ids: IntArray, label: String, tilePc: Double = 200.0,
+                      sids: LongArray? = null, teffs: FloatArray? = null): StarCatalog {
             val groups = LinkedHashMap<Triple<Int, Int, Int>, MutableList<Int>>()
             for ((k, s) in stars.withIndex()) {
                 val key = Triple(kotlin.math.floor(s[0] / tilePc).toInt(), kotlin.math.floor(s[1] / tilePc).toInt(), kotlin.math.floor(s[2] / tilePc).toInt())
@@ -42,28 +46,51 @@ class StarCatalog(val tiles: List<StarTile>, val label: String) {
                 val anchor = Vec3d((key.first + 0.5) * tilePc, (key.second + 0.5) * tilePc, (key.third + 0.5) * tilePc)
                 val data = FloatArray(members.size * 7)
                 val tid = IntArray(members.size)
+                val ts = sids?.let { LongArray(members.size) }
+                val tt = teffs?.let { FloatArray(members.size) }
                 for ((j, k) in members.withIndex()) {
+                    if (ts != null) ts[j] = sids[k]
+                    if (tt != null) tt[j] = teffs[k]
                     val s = stars[k]
                     data[j * 7] = (s[0] - anchor.x).toFloat(); data[j * 7 + 1] = (s[1] - anchor.y).toFloat()
                     data[j * 7 + 2] = (s[2] - anchor.z).toFloat()
                     data[j * 7 + 3] = s[3]; data[j * 7 + 4] = s[4]; data[j * 7 + 5] = s[5]; data[j * 7 + 6] = s[6]
                     tid[j] = ids[k]
                 }
-                StarTile(anchor, data, tid, ByteArray(members.size))
+                StarTile(anchor, data, tid, ByteArray(members.size)).also { it.sids = ts; it.teffs = tt }
             }
             return StarCatalog(tiles, label)
         }
     }
 
     val count = tiles.sumOf { it.count }
-    /** id -> (tile << 32 | index), built on first use. */
-    private val index: HashMap<Int, Long> by lazy {
-        val m = HashMap<Int, Long>(count * 2)
-        for ((t, tile) in tiles.withIndex()) for (i in 0 until tile.count) m[tile.ids[i]] = (t.toLong() shl 32) or i.toLong()
-        m
+    /**
+     * id -> (tile << 32 | index), built on first use as two sorted primitive arrays (a HashMap of
+     * 750,000 boxed entries took ~35 MB; this takes 9).
+     */
+    private val index: Pair<IntArray, LongArray> by lazy {
+        val keys = LongArray(count)
+        var k = 0
+        for ((t, tile) in tiles.withIndex()) for (i in 0 until tile.count) {
+            // id in the high half, running position in the low half, so one sort orders both.
+            keys[k] = (tile.ids[i].toLong() shl 32) or k.toLong(); k++
+        }
+        val locs = LongArray(count)
+        k = 0
+        for ((t, tile) in tiles.withIndex()) for (i in 0 until tile.count) { locs[k++] = (t.toLong() shl 32) or i.toLong() }
+        keys.sort()
+        val ids = IntArray(count) { (keys[it] shr 32).toInt() }
+        val sortedLocs = LongArray(count) { locs[(keys[it] and 0xFFFFFFFFL).toInt()] }
+        ids to sortedLocs
     }
 
-    fun locate(id: Int): Pair<StarTile, Int>? = index[id]?.let { tiles[(it ushr 32).toInt()] to (it and 0xFFFFFFFFL).toInt() }
+    fun locate(id: Int): Pair<StarTile, Int>? {
+        val (ids, locs) = index
+        val at = java.util.Arrays.binarySearch(ids, id)
+        if (at < 0) return null
+        val l = locs[at]
+        return tiles[(l ushr 32).toInt()] to (l and 0xFFFFFFFFL).toInt()
+    }
 }
 
 object StarFiles {
