@@ -271,7 +271,9 @@ class World(private val engine: Engine) {
         }
         loader.execute {
             val rs = realStars
-            if (rs != null && !builtInStarsLoaded) {
+            // The basic sky and the galaxies load straight away; these bigger catalogues take turns with
+            // the other memory-hungry jobs (see Heavy).
+            if (rs != null && !builtInStarsLoaded) com.emotionalleaves.universe.core.Heavy.run {
                 builtInStarsLoaded = true
                 // AT-HYG (750,000 real stars to magnitude 11, from Tycho-2 and Gaia) ships inside the app.
                 rs.packs = try {
@@ -505,9 +507,9 @@ class World(private val engine: Engine) {
 
     private val byId = HashMap<String, Body>()
     private val byIdConcurrent = java.util.concurrent.ConcurrentHashMap<String, Body>()
-    private val loader = com.emotionalleaves.universe.core.Heavy.turns(java.util.concurrent.Executors.newSingleThreadExecutor())
+    private val loader = java.util.concurrent.Executors.newSingleThreadExecutor()
     /** Startup loads run side by side (stars, galaxies, small bodies, cosmic web) instead of one after another. */
-    private val loader2 = com.emotionalleaves.universe.core.Heavy.turns(java.util.concurrent.Executors.newSingleThreadExecutor())
+    private val loader2 = java.util.concurrent.Executors.newSingleThreadExecutor()
     /** What you see first (stars, galaxies) gets the CPU first on phones with few cores. */
     private val background = java.util.concurrent.ThreadFactory { r -> Thread(r).apply { priority = Thread.MIN_PRIORITY + 1; isDaemon = true } }
     private val loader3 = com.emotionalleaves.universe.core.Heavy.turns(java.util.concurrent.Executors.newSingleThreadExecutor(background))

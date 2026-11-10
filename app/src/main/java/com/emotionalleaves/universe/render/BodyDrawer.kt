@@ -232,7 +232,7 @@ class BodyDrawer(private val programs: Programs) {
     ) {
         val off0 = frame.rel(batch.anchor)
         // A structure shown on its own has little else lighting the view: expose a little longer.
-        @Suppress("NAME_SHADOWING") val magLimit = if (clip != null && worldSize <= 0.0) magLimit + 1.2f else magLimit
+        @Suppress("NAME_SHADOWING") val magLimit = if (clip != null && worldSize <= 0.0) magLimit + 1.8f else magLimit
         // Chunked batches: only what is in view and bright enough to show.
         batch.chunks?.let { ch ->
             val lim = if (worldSize > 0.0) 99f else magLimit

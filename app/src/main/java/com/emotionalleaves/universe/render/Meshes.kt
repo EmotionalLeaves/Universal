@@ -166,9 +166,11 @@ class PointBatch(
         private var vao = 0
         private var vbo = 0
         private var done = 0
-        private val per = 1 shl 15
-        private val tmp = FloatArray(per * 7)
-        private val buf = java.nio.ByteBuffer.allocateDirect(per * 28).order(java.nio.ByteOrder.nativeOrder()).asFloatBuffer()
+        private val per = SLICE
+        // One scratch buffer shared by every staged upload (they all run on the drawing thread): a
+        // buffer each, for hundreds of star blocks, used up the whole heap.
+        private val tmp get() = scratch
+        private val buf get() = scratchBuf
 
         fun step(maxPoints: Int): PointBatch? {
             if (vbo == 0) {
@@ -212,6 +214,10 @@ class PointBatch(
     }
 
     companion object {
+        private const val SLICE = 1 shl 15
+        private val scratch by lazy { FloatArray(SLICE * 7) }
+        private val scratchBuf by lazy { java.nio.ByteBuffer.allocateDirect(SLICE * 28).order(java.nio.ByteOrder.nativeOrder()).asFloatBuffer() }
+
         /**
          * Uploads points. [data] holds per point: x, y, z (in [unit] metres relative to [anchor]),
          * then r, g, b (0..1), then absolute magnitude. 7 floats per point.
@@ -226,9 +232,9 @@ class PointBatch(
             GLES30.glBindVertexArray(vao)
             GLES30.glBindBuffer(GLES30.GL_ARRAY_BUFFER, vbo)
             GLES30.glBufferData(GLES30.GL_ARRAY_BUFFER, count * 28, null, GLES30.GL_STATIC_DRAW)
-            val per = 1 shl 16
-            val tmp = FloatArray(per * 7)
-            val buf = java.nio.ByteBuffer.allocateDirect(per * 28).order(java.nio.ByteOrder.nativeOrder()).asFloatBuffer()
+            val per = SLICE
+            val tmp = scratch
+            val buf = scratchBuf
             var i = 0
             while (i < count) {
                 val n = minOf(per, count - i)
