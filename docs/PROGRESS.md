@@ -425,3 +425,15 @@ How it was tested: an Android emulator on GitHub (ui-test.yml + tools/ui_test.sh
 - [x] Zoomed far out, an even sample of the whole observable universe is drawn (real galaxies thinned to match) instead of a white ball around us.
 - [x] Deep space: free flight between galaxies exposes for the galaxy-filled sky; generated galaxies around the camera are 7x denser.
 - [x] All 36.5 million Gaia stars to G=15, all 21.3 million GLADE+ galaxies, 1M Milliquas quasars streamed from the repo's sky-v1 release; memory fixes (compact galaxy data, chunked GPU uploads).
+
+## Pass 25: accuracy
+- [x] DESI DR1 and SDSS DR17 spectroscopic redshifts (15.4 million galaxies) merged into GLADE+ by the sky build: measured distances replace photometric ones (4.3 million corrected), 11.2 million galaxies added; 33.5 million real galaxies in all. Pack v4 is shuffled and read straight from the mapped file.
+- [x] Generated galaxies follow the real structure: completeness is measured per 100 Mpc shell and sky pixel; partly surveyed regions get companions of their real galaxies (real voids stay empty), a generated web only where no survey has looked.
+
+## Pass 26: filters, one structure on its own, smoothness, tapping
+- [x] Zoom slider across the top; taps on it glide instead of jumping.
+- [x] View filters (21 kinds of things, "Everything" / "Real only").
+- [x] Show one place on its own: 27 more named structures (superclusters, walls, voids, clusters, groups), or any galaxy/cluster from its card. A clip sphere in the point shader and the drawer; labels and taps follow.
+- [x] Smoothness: point sets are chunked (ChunkIndex: Z-order chunks, brightest first) and only chunks in view, cut at the visible magnitude, are drawn; indexes are built off the drawing thread and uploads staged a slice per frame; nearest-object scans moved to a background thread; close up only asteroids bright enough to show are drawn.
+- [x] Tapping: names are tappable, presses up to 0.6 s count, a ripple shows where the tap landed, a miss keeps the selection, regions and unlabelled famous objects no longer swallow taps, "In view" list. Taps cost a fraction of what they did (cone test before the logarithm, block reads, no per-star objects).
+- [x] Memory: heavy loading jobs take turns (Heavy), tile indexes are arrays, shared star strings: start-up fits a 300 MB heap in the harness (needed ~400 MB).
