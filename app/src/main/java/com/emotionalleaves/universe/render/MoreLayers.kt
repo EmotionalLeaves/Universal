@@ -190,6 +190,10 @@ class SmallBodyLayer : Layer {
 
 /** Pulsars, quasars and galaxy clusters from real catalogues. */
 class ExoticLayer : Layer {
+    /** View filters. */
+    var showPulsars = true
+    var showQuasars = true
+    var showClusters = true
     private var src: ExoticCatalog? = null
     private var psr: PointBatch? = null
     private var qso: PointBatch? = null
@@ -252,13 +256,13 @@ class ExoticLayer : Layer {
         // Pulsars are invisible to the eye: show them as markers only when looking at the galaxy
         // from afar (not as fake stars in the night sky), or when one is selected.
         val psrVis = pulsarMarkers(frame)
-        psr?.let { if (psrVis > 0.01f) rc.drawer.points(frame, it, 7.2f + rc.engine.settings.starBrightness, 2.2f, 0.8f * day * psrVis, minSize = 1.2f, maxSize = 5f) }
-        qso?.let { rc.drawer.points(frame, it, exp - 2.4f, 2.2f, 0.9f * day, minSize = 1.1f, maxSize = 5f) }
-        gcl?.let { rc.drawer.points(frame, it, exp, 2.6f, 0.9f * day, minSize = 1.4f, maxSize = 8f) }
+        if (showPulsars) psr?.let { if (psrVis > 0.01f) rc.drawer.points(frame, it, 7.2f + rc.engine.settings.starBrightness, 2.2f, 0.8f * day * psrVis, minSize = 1.2f, maxSize = 5f) }
+        if (showQuasars) qso?.let { rc.drawer.points(frame, it, exp - 2.4f, 2.2f, 0.9f * day, minSize = 1.1f, maxSize = 5f) }
+        if (showClusters) gcl?.let { rc.drawer.points(frame, it, exp, 2.6f, 0.9f * day, minSize = 1.4f, maxSize = 8f) }
         // Close up: a pulsar is a tiny white-hot ball with a glow; a quasar a blinding core.
         val ex = src
         if (ex != null) {
-            for (b in ex.pulsars) {
+            for (b in if (showPulsars) ex.pulsars else emptyList()) {
                 val rel = frame.rel(b.position(0.0))
                 val d = rel.length()
                 if (d > 30 * Units.PC) continue

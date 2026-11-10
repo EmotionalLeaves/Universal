@@ -18,6 +18,10 @@ import kotlin.math.max
  * web out to the edge, and the Planck map of the cosmic microwave background as the outer shell.
  */
 class CosmicLayer : Layer {
+    /** View filters: real galaxies, generated galaxies, the microwave background. */
+    var showReal = true
+    var showGenerated = true
+    var showCmb = true
     private var web: CosmicWebData? = null
     private var webBatch: PointBatch? = null
     private var glade: GladePack? = null
@@ -91,6 +95,7 @@ class CosmicLayer : Layer {
     }
 
     override fun drawOpaque(frame: Frame, rc: RenderContext) {
+        if (!showCmb) return
         val vis = cmbVisibility(frame) * (1 - daylight)
         if (vis < 0.01) return
         val tex = rc.textures.get("cmb/planck.jpg")
@@ -136,15 +141,15 @@ class CosmicLayer : Layer {
         }
         outerBatch?.let { it.limit = if (low) it.count / 2 else it.count }
         rc.drawer.beginAdditive()
-        gladeBatch?.let {
+        if (showReal) gladeBatch?.let {
             // Zoomed far out, the real catalogue (dense around us) is thinned to an even sample, so it
             // doesn't burn into a white ball next to the generated rest of the universe.
             it.limit = (it.count * gladeShare(frame)).toInt()
             rc.drawer.points(frame, it, exp + 1.5f, 2.2f, 0.85f * day, minSize = 1.3f, maxSize = 5f)
         }
-        for (b in tileBatches.values) rc.drawer.points(frame, b, exp + 1.5f, 2.2f, 0.85f * day, minSize = 1.3f, maxSize = 5f)
-        webBatch?.let { rc.drawer.points(frame, it, exp + 1.5f + boost, 2.2f, 0.95f * day, minSize = 1.3f, maxSize = 5f) }
-        outerBatch?.let { rc.drawer.points(frame, it, exp + 1.5f + boost, 2.2f, 0.9f * day, minSize = 1.3f, maxSize = 5f) }
+        if (showReal) for (b in tileBatches.values) rc.drawer.points(frame, b, exp + 1.5f, 2.2f, 0.85f * day, minSize = 1.3f, maxSize = 5f)
+        if (showGenerated) webBatch?.let { rc.drawer.points(frame, it, exp + 1.5f + boost, 2.2f, 0.95f * day, minSize = 1.3f, maxSize = 5f) }
+        if (showGenerated) outerBatch?.let { rc.drawer.points(frame, it, exp + 1.5f + boost, 2.2f, 0.9f * day, minSize = 1.3f, maxSize = 5f) }
         rc.drawer.end()
     }
 

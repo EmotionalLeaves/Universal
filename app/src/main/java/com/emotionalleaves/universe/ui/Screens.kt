@@ -37,7 +37,7 @@ import com.emotionalleaves.universe.engine.Engine
 import com.emotionalleaves.universe.engine.PackState
 import java.util.Locale
 
-enum class Screen { NONE, EXPLORE, CENSUS, MENU, DATA, SETTINGS, SEARCH, BOOKMARKS, HELP, CREDITS, SCALE }
+enum class Screen { NONE, EXPLORE, CENSUS, MENU, DATA, SETTINGS, SEARCH, BOOKMARKS, HELP, CREDITS, SCALE, FILTERS }
 
 /** Which overlay screen is open. */
 object Nav {
@@ -442,6 +442,46 @@ private fun ToggleRow(title: String, detail: String, initial: Boolean, onChange:
     }
 }
 
+/** Bumped when view filters change, so buttons and rows showing them refresh. */
+object FiltersUi {
+    var version by mutableStateOf(0)
+}
+
+/** What is shown in the universe: any mix of filters, plus quick presets. */
+@Composable
+fun FiltersScreen(engine: Engine) {
+    val vf = engine.settings.filters
+    val v = FiltersUi.version
+    Panel("What's shown", { Nav.screen = Screen.NONE }) {
+        Text("Pick what to see. Hidden things can't be tapped or labelled either; switching back is instant.", style = Type.Caption)
+        Row(Modifier.padding(vertical = 10.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            PillButton("Everything", primary = vf.hiddenCount() == 0) { vf.showAll(); FiltersUi.version++ }
+            PillButton("Real only") { vf.realOnly(); FiltersUi.version++ }
+        }
+        var group = ""
+        for (f in com.emotionalleaves.universe.engine.ViewFilter.values()) {
+            if (f.group != group) {
+                group = f.group
+                Overline(group, Modifier.padding(top = 14.dp, bottom = 2.dp))
+            }
+            val on = androidx.compose.runtime.remember(v) { vf.shown(f) }
+            Row(
+                Modifier.fillMaxWidth().clickable { vf.set(f, !on); FiltersUi.version++ }.padding(vertical = 7.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(Modifier.weight(1f)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(f.title, style = Type.Body)
+                        if (f.generated) { Spacer(Modifier.width(6.dp)); Chip("Generated", GenPurple) }
+                    }
+                    Text(f.description, style = Type.Caption)
+                }
+                Switch(checked = on, onCheckedChange = { vf.set(f, it); FiltersUi.version++ })
+            }
+        }
+    }
+}
+
 @Composable
 fun SettingsScreen(engine: Engine) {
     val s = engine.settings
@@ -512,7 +552,7 @@ fun HelpScreen() {
     Panel("How to use", { Nav.screen = Screen.NONE }) {
         val items = listOf(
             "Look around" to "Drag with one finger to orbit whatever you are looking at.",
-            "Zoom" to "Pinch, or drag the slider on the right. Bottom of the slider = a low orbit over whatever you picked; top = the whole universe.",
+            "Zoom" to "Pinch, or drag the slider across the top. Left end = a low orbit over whatever you picked; right end = the whole universe.",
             "Pick something" to "Tap a planet, star, nebula or galaxy to see its card; tap it again (or Fly to) to travel there. In crowded spots the card lists what else was under your finger under Also here.",
             "Know more" to "Every card describes the object; tap Read more for the full story, its Wikipedia summary and figures: gravity, your weight there, star type, lifetime, habitable zone and more.",
             "How much is here?" to "Menu → What's in the universe counts the real objects in the app and what is generated as you travel.",
@@ -522,7 +562,7 @@ fun HelpScreen() {
             "Time" to "Use the rewind, pause and fast-forward buttons at the bottom to change how fast time runs. Now goes back to the present.",
             "Real or generated" to "Every card shows a green Real badge (from scientific catalogues) or a purple Generated badge (made up by rules, the same every time).",
             "Explore" to "Tap Explore (top right) for famous places sorted by type. One tap flies you there. The Surprise me buttons pick a random alien world, galaxy, black hole and more.",
-            "Jump between scales" to "The labels beside the zoom slider (Planet, Solar system, Nearby stars, Milky Way, Galaxy groups, Universe, Beyond) jump straight to that size.",
+            "Jump between scales" to "The labels above and below the zoom slider (Planet, Solar system, Nearby stars, Milky Way, Galaxy groups, Universe, Beyond) jump straight to that size.",
             "Lost in space?" to "If you drift into empty space, tap Back to … under the name at the top left, or the home button.",
             "Find things" to "Search (magnifier, top right) finds planets, stars, exoplanets, asteroids, nebulae and galaxies by name or catalogue number (HIP, HD, NGC, M, PGC). Anything else with a name is looked up online (SIMBAD, NED, NASA JPL) and you can fly straight to it.",
             "Every known object" to "Data packs: download all ~1.5 million known asteroids (each on its real orbit), and turn on Gaia streaming to see the real stars around you anywhere near the Sun — 1.8 billion are available, loaded a neighbourhood at a time.",
@@ -580,7 +620,7 @@ fun TipsOverlay(engine: Engine) {
     val tips = listOf(
         "Welcome!" to "You are looking at Earth, today, from space. Everything you see is in its real place.",
         "A universe of ${com.emotionalleaves.universe.core.Units.sci(com.emotionalleaves.universe.engine.Census.withBeyond())} things" to "Every star in every galaxy, with its planets, moons and every rock down to 1 metre, is built the moment you get close — and is the same every time. Explore → the count shows how it adds up.",
-        "Zoom anywhere" to "Pinch, or drag the slider on the right. Tap a label beside it (Planet, Solar system, Milky Way…) to jump to that scale.",
+        "Zoom anywhere" to "Pinch, or drag the slider across the top. Tap a label on it (Planet, Solar system, Milky Way…) to jump to that scale.",
         "Not sure where to go?" to "Tap Explore (top right) for famous planets, stars, nebulae and galaxies, or Surprise me for a random alien world.",
         "Tap to explore" to "Tap anything for its card. Tap it again, or Fly to, to travel there.",
         "Fly freely" to "The paper-plane button next to Explore switches to free flight: look around and fly anywhere, at a speed that adapts to what is near you.",

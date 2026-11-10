@@ -43,6 +43,10 @@ class Settings(context: Context) {
         set(v) { field = v; prefs.edit().putBoolean("autoDownload", v).apply() }
     @Volatile var wifiOnly = prefs.getBoolean("wifiOnly", true)
         set(v) { field = v; prefs.edit().putBoolean("wifiOnly", v).apply() }
+    /** Names of the [ViewFilter]s switched off (see [ViewFilters]). */
+    @Volatile var hiddenFilters: Set<String> = (prefs.getString("hiddenFilters", "") ?: "").split(',').filter { it.isNotEmpty() }.toSet()
+        set(v) { field = v; prefs.edit().putString("hiddenFilters", v.joinToString(",")).apply() }
+    val filters = ViewFilters(this)
     // Key bumped when the tour changes, so everyone sees the new features once.
     @Volatile var seenTips = prefs.getBoolean("seenTips3", false)
         set(v) { field = v; prefs.edit().putBoolean("seenTips3", v).apply() }

@@ -18,6 +18,10 @@ import kotlin.math.tan
  * covers a few pixels. Brightness is scaled with how far out you are zoomed, like a camera exposure.
  */
 class GalaxyCatalogLayer : Layer {
+    /** View filters: real (catalogued) and generated galaxies. */
+    var showReal = true
+    var showGenerated = true
+    private var shownKey = 3
     private var source: List<GalaxyBody>? = null
     private var batch: PointBatch? = null
     private var px = DoubleArray(0)
@@ -49,7 +53,8 @@ class GalaxyCatalogLayer : Layer {
             val c = tint(g.model.type)
             data[k + 3] = c[0]; data[k + 4] = c[1]; data[k + 5] = c[2]
             // The Milky Way is drawn from inside by GalaxyLayer; as a point it would blaze in Sagittarius.
-            data[k + 6] = if (g.isMilkyWay) 99f else g.absMag.toFloat()
+            val hidden = if (g.source == com.emotionalleaves.universe.engine.Source.GENERATED) !showGenerated else !showReal
+            data[k + 6] = if (g.isMilkyWay || hidden) 99f else g.absMag.toFloat()
         }
         return data
     }
@@ -64,6 +69,9 @@ class GalaxyCatalogLayer : Layer {
 
     override fun update(frame: Frame, rc: RenderContext) {
         val list = rc.engine.world.galaxies
+        val key = (if (showReal) 1 else 0) + (if (showGenerated) 2 else 0)
+        // A filter change redraws everything from scratch.
+        if (key != shownKey) { shownKey = key; source = null }
         val old = source
         if (list === old) return
         source = list
@@ -105,6 +113,9 @@ class GalaxyCatalogLayer : Layer {
         return if (shapesCache.size > limit) shapesCache.subList(0, limit) else shapesCache
     }
 
+    private fun hiddenByFilter(g: GalaxyBody) =
+        if (g.source == com.emotionalleaves.universe.engine.Source.GENERATED) !showGenerated else !showReal && !g.isMilkyWay
+
     private fun computeShapes(frame: Frame, limit: Int): List<Pair<Int, Double>> {
         val list = source ?: return emptyList()
         val cam = (frame.camPos - UPos.ZERO) / Units.PC
@@ -114,7 +125,7 @@ class GalaxyCatalogLayer : Layer {
             val dx = px[i] - cam.x; val dy = py[i] - cam.y; val dz = pz[i] - cam.z
             val d = sqrt(dx * dx + dy * dy + dz * dz)
             val pix = pr[i] / d * k
-            if (pix > 2.5) out.add(i to pix)
+            if (pix > 2.5 && !hiddenByFilter(list[i])) out.add(i to pix)
         }
         out.sortByDescending { it.second }
         return if (out.size > limit) out.subList(0, limit) else out

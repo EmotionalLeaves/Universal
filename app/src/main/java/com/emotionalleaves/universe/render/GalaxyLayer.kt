@@ -22,6 +22,9 @@ import kotlin.math.log10
  * plus individually generated stars around the camera (which never replace real stars).
  */
 class GalaxyLayer : Layer {
+    /** View filters: the glow of galaxies seen from inside or nearby, and generated stars. */
+    var showGlow = true
+    var showGenStars = true
     private class Glow(val galaxy: GalaxyBody, val batch: PointBatch, val particleMag: Float) { var inside = true }
 
     private val glows = HashMap<String, Glow>()
@@ -124,7 +127,7 @@ class GalaxyLayer : Layer {
     override fun drawTransparent(frame: Frame, rc: RenderContext) {
         rc.drawer.beginAdditive()
         val day = 1f - daylight
-        for (glow in glows.values) {
+        for (glow in (if (showGlow) glows.values else emptyList())) {
             val g = glow.galaxy
             val dist = (g.center - frame.camPos).length()
             // Seen from far away the galaxy is drawn by the galaxy-catalogue layer instead.
@@ -153,7 +156,7 @@ class GalaxyLayer : Layer {
                 minSize = 1.5f, maxSize = maxBlob, worldSize = g.radius * 0.012, glowGain = gain,
             )
         }
-        genBatch?.let {
+        if (showGenStars) genBatch?.let {
             if (day > 0.03f) rc.drawer.points(frame, it, magLimit + rc.engine.settings.starBrightness - daylight * 7f, 3.2f, day, minSize = 1.3f, maxSize = 13f)
         }
         rc.drawer.end()

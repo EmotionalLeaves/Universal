@@ -1,5 +1,6 @@
 package com.emotionalleaves.universe.render
 
+import com.emotionalleaves.universe.engine.ViewFilter.*
 import android.content.Context
 import android.opengl.GLES30
 import android.opengl.GLSurfaceView
@@ -54,6 +55,18 @@ class UniverseRenderer(private val context: Context, private val engine: Engine)
         cosmicLayer, hazeLayer, webLodLayer, exoticLayer, fieldLayer, galaxyCatalogLayer, galaxyLayer, deepSkyLayer, starLayer, remnantLayer, systemLayer, beltLayer, rockLayer,
         solarLayer, asteroidCloudLayer, smallBodyLayer, famousLayer, onlineLayer, testLayer,
     )
+
+    /** Layers switched off as a whole by a view filter (see [ViewFilter]). */
+    private val layerFilter: Map<Layer, com.emotionalleaves.universe.engine.ViewFilter> = com.emotionalleaves.universe.engine.ViewFilter.run {
+        mapOf(
+            starLayer to STARS, solarLayer to PLANETS, systemLayer to SYSTEMS, smallBodyLayer to ASTEROIDS,
+            asteroidCloudLayer to ASTEROIDS, beltLayer to BELTS, rockLayer to BELTS, deepSkyLayer to NEBULAE,
+            remnantLayer to REMNANTS, famousLayer to FAMOUS, onlineLayer to ONLINE, hazeLayer to HAZE,
+            fieldLayer to GEN_GALAXIES, webLodLayer to GEN_GALAXIES,
+        )
+    }
+
+    private fun on(l: Layer) = layerFilter[l]?.let { engine.settings.filters.shown(it) } ?: true
 
     override fun onSurfaceCreated(gl: GL10?, config: EGLConfig?) {
         textures.contextLost()
@@ -134,12 +147,19 @@ class UniverseRenderer(private val context: Context, private val engine: Engine)
         solarLayer.showOrbits = engine.settings.showOrbits
         systemLayer.showOrbits = engine.settings.showOrbits
         smallBodyLayer.skipAsteroids = asteroidCloudLayer.active
-        for (l in layers) safely(l, "update") { l.update(frame, ctx) }
+        val vf = engine.settings.filters
+        com.emotionalleaves.universe.engine.ViewFilter.run {
+            cosmicLayer.showReal = vf.shown(REAL_GALAXIES); cosmicLayer.showGenerated = vf.shown(GEN_GALAXIES); cosmicLayer.showCmb = vf.shown(CMB)
+            exoticLayer.showPulsars = vf.shown(PULSARS); exoticLayer.showQuasars = vf.shown(QUASARS); exoticLayer.showClusters = vf.shown(CLUSTERS)
+            galaxyLayer.showGlow = vf.shown(GALAXY_GLOW); galaxyLayer.showGenStars = vf.shown(GEN_STARS)
+            galaxyCatalogLayer.showReal = vf.shown(REAL_GALAXIES); galaxyCatalogLayer.showGenerated = vf.shown(GEN_GALAXIES)
+        }
+        for (l in layers) if (on(l)) safely(l, "update") { l.update(frame, ctx) }
         diagTimer += dt
         val diag = diagTimer >= 3.0
         if (diag) { diagTimer = 0.0; GLES30.glGetError() }
-        for (l in layers) safely(l, "drawOpaque") { l.drawOpaque(frame, ctx); if (diag) glCheck(l, "drawOpaque") }
-        for (l in layers) safely(l, "drawTransparent") { l.drawTransparent(frame, ctx); if (diag) glCheck(l, "drawTransparent") }
+        for (l in layers) if (on(l)) safely(l, "drawOpaque") { l.drawOpaque(frame, ctx); if (diag) glCheck(l, "drawOpaque") }
+        for (l in layers) if (on(l)) safely(l, "drawTransparent") { l.drawTransparent(frame, ctx); if (diag) glCheck(l, "drawTransparent") }
         if (glow) try { fx!!.end(0.75f) } catch (e: Throwable) { com.emotionalleaves.universe.engine.ErrorLog.record("glow", e); postFx = null }
         if (diag) {
             android.util.Log.i("UniverseDiag", "dist=%.3e target=%s fps=%d gpuMB=%.1f lastErr=0x%x galaxies=%d near=%s".format(
@@ -150,21 +170,24 @@ class UniverseRenderer(private val context: Context, private val engine: Engine)
         lastFrame = frame
         // Tap targets and labels
         val picks = ArrayList<Pickable>(256)
-        for (l in layers) safely(l, "collect") { l.collect(frame, ctx, picks) }
+        for (l in layers) if (on(l)) safely(l, "collect") { l.collect(frame, ctx, picks) }
+        // Labels and taps only for what is shown.
+        picks.removeAll { !vf.shows(it.body) }
         hideBehindWorlds(frame, picks)
         engine.pickables = picks
         engine.takeTap()?.let { tap ->
             var body = engine.pick(tap.x, tap.y)?.body
             if (body == null) {
                 for (l in layers.asReversed()) {
-                    body = try { l.pickAt(frame, ctx, tap.x, tap.y, engine.tapReach) } catch (e: Exception) {
+                    if (!on(l)) continue
+                    body = try { l.pickAt(frame, ctx, tap.x, tap.y, engine.tapReach)?.takeIf { vf.shows(it) } } catch (e: Exception) {
                         com.emotionalleaves.universe.engine.ErrorLog.record("${l.javaClass.simpleName}.pickAt", e); null
                     }
                     if (body != null) break
                 }
             }
             if (body == null) {
-                body = try { engine.world.starAlongRay(frame.camPos, frame.rayThrough(tap.x, tap.y)) } catch (e: Exception) {
+                body = try { engine.world.starAlongRay(frame.camPos, frame.rayThrough(tap.x, tap.y))?.takeIf { vf.shows(it) } } catch (e: Exception) {
                     com.emotionalleaves.universe.engine.ErrorLog.record("starAlongRay", e); null
                 }
             }

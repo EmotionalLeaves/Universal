@@ -42,31 +42,34 @@ fun UniverseScreen(engine: Engine, version: String, view: UniverseView) {
         )
 
         Box(Modifier.fillMaxSize().safeDrawingPadding()) {
-            Column(Modifier.align(Alignment.TopStart).padding(8.dp).fillMaxWidth(0.58f)) {
-                TopStatus(engine)
-                FreeFlightHint(engine, Modifier.padding(top = 6.dp))
-                LoadingChip(Modifier.padding(top = 4.dp))
-                if (SettingsUi.showStats) StatsBadge(Modifier.padding(top = 4.dp))
+            Column(Modifier.align(Alignment.TopStart).fillMaxWidth()) {
+                if (!Hud.freeFlight) ZoomSlider(engine, Modifier.padding(start = 8.dp, end = 8.dp, top = 6.dp))
+                Box(Modifier.fillMaxWidth()) {
+                    Column(Modifier.align(Alignment.TopStart).padding(8.dp).fillMaxWidth(0.5f)) {
+                        TopStatus(engine)
+                        FreeFlightHint(engine, Modifier.padding(top = 6.dp))
+                        LoadingChip(Modifier.padding(top = 4.dp))
+                        if (SettingsUi.showStats) StatsBadge(Modifier.padding(top = 4.dp))
+                    }
+                    Column(Modifier.align(Alignment.TopEnd).padding(8.dp), horizontalAlignment = Alignment.End) {
+                        Row {
+                            SearchButton()
+                            Spacer(Modifier.width(8.dp))
+                            FiltersButton(engine)
+                            Spacer(Modifier.width(8.dp))
+                            HomeButton(engine)
+                            Spacer(Modifier.width(8.dp))
+                            MenuButton()
+                        }
+                        Row(Modifier.padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                            FreeFlightButton(engine)
+                            Spacer(Modifier.width(8.dp))
+                            ExploreButton()
+                        }
+                    }
+                }
             }
             if (Hud.freeFlight) FlightPad(engine, Modifier.align(Alignment.CenterEnd).padding(end = 8.dp))
-            else ZoomSlider(
-                engine,
-                Modifier.align(Alignment.CenterEnd).padding(end = 6.dp),
-            )
-            Column(Modifier.align(Alignment.TopEnd).padding(8.dp), horizontalAlignment = Alignment.End) {
-                Row {
-                    SearchButton()
-                    Spacer(Modifier.width(8.dp))
-                    HomeButton(engine)
-                    Spacer(Modifier.width(8.dp))
-                    MenuButton()
-                }
-                Row(Modifier.padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                    FreeFlightButton(engine)
-                    Spacer(Modifier.width(8.dp))
-                    ExploreButton()
-                }
-            }
             Column(
                 Modifier.align(Alignment.BottomCenter).padding(horizontal = 10.dp, vertical = 8.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
@@ -86,6 +89,7 @@ fun UniverseScreen(engine: Engine, version: String, view: UniverseView) {
             Screen.SEARCH -> SearchScreen(engine)
             Screen.BOOKMARKS -> BookmarksScreen(engine)
             Screen.SETTINGS -> SettingsScreen(engine)
+            Screen.FILTERS -> FiltersScreen(engine)
             Screen.HELP -> HelpScreen()
             Screen.SCALE -> ScaleScreen(engine)
             Screen.CREDITS -> CreditsScreen(version)
