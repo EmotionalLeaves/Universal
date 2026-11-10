@@ -78,6 +78,11 @@ tap_text "Close"; sleep 1
 for s in "Planet" "Solar system" "Nearby stars" "Milky Way" "Galaxy groups" "Universe" "Beyond"; do
   tap_text "$s"; sleep 6; shot "zoom_${s// /_}"; texts
 done
+# View filters: real only at the galaxy-groups scale, then everything again
+tap_text "Galaxy groups"; sleep 6
+tap_text "Filters"; sleep 2; shot filters; texts
+tap_text "Real only"; sleep 1; shot filters_real; tap_text "Back"; sleep 4; shot real_only_groups
+tap_text "Filters"; sleep 2; tap_text "Everything"; sleep 1; tap_text "Back"; sleep 3
 
 # Home, then free flight
 tap_text "Home"; sleep 8; shot home_again; texts
