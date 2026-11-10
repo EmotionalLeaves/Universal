@@ -30,6 +30,6 @@ jobs:
           if [ -f build/sky/glade.bin ]; then (cd build/sky && zip -q pack-galaxies-glade.zip glade.bin) && gh release upload sky-v1 build/sky/pack-galaxies-glade.zip --clobber; fi
           if [ -f build/sky/milliquas.bin ]; then (cd build/sky && zip -q pack-quasars-milliquas.zip milliquas.bin milliquas_names.txt) && gh release upload sky-v1 build/sky/pack-quasars-milliquas.zip --clobber; fi
           if [[ "${{ inputs.only }}" == *packs* ]]; then
-            mkdir -p /tmp/p && gh release download data-v1 -p pack-galaxies-glade.zip -D /tmp/p && gh release upload sky-v1 /tmp/p/pack-galaxies-glade.zip --clobber
+            mkdir -p /tmp/p
             if [ ! -f build/sky/milliquas.bin ]; then gh release download sky-v1 -p milliquas.bin -p milliquas_names.txt -D /tmp/p && (cd /tmp/p && zip -q pack-quasars-milliquas.zip milliquas.bin milliquas_names.txt) && gh release upload sky-v1 /tmp/p/pack-quasars-milliquas.zip --clobber; fi
           fi

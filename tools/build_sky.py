@@ -162,7 +162,8 @@ def gaia(out, work, gmax):
             except Exception as e:
                 time.sleep(10 * (attempt + 1))
                 last = e
-        raise RuntimeError(f"range {a}-{b} failed: {last}")
+        log(f"  range {a}-{b} failed 6 times ({last}); will retry in halves")
+        return rng, None
 
     def keep(lines):
         kept = 0
@@ -209,6 +210,14 @@ def gaia(out, work, gmax):
             finished, futs = cf.wait(futs, return_when=cf.FIRST_COMPLETED)
             for f in finished:
                 (a, b), lines = f.result()
+                if lines is None:
+                    # The archive dropped this one: smaller pieces usually go through.
+                    if b - a > 1:
+                        m = (a + b) // 2
+                        futs |= {ex.submit(run, (a, m)), ex.submit(run, (m, b))}
+                    else:
+                        log(f"  skipping single pixel {a} after repeated failures")
+                    continue
                 rows = sum(1 for l in lines if l)
                 if rows >= CAP - 1 and b - a > 1:
                     m = (a + b) // 2
