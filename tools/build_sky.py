@@ -280,6 +280,193 @@ GREC = struct.Struct("<HHHhi")
 OVERVIEW_ABS = -20.5
 
 
+# ---------------------------------------------------------------------------------------------
+# Spectroscopic redshifts (exact distances) from DESI DR1 and SDSS DR17, merged into GLADE+.
+# GLADE+ beyond a few hundred Mpc is mostly photometric redshifts, which put a galaxy up to ~100 Mpc
+# too near or too far; a measured spectrum fixes that, and adds galaxies GLADE+ does not have.
+
+DESI_ZCAT = "https://data.desi.lbl.gov/public/dr1/spectro/redux/iron/zcatalog/v1/zall-pix-iron.fits"
+SDSS_ZCAT = "https://data.sdss.org/sas/dr17/sdss/spectro/redux/specObj-dr17.fits"
+H0 = 70.0
+OM = 0.3
+MATCH_ARCSEC = 2.0
+
+
+def comoving_table():
+    import numpy as np
+    zs = np.linspace(0, 8, 16001)
+    inv = 1.0 / np.sqrt(OM * (1 + zs) ** 3 + (1 - OM))
+    dc = np.concatenate([[0.0], np.cumsum((inv[1:] + inv[:-1]) * 0.5 * np.diff(zs))]) * 299792.458 / H0
+    return zs, dc
+
+
+def fits_stream(url, want, chunk_rows=100000):
+    """Streams the first binary table of a (huge) FITS file over HTTP, yielding dicts of the [want]
+    columns chunk by chunk; reconnects with a Range request where a transfer breaks."""
+    import numpy as np
+    pos = 0
+    resp = None
+
+    def connect(at):
+        for attempt in range(10):
+            try:
+                req = urllib.request.Request(url, headers={"User-Agent": "UniverseExplorer-data/1.0", "Range": f"bytes={at}-"})
+                return urllib.request.urlopen(req, timeout=300)
+            except Exception as e:
+                log(f"  reconnect {url} at {at}: {e}")
+                time.sleep(15 * (attempt + 1))
+        raise RuntimeError("cannot reach " + url)
+
+    def read(n):
+        nonlocal pos, resp
+        buf = bytearray()
+        while len(buf) < n:
+            try:
+                if resp is None:
+                    resp = connect(pos)
+                b = resp.read(min(n - len(buf), 1 << 24))
+                if not b:
+                    raise IOError("eof")
+                buf += b
+                pos += len(b)
+            except Exception as e:
+                if str(e) == "eof" and pos > 0 and len(buf) == 0:
+                    raise
+                log(f"  stream broke at {pos}: {e}")
+                try:
+                    resp.close()
+                except Exception:
+                    pass
+                resp = None
+        return bytes(buf)
+
+    def header():
+        cards = {}
+        order = []
+        while True:
+            block = read(2880)
+            done = False
+            for i in range(0, 2880, 80):
+                c = block[i:i + 80].decode("latin-1")
+                k = c[:8].strip()
+                if k == "END":
+                    done = True
+                    break
+                if c[8:10] == "= ":
+                    v = c[10:].split("/")[0].strip() if not c[10:].strip().startswith("'") else c[10:].strip().split("'")[1].strip()
+                    cards[k] = v
+                    order.append(k)
+            if done:
+                return cards
+
+    h0 = header()
+    naxis = int(h0.get("NAXIS", "0"))
+    size = 0
+    if naxis > 0:
+        size = abs(int(h0["BITPIX"])) // 8
+        for i in range(1, naxis + 1):
+            size *= int(h0[f"NAXIS{i}"])
+    if size:
+        read(((size + 2879) // 2880) * 2880)
+    h = header()
+    rowlen = int(h["NAXIS1"]); nrows = int(h["NAXIS2"]); nf = int(h["TFIELDS"])
+    sizes = {"L": 1, "B": 1, "I": 2, "J": 4, "K": 8, "A": 1, "E": 4, "D": 8, "C": 8, "M": 16, "P": 8, "Q": 16}
+    np_fmt = {"L": "S1", "B": "u1", "I": ">i2", "J": ">i4", "K": ">i8", "E": ">f4", "D": ">f8"}
+    names, formats, offsets = [], [], []
+    off = 0
+    import re
+    for i in range(1, nf + 1):
+        name = h[f"TTYPE{i}"]
+        m = re.match(r"(\d*)([A-Z])", h[f"TFORM{i}"])
+        rep = int(m.group(1)) if m.group(1) else 1
+        code = m.group(2)
+        nbytes = (rep + 7) // 8 if code == "X" else rep * sizes[code]
+        if name in want:
+            if code == "A":
+                f = f"S{rep}"
+            elif rep == 1:
+                f = np_fmt[code]
+            else:
+                f = (np_fmt[code], (rep,))
+            names.append(name); formats.append(f); offsets.append(off)
+        off += nbytes
+    assert off == rowlen, (off, rowlen)
+    dt = np.dtype({"names": names, "formats": formats, "offsets": offsets, "itemsize": rowlen})
+    log(f"  {url.split('/')[-1]}: {nrows:,} rows of {rowlen} bytes")
+    left = nrows
+    while left > 0:
+        n = min(chunk_rows, left)
+        arr = np.frombuffer(read(n * rowlen), dtype=dt)
+        left -= n
+        yield {k: arr[k] for k in names}, nrows - left, nrows
+
+
+def spec_catalogue(work):
+    """Every galaxy with a good spectroscopic redshift in DESI DR1 and SDSS DR17 (SDSS ones that DESI
+    also measured dropped): arrays ra, dec, z, apparent r magnitude (nan if unknown)."""
+    import numpy as np
+    cache = os.path.join(work, "spec.npz")
+    if os.path.exists(cache):
+        d = np.load(cache)
+        return d["ra"], d["dec"], d["z"], d["r"]
+    parts = []
+    t0 = time.time()
+    try:
+        cols = {"ZCAT_PRIMARY", "SPECTYPE", "ZWARN", "COADD_FIBERSTATUS", "DELTACHI2", "Z", "TARGET_RA", "TARGET_DEC", "FLUX_R"}
+        for c, done, total in fits_stream(DESI_ZCAT, cols):
+            ok = (c["ZCAT_PRIMARY"] == b"T") & (np.char.strip(c["SPECTYPE"]) == b"GALAXY") & (c["ZWARN"] == 0) & \
+                 (c["COADD_FIBERSTATUS"] == 0) & (c["DELTACHI2"] > 25) & (c["Z"] > 0.0015) & (c["Z"] < 5)
+            fr = c["FLUX_R"][ok].astype("f8")
+            r = np.where(fr > 0, 22.5 - 2.5 * np.log10(np.maximum(fr, 1e-9)), np.nan)
+            parts.append((c["TARGET_RA"][ok].astype("f8"), c["TARGET_DEC"][ok].astype("f8"), c["Z"][ok].astype("f4"), r.astype("f4"), np.zeros(ok.sum(), "u1")))
+            if (done // 100000) % 20 == 0:
+                log(f"  DESI {done:,}/{total:,} rows, {sum(len(p[0]) for p in parts):,} galaxies, {(time.time() - t0) / 60:.0f} min")
+    except Exception as e:
+        log(f"DESI failed: {e}")
+    try:
+        cols = {"SPECPRIMARY", "CLASS", "ZWARNING", "Z", "PLUG_RA", "PLUG_DEC", "SPECTROFLUX"}
+        for c, done, total in fits_stream(SDSS_ZCAT, cols):
+            ok = (c["SPECPRIMARY"].astype("i8") == 1) & (np.char.strip(c["CLASS"]) == b"GALAXY") & (c["ZWARNING"] == 0) & \
+                 (c["Z"] > 0.0015) & (c["Z"] < 5)
+            fr = c["SPECTROFLUX"][ok][:, 2].astype("f8")
+            r = np.where(fr > 0, 22.5 - 2.5 * np.log10(np.maximum(fr, 1e-9)), np.nan)
+            parts.append((c["PLUG_RA"][ok].astype("f8"), c["PLUG_DEC"][ok].astype("f8"), c["Z"][ok].astype("f4"), r.astype("f4"), np.ones(ok.sum(), "u1")))
+            if (done // 100000) % 10 == 0:
+                log(f"  SDSS {done:,}/{total:,} rows, {(time.time() - t0) / 60:.0f} min")
+    except Exception as e:
+        log(f"SDSS failed: {e}")
+    if not parts:
+        return None
+    ra = np.concatenate([p[0] for p in parts]); dec = np.concatenate([p[1] for p in parts])
+    z = np.concatenate([p[2] for p in parts]); r = np.concatenate([p[3] for p in parts]); src = np.concatenate([p[4] for p in parts])
+    log(f"spectra: {len(ra):,} galaxies ({(src == 0).sum():,} DESI, {(src == 1).sum():,} SDSS) before removing repeats")
+    # SDSS galaxies DESI also measured (and DESI/SDSS repeats among themselves) are dropped.
+    from scipy.spatial import cKDTree
+    v = unit(ra, dec)
+    keep = np.ones(len(ra), bool)
+    rad = math.radians(MATCH_ARCSEC / 3600.0)
+    order = np.lexsort((src,))   # DESI first
+    tree = cKDTree(v)
+    pairs = tree.query_pairs(rad, output_type="ndarray")
+    if len(pairs):
+        a, b = pairs[:, 0], pairs[:, 1]
+        # Drop the SDSS one of each pair, or the later of two from the same survey.
+        drop = np.where(src[a] > src[b], a, np.where(src[b] > src[a], b, np.maximum(a, b)))
+        keep[drop] = False
+    del tree, pairs, order
+    ra, dec, z, r = ra[keep], dec[keep], z[keep], r[keep]
+    log(f"spectra: {len(ra):,} galaxies after removing repeats")
+    np.savez(cache, ra=ra, dec=dec, z=z, r=r)
+    return ra, dec, z, r
+
+
+def unit(ra, dec):
+    import numpy as np
+    a = np.radians(ra); d = np.radians(dec)
+    return np.stack([np.cos(d) * np.cos(a), np.cos(d) * np.sin(a), np.sin(d)], axis=1)
+
+
+
 def glade(out, work):
     """All of GLADE+ (22.5 million galaxies): the bright ones (absolute B < OVERVIEW_ABS, or unknown) go in
     glade.bin (the pack the app downloads whole, UXGL format: float32 x, y, z Mpc, absB), the rest in
@@ -337,16 +524,66 @@ def glade(out, work):
                 time.sleep(5 * (attempt + 1))
         raise RuntimeError(f"box {box} failed: {last}")
 
+    import numpy as np
+    zs_tab, dc_tab = comoving_table()
+    spec = spec_catalogue(work)
+    # Spectra sorted by the sky box they fall in (same boxes as the GLADE+ queries).
+    band_off, band_n = [], []
+    k = 0
+    dec_edges = sorted(set(b[2] for b in boxes))
+    for de0 in dec_edges:
+        n = sum(1 for b in boxes if b[2] == de0)
+        band_off.append(k); band_n.append(n); k += n
+    box_id = {b: i for i, b in enumerate(boxes)}
+    if spec is not None:
+        sra, sdec, sz, sr = spec
+        band = np.clip(np.searchsorted(np.array(dec_edges), sdec, side="right") - 1, 0, len(dec_edges) - 1)
+        bn = np.array(band_n)[band]
+        sid = np.array(band_off)[band] + np.minimum(bn - 1, (np.mod(sra, 360.0) / 360.0 * bn).astype(np.int64))
+        sorder = np.argsort(sid, kind="stable")
+        sstart = np.searchsorted(sid[sorder], np.arange(len(boxes) + 1))
+        sdc = np.interp(sz.astype("f8"), zs_tab, dc_tab)
+        log(f"spectra sorted into {len(boxes)} sky boxes")
+    rad = math.radians(MATCH_ARCSEC / 3600.0)
+    from scipy.spatial import cKDTree
+
     buckets = Buckets(os.path.join(work, "gbuckets"))
     ov = open(os.path.join(out, "glade.bin"), "wb")
     ov.write(b"UXGL")
-    ov.write(struct.pack("<i", 1))
-    n_ov = n_tile = n_all = 0
+    ov.write(struct.pack("<i", 2))
+    counts = {"all": 0, "ov": 0, "tile": 0, "fixed": 0, "added": 0}
+
+    def emit(x, y, zz, dc, absb, pgc):
+        counts["all"] += 1
+        if absb < OVERVIEW_ABS:
+            ov.write(struct.pack("<ffff", x, y, zz, absb))
+            counts["ov"] += 1
+            return
+        for tier, size, dmin, dmax in GTIERS:
+            if dmin <= dc < dmax:
+                break
+        cell = (math.floor(x / size), math.floor(y / size), math.floor(zz / size))
+        if max(abs(c) for c in cell) > 32000:
+            return
+        q = [min(65535, int((v / size - c) * 65535 + 0.5)) for v, c in zip((x, y, zz), cell)]
+        buckets.add(tier, cell, GREC.pack(q[0], q[1], q[2], int(max(-32767, min(32767, absb * 100))), pgc) + b"\0" * 6)
+        counts["tile"] += 1
+
+    def abs_from_r(r, dl):
+        # r-band to B (typical galaxy colour), no K-correction: good to about a magnitude.
+        return float(r) - 5 * math.log10(dl * 1e6 / 10) + 1.0 if r == r else -20.8
+
     t0 = time.time()
     with cf.ThreadPoolExecutor(max_workers=6) as ex:
         futs = [ex.submit(fetch, b) for b in boxes]
         for k, f in enumerate(cf.as_completed(futs)):
             box, rows = f.result()
+            bid = box_id[box]
+            # This box's spectra, and a tree to find the one (if any) under each GLADE+ galaxy.
+            idx = sorder[sstart[bid]:sstart[bid + 1]] if spec is not None else np.zeros(0, np.int64)
+            used = np.zeros(len(idx), bool)
+            tree = cKDTree(unit(sra[idx], sdec[idx])) if len(idx) else None
+            parsed = []
             for p in rows:
                 try:
                     ra = float(p[0]); de = float(p[1]); dl = float(p[2])
@@ -355,33 +592,56 @@ def glade(out, work):
                 if not (dl > 0):
                     continue
                 z = float(p[3]) if p[3].strip() else float("nan")
-                dc = dl / (1 + z) if z == z and z > 0 else dl / (1 + dl / 4400.0)
                 b = float(p[4]) if p[4].strip() else float("nan")
-                absb = b - 5 * math.log10(dl * 1e6 / 10) if b == b else float("nan")
                 pgc = int(p[5]) if p[5].strip().isdigit() else 0
-                x, y, zz = place(ra, de, dc)
-                n_all += 1
+                parsed.append((ra, de, dl, z, b, pgc))
+            hit = np.full(len(parsed), -1, np.int64)
+            if tree is not None and parsed:
+                arr = np.array([(q[0], q[1]) for q in parsed])
+                dist, j = tree.query(unit(arr[:, 0], arr[:, 1]), distance_upper_bound=rad)
+                ok = np.isfinite(dist)
+                hit[ok] = j[ok]
+            for (ra, de, dl, z, b, pgc), h in zip(parsed, hit):
+                dc = dl / (1 + z) if z == z and z > 0 else dl / (1 + dl / 4400.0)
+                absb = b - 5 * math.log10(dl * 1e6 / 10) if b == b else float("nan")
+                if h >= 0:
+                    used[h] = True
+                    si = idx[h]
+                    # A measured redshift beats GLADE+'s (mostly photometric) one, except for the
+                    # nearest galaxies, whose GLADE+ distances are measured directly.
+                    if dc > 40:
+                        zz_ = float(sz[si]); dc = float(sdc[si]); dl2 = dc * (1 + zz_)
+                        absb = b - 5 * math.log10(dl2 * 1e6 / 10) if b == b else abs_from_r(sr[si], dl2)
+                        counts["fixed"] += 1
                 if not (absb == absb):
                     absb = -19.5   # no B magnitude (infrared-only): a typical galaxy, streamed with the faint ones
-                if absb < OVERVIEW_ABS:
-                    ov.write(struct.pack("<ffff", x, y, zz, absb))
-                    n_ov += 1
-                    continue
-                for tier, size, dmin, dmax in GTIERS:
-                    if dmin <= dc < dmax:
-                        break
-                cell = (math.floor(x / size), math.floor(y / size), math.floor(zz / size))
-                if max(abs(c) for c in cell) > 32000:
-                    continue
-                q = [min(65535, int((v / size - c) * 65535 + 0.5)) for v, c in zip((x, y, zz), cell)]
-                buckets.add(tier, cell, GREC.pack(q[0], q[1], q[2], int(max(-32767, min(32767, absb * 100))), pgc) + b"\0" * 6)
-                n_tile += 1
+                x, y, zz = place(ra, de, dc)
+                emit(x, y, zz, dc, absb, pgc)
+            # Galaxies only the spectroscopic surveys have.
+            for h in np.nonzero(~used)[0]:
+                si = idx[h]
+                dc = float(sdc[si]); zz_ = float(sz[si])
+                x, y, zz = place(float(sra[si]), float(sdec[si]), dc)
+                emit(x, y, zz, dc, abs_from_r(sr[si], dc * (1 + zz_)), 0)
+                counts["added"] += 1
             if (k + 1) % 100 == 0:
-                log(f"  {k + 1}/{len(boxes)} boxes, {n_all:,} galaxies ({n_ov:,} overview, {n_tile:,} tiles), {(time.time() - t0) / 60:.0f} min")
+                log(f"  {k + 1}/{len(boxes)} boxes, {counts}, {(time.time() - t0) / 60:.0f} min")
     ov.close()
     buckets.close()
-    log(f"glade: {n_all:,} galaxies; overview {n_ov:,}; tiles {n_tile:,}")
+    log(f"glade: {counts}")
+    shuffle_pack(os.path.join(out, "glade.bin"))
     write_tiles(out, buckets.root, "galaxy", GTIERS, GREC.size, pad=6, sort_key=lambda r: struct.unpack_from("<h", r, 6)[0])
+
+
+def shuffle_pack(path):
+    """Random order (fixed seed): any first N points are an even sample of the whole sky, so a phone
+    can load just part of the pack and the renderer can draw a fraction when zoomed far out."""
+    import numpy as np
+    a = np.fromfile(path, dtype="<f4", offset=8).reshape(-1, 4)
+    a = a[np.random.default_rng(0x5A11E5).permutation(len(a))]
+    with open(path, "wb") as f:
+        f.write(b"UXGL"); f.write(struct.pack("<i", 2)); f.write(a.astype("<f4").tobytes())
+    log(f"pack: {len(a):,} galaxies, shuffled")
 
 
 def write_tiles(out, root, prefix, tiers, rec_size, pad=0, sort_key=None):

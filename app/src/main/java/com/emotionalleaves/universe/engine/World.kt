@@ -290,32 +290,36 @@ class World(private val engine: Engine) {
 
     private var lastFillKey = ""
 
+    /** Where the real luminous galaxies are and how complete the catalogues are (see [RealDensity]). */
+    @Volatile var realDensity: RealDensity? = null
+
     /** (Re)loads the GLADE+ pack and regenerates the cosmic web beyond whatever real data we have. */
     fun reloadLargeScale() {
         webExec.execute {
-            val maxPts = when (engine.settings.quality) { 0 -> 600_000; 2 -> 5_000_000; else -> 2_500_000 }
+            val maxPts = when (engine.settings.quality) { 0 -> 1_500_000; 2 -> 10_000_000; else -> 4_000_000 }
             glade = GladePack.load(engine.context, maxPts)
             // With millions of real galaxies installed, generated ones must be fainter (rule 2).
             GalaxyField.catalogLimit = if (glade != null) 17.0 else 14.0
             fieldCell = null
-            // Real luminous galaxies per 100 Mpc shell (catalogue + GLADE+): generated ones fill the rest.
+            // Real luminous galaxies (catalogue + GLADE+): generated ones fill the rest around them.
             val bins = IntArray(160)
             val g = glade
-            if (g != null) {
-                val d = g.data
-                for (i in 0 until g.count) {
-                    if (d[i * 4 + 3] >= -20.5f) continue
-                    val r = kotlin.math.sqrt((d[i * 4] * d[i * 4] + d[i * 4 + 1] * d[i * 4 + 1] + d[i * 4 + 2] * d[i * 4 + 2]).toDouble())
-                    val b = (r / CosmicWeb.FILL_BIN_MPC).toInt()
-                    if (b < bins.size) bins[b]++
-                }
+            val density = if (g != null) {
+                RealDensity(g.data, 4, g.count, g.weight) { g.data[it * 4 + 3] < -20.5f }
             } else {
-                for (gal in galaxies) {
-                    if (gal.absMag >= -20.5) continue
-                    val b = ((gal.position(0.0) - UPos.ZERO).length() / Units.MPC / CosmicWeb.FILL_BIN_MPC).toInt()
-                    if (b < bins.size) bins[b]++
+                val ps = synchronized(galaxyLock) { galaxies.filter { it.absMag < -20.5 && !it.isMilkyWay } }
+                val arr = FloatArray(ps.size * 3)
+                ps.forEachIndexed { i, gal ->
+                    val p = (gal.position(0.0) - UPos.ZERO) * (1.0 / Units.MPC)
+                    arr[i * 3] = p.x.toFloat(); arr[i * 3 + 1] = p.y.toFloat(); arr[i * 3 + 2] = p.z.toFloat()
                 }
+                RealDensity(ArrayFloats(arr), 3, ps.size, 1.0) { true }
             }
+            for (k in 0 until density.count) {
+                val b = (density.pos(density.members[k]).length() / CosmicWeb.FILL_BIN_MPC).toInt()
+                if (b < bins.size) bins[b]++
+            }
+            realDensity = density
             val budget = when (engine.settings.quality) { 0 -> 300_000; 2 -> 900_000; else -> 600_000 }
             // Where the real catalogues have thinned to under 30% of the true number: beyond here,
             // galaxies generated around the camera (WebLod) and the glow (haze) take over.
@@ -325,10 +329,10 @@ class World(private val engine: Engine) {
                 val expected = CosmicWeb.LUMINOUS_DENSITY * 4.0 / 3.0 * Math.PI * (r1 * r1 * r1 - r0 * r0 * r0)
                 if (bins[b] < 0.3 * expected) { inner = maxOf(300.0, r0); break }
             }
-            val key = "fill${CosmicWeb.VERSION}c_${bins.sum()}_$budget"
+            val key = "fill${CosmicWeb.VERSION}d_${bins.sum()}_$budget"
             if (cosmicWeb?.innerMpc != inner || lastFillKey != key) {
                 lastFillKey = key
-                val (fill, mapN) = CosmicWeb.splitFill(cachedFloats("web_$key") { CosmicWeb.generateFill(bins, budget).data })
+                val (fill, mapN) = CosmicWeb.splitFill(cachedFloats("web_$key") { CosmicWeb.generateFill(density, budget).data })
                 cosmicWeb = CosmicWebData(inner, fill, mapCount = mapN)
                 haze = try { cachedFloats("haze_${inner.toLong()}") { CosmicHaze.generate(inner) } } catch (e: Throwable) { ErrorLog.record("haze", e); null }
                 loaded("cosmic web")

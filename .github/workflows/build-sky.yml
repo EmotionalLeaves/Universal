@@ -16,6 +16,8 @@ jobs:
     timeout-minutes: 350
     steps:
       - uses: actions/checkout@v4
+      - name: Python packages
+        run: pip install --quiet numpy scipy
       - name: Build
         run: mkdir -p build && python3 tools/build_sky.py --out build/sky --only "${{ inputs.only }}" --gmax "${{ inputs.gmax }}" 2>&1 | tee build/sky-build-${{ inputs.only }}.log || true
       - name: Publish

@@ -30,12 +30,13 @@ class WebLodLayer : Layer {
         val level = WebLod.levelFor(frame.focusDistance)
         val cell = WebLod.cellOf(focus, level)
         val inner = rc.engine.world.cosmicWeb?.innerMpc ?: 300.0
-        val w = Triple(level, cell, inner)
+        val density = rc.engine.world.realDensity
+        val w = listOf(level, cell, inner, density)
         if (w == want || busy) return
         want = w
         busy = true
         worker.execute {
-            try { pending = WebLod.generate(level, cell, inner) } catch (_: Throwable) {} finally { busy = false }
+            try { pending = WebLod.generate(level, cell, inner, density) } catch (_: Throwable) {} finally { busy = false }
         }
     }
 
