@@ -46,7 +46,7 @@ class ChunkedLoader<K : Any>(private val leaf: Int = 4096, private val perFrame:
         }
         val r = ready
         if (r != null && r.first === working && staged == null) {
-            staged = PointBatch.Staged(anchor, unit, count, r.second, fill)
+            staged = PointBatch.Staged(anchor, unit, count, r.second, fill = fill)
             ready = null
         }
         staged?.step(perFrame)?.let {

@@ -159,6 +159,8 @@ class PointBatch(
     class Staged(
         private val anchor: com.emotionalleaves.universe.core.UPos, private val unit: Double, val count: Int,
         private val index: com.emotionalleaves.universe.engine.ChunkIndex?,
+        /** Keep the index's upload order afterwards (needed if the same index is uploaded again). */
+        private val keepOrder: Boolean = false,
         private val fill: (i: Int, out: FloatArray, at: Int) -> Unit,
     ) {
         private var vao = 0
@@ -197,7 +199,7 @@ class PointBatch(
             GLES30.glEnableVertexAttribArray(2)
             GLES30.glVertexAttribPointer(2, 1, GLES30.GL_FLOAT, false, stride, 24)
             GLES30.glBindVertexArray(0)
-            index?.release()
+            if (!keepOrder) index?.release()
             return PointBatch(anchor, unit, count, vao, vbo).also { it.chunks = index }
         }
 

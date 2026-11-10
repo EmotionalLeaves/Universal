@@ -32,7 +32,7 @@ class CosmicLayer : Layer {
     var drawFraction = 1.0
 
     override fun init(rc: RenderContext) {
-        web = null; webBatch = null; gladeLoader.reset(); outer = null; outerBatch = null; tileBatches.clear()
+        web = null; webBatch = null; gladeLoader.reset(); outer = null; outerBatch = null; tileBatches.clear(); tileStaged = null; tileStagedFor = null
     }
 
     fun exposure(frame: Frame): Float = Exposure.of(frame)
@@ -55,16 +55,21 @@ class CosmicLayer : Layer {
             val keep = groups.toSet()
             val it = tileBatches.entries.iterator()
             while (it.hasNext()) { val e = it.next(); if (e.key !in keep) { e.value.release(); it.remove() } }
-            // One upload per frame keeps the frame rate smooth.
-            groups.firstOrNull { it !in tileBatches }?.let { g ->
-                val d = g.data
-                val order = g.chunks.order
-                tileBatches[g] = PointBatch.uploadStrided(UPos.ZERO, Units.MPC, g.count) { k, out, at ->
-                    val i = if (order != null) order[k] else k
-                    out[at] = d[i * 4]; out[at + 1] = d[i * 4 + 1]; out[at + 2] = d[i * 4 + 2]
-                    out[at + 3] = 0.92f; out[at + 4] = 0.9f; out[at + 5] = 1f; out[at + 6] = d[i * 4 + 3]
-                }.also { if (order != null) it.chunks = g.chunks }
+            if (tileStaged != null && tileStagedFor !in keep) { tileStaged?.cancel(); tileStaged = null; tileStagedFor = null }
+        }
+        // Streamed groups go up a slice per frame (a whole group at once made the picture stutter).
+        if (tileStaged == null) groups.firstOrNull { it !in tileBatches }?.let { g ->
+            val d = g.data
+            tileStagedFor = g
+            tileStaged = PointBatch.Staged(UPos.ZERO, Units.MPC, g.count, g.chunks, keepOrder = true) { i, out, at ->
+                out[at] = d[i * 4]; out[at + 1] = d[i * 4 + 1]; out[at + 2] = d[i * 4 + 2]
+                out[at + 3] = 0.92f; out[at + 4] = 0.9f; out[at + 5] = 1f; out[at + 6] = d[i * 4 + 3]
             }
+        }
+        tileStaged?.step(100_000)?.let { b ->
+            val g = tileStagedFor
+            if (g != null && g in groups) tileBatches[g] = b else b.release()
+            tileStaged = null; tileStagedFor = null
         }
         val g = rc.engine.world.glade
         val d = g?.data
@@ -77,6 +82,8 @@ class CosmicLayer : Layer {
         }
     }
 
+    private var tileStaged: PointBatch.Staged? = null
+    private var tileStagedFor: com.emotionalleaves.universe.engine.GalaxyTiles.Group? = null
     private val gladeLoader = ChunkedLoader<GladePack>()
     private val glade get() = gladeLoader.shown
     private val gladeBatch get() = gladeLoader.batch

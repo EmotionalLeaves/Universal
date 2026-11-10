@@ -148,7 +148,7 @@ class AsteroidCloudLayer : Layer {
         val area = minOf(Math.PI * beltPx * beltPx * 0.6, frame.width.toDouble() * frame.height)
         val target = 0.3 * zoomOut
         val minAlpha = 0.006
-        val n = if (zoomOut <= 0f) all else minOf(all.toDouble(), maxOf(60_000.0, target * area / minAlpha)).toInt()
+        val n = if (zoomOut <= 0f) minOf(all, brighterThan(db, all, limit(rc) + 8.0)) else minOf(all.toDouble(), maxOf(60_000.0, target * area / minAlpha)).toInt()
         val floor = if (zoomOut <= 0f) 0f else (target * area / n).coerceIn(minAlpha, 0.1).toFloat()
         val p = rc.programs.kepler
         rc.drawer.beginAdditive()
@@ -169,6 +169,18 @@ class AsteroidCloudLayer : Layer {
         GLES30.glDrawArrays(GLES30.GL_POINTS, 0, n)
         GLES30.glBindVertexArray(0)
         rc.drawer.end()
+    }
+
+    /**
+     * How many of the first [n] asteroids (sorted brightest first) have absolute magnitude under [h].
+     * Close up, the faint ones can't show (they would need to pass within ~0.4 AU; those right next to
+     * you are drawn as rocks anyway), so most of the 1.5 million are skipped: each one costs the GPU
+     * an orbit calculation every frame.
+     */
+    private fun brighterThan(db: AsteroidDb, n: Int, h: Double): Int {
+        var lo = 0; var hi = n
+        while (lo < hi) { val mid = (lo + hi) ushr 1; if (db.h(mid) < h) lo = mid + 1 else hi = mid }
+        return lo
     }
 
     override fun pickAt(frame: Frame, rc: RenderContext, x: Float, y: Float, reach: Float): Body? {
