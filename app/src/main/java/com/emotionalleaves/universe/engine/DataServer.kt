@@ -7,9 +7,14 @@ import java.util.concurrent.ConcurrentHashMap
 /** Reads pieces of the big data files in the repo's sky-v1 release with HTTP range requests. */
 object DataServer {
     private val resolved = ConcurrentHashMap<String, Pair<String, Long>>()
+    /** Tests only: read the files from this folder instead of the network. */
+    @Volatile var localDir: java.io.File? = null
 
     /** Bytes [start, start+len) of a data file (follows GitHub's redirect to its file server, re-resolved every few minutes). */
     fun range(file: String, start: Long, len: Long): ByteArray {
+        localDir?.let { d ->
+            java.io.RandomAccessFile(java.io.File(d, file), "r").use { f -> val b = ByteArray(len.toInt()); f.seek(start); f.readFully(b); return b }
+        }
         var last: Exception? = null
         for (attempt in 0 until 3) {
             try {
@@ -38,6 +43,7 @@ object DataServer {
 
     /** The file's full size (from a 1-byte range request's Content-Range), or -1. */
     fun totalSize(file: String): Long {
+        localDir?.let { return java.io.File(it, file).length() }
         val conn = URL(resolvedUrl(file, true)).openConnection() as HttpURLConnection
         conn.setRequestProperty("User-Agent", "UniverseExplorer-app")
         conn.setRequestProperty("Range", "bytes=0-0")

@@ -419,3 +419,9 @@ How it was tested: an Android emulator on GitHub (ui-test.yml + tools/ui_test.sh
 - [x] Streaming further out: the destination's neighbourhood starts downloading the moment a trip begins, the next ones along your heading load ahead of you (one at a time, since the archive slows down when a phone sends several at once), the last six neighbourhoods stay in memory, ESA answers first (2–4 s a neighbourhood) with Heidelberg's mirror as a backup after 6 s.
 - [x] Stars with unreliable astrometry (RUWE ≥ 1.4) dropped: they had piled up as a false cloud toward the galactic centre.
 - [x] Gaia neighbourhoods around 153 famous places 330–8,000 ly away (every Messier object and named nebula/cluster in range, plus the bright named stars such as Rigel, Deneb and Betelgeuse) ship with the app (27 MB): flying there shows real stars at once (0.4 s on the emulator, against 15–45 s from the archive tonight). A neighbourhood is reused while you are within 70% of its radius, so arriving off-centre doesn't trigger a second download.
+
+## Pass 24: the whole universe, not just Laniakea
+- [x] Generated galaxies now fill exactly what the catalogues miss: the real luminous galaxies are counted in 100 Mpc shells and each shell gets the shortfall against the density measured nearby (1 per 1,000 Mpc³), out to the edge of the observable universe. Before, generation only started past the farthest GLADE+ galaxy (7.7 Gpc), leaving 2–7 Gpc nearly empty.
+- [x] Zoomed far out, an even sample of the whole observable universe is drawn (real galaxies thinned to match) instead of a white ball around us.
+- [x] Deep space: free flight between galaxies exposes for the galaxy-filled sky; generated galaxies around the camera are 7x denser.
+- [x] All 36.5 million Gaia stars to G=15, all 21.3 million GLADE+ galaxies, 1M Milliquas quasars streamed from the repo's sky-v1 release; memory fixes (compact galaxy data, chunked GPU uploads).

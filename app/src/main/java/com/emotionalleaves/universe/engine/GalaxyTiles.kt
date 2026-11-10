@@ -93,6 +93,12 @@ class GalaxyTiles(private val cacheDir: File) {
         }
     }
 
+    /** Forgets everything loaded (zoomed far out: they are too faint to see and only cost memory). */
+    fun clear() {
+        if (groups.isEmpty() || busy) return
+        synchronized(loaded) { groups = emptyList(); loaded.clear() }
+    }
+
     /** Called often with the camera position; loads cells around it, forgets far ones. */
     fun update(cam: UPos) {
         val ts = tiers

@@ -12,6 +12,9 @@ import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import java.util.Locale
 import kotlin.math.log10
+import kotlin.math.ceil
+import kotlin.math.ln
+import kotlin.math.max
 import kotlin.math.pow
 import kotlin.math.sqrt
 
@@ -26,6 +29,8 @@ class CosmicWebData(
     val data: FloatArray,
     /** "web" for the observable universe, "out" for the speculative region beyond it. */
     val prefix: String = "web",
+    /** The first this-many points are an even sample of the whole universe (drawn alone when zoomed far out). */
+    val mapCount: Int = data.size / 7,
 ) {
     val count get() = data.size / 7
 
@@ -90,6 +95,86 @@ object CosmicWeb {
             k++
         }
         return CosmicWebData(innerMpc, if (k == COUNT) data else data.copyOf(k * 7))
+    }
+
+    /** Density of luminous galaxies (absolute B < -20.5) where the real catalogues are complete, per Mpc³. */
+    const val LUMINOUS_DENSITY = 1.0e-3
+    const val FILL_BIN_MPC = 100.0
+
+    /**
+     * Generated galaxies that fill in what the real catalogues miss, out to the edge of the observable
+     * universe. [realLuminous] counts the real luminous galaxies in each 100 Mpc shell around us; each
+     * shell gets the difference to the density measured nearby, so real + generated is even everywhere:
+     * nothing generated where the catalogue is complete, a few where it thins out, all of them beyond it.
+     * Far away one point stands for many galaxies (brighter, so each region keeps its true total light).
+     */
+    fun generateFill(realLuminous: IntArray, budget: Int): CosmicWebData {
+        val rng = Rng(Rng.hash(SEED, VERSION.toLong() + 100, realLuminous.sum().toLong()))
+        val noise = Noise3(SEED)
+        val bins = ceil(EDGE_MPC / FILL_BIN_MPC).toInt()
+        val missing = DoubleArray(bins)
+        for (b in 0 until bins) {
+            val r0 = b * FILL_BIN_MPC; val r1 = minOf(EDGE_MPC, (b + 1) * FILL_BIN_MPC)
+            val vol = 4.0 / 3.0 * Math.PI * (r1 * r1 * r1 - r0 * r0 * r0)
+            val real = if (b < realLuminous.size) realLuminous[b] else 0
+            // Within 30 Mpc every galaxy is known (and the field generator handles faint ones).
+            missing[b] = if (r1 <= 30) 0.0 else max(0.0, LUMINOUS_DENSITY * vol - real)
+        }
+        // Points per shell grow with distance (like the screen area a shell covers), never more than
+        // the galaxies actually missing there.
+        val share = DoubleArray(bins) { b -> if (missing[b] > 0) sqrt(b + 0.5) else 0.0 }
+        val shareSum = share.sum().coerceAtLeast(1e-9)
+        val points = IntArray(bins) { b -> minOf(missing[b], budget * share[b] / shareSum).toInt() }
+        val total = points.sum()
+        val data = FloatArray(total * 7)
+        // An even sample over the whole observable universe (same number per volume everywhere) goes
+        // first: zoomed far out only that part is drawn, so the near shells don't pile up into a ball.
+        val mapDensity = MAP_POINTS / (4.0 / 3.0 * Math.PI * EDGE_MPC * EDGE_MPC * EDGE_MPC)
+        val isMap = BooleanArray(total)
+        var k = 0
+        for (b in 0 until bins) {
+            val n = points[b]
+            if (n == 0) continue
+            val r0 = b * FILL_BIN_MPC; val r1 = minOf(EDGE_MPC, (b + 1) * FILL_BIN_MPC)
+            var made = 0
+            var guard = 0
+            val vol = 4.0 / 3.0 * Math.PI * (r1 * r1 * r1 - r0 * r0 * r0)
+            val pMap = (mapDensity * vol / n).coerceAtMost(1.0)
+            while (made < n && guard < n * 60) {
+                guard++
+                val r = Math.cbrt(r0 * r0 * r0 + rng.nextDouble() * (r1 * r1 * r1 - r0 * r0 * r0))
+                val p = rng.unitVector() * r
+                val sc = 1.0 / 160.0
+                val web = noise.ridged(p.x * sc, p.y * sc, p.z * sc, 4)
+                if (rng.nextDouble() > web * web * web * 1.6) continue
+                val warm = rng.nextDouble().toFloat()
+                val m = -20.5 - 0.7 * -ln(1 - rng.nextDouble() * 0.999)
+                data[k * 7] = p.x.toFloat(); data[k * 7 + 1] = p.y.toFloat(); data[k * 7 + 2] = p.z.toFloat()
+                data[k * 7 + 3] = 0.85f + 0.15f * warm; data[k * 7 + 4] = 0.85f; data[k * 7 + 5] = 1.0f - 0.2f * warm
+                // Far points stand for many galaxies but are drawn only a little brighter: their full summed
+                // light would turn the whole sky white (each one is a dot, not a tiny smudge).
+                data[k * 7 + 6] = (m - 2.0 * log10(max(1.0, r / 300.0))).toFloat()
+                isMap[k] = rng.nextDouble() < pMap
+                k++; made++
+            }
+        }
+        val inner = (0 until bins).firstOrNull { missing[it] > 0 }?.let { it * FILL_BIN_MPC } ?: EDGE_MPC
+        // Map sample first, then the rest; the last float pair records how many are map points.
+        val out = FloatArray(k * 7 + 7)
+        var o = 0
+        for (pass in 0..1) for (i in 0 until k) if (isMap[i] == (pass == 0)) { System.arraycopy(data, i * 7, out, o * 7, 7); o++ }
+        val mapN = (0 until k).count { isMap[it] }
+        out[k * 7] = Float.NaN; out[k * 7 + 1] = mapN.toFloat()
+        return CosmicWebData(inner, out)
+    }
+
+    /** Points in the even whole-universe sample of [generateFill]. */
+    const val MAP_POINTS = 260_000.0
+
+    /** Splits [generateFill]'s output into the galaxies and the count of map points at the front. */
+    fun splitFill(raw: FloatArray): Pair<FloatArray, Int> {
+        if (raw.size >= 7 && raw[raw.size - 7].isNaN()) return raw.copyOf(raw.size - 7) to raw[raw.size - 6].toInt()
+        return raw to raw.size / 7
     }
 
     /**
@@ -191,6 +276,13 @@ class GladePack(val data: FloatArray, val maxMpc: Double) {
                     out[i * 4 + 3] = m - 2.5f * log10(step.toFloat())
                     val d = sqrt((x * x + y * y + z * z).toDouble())
                     if (d > maxD) maxD = d
+                }
+                // Random order (same on every phone): any first N are an even sample of the whole sky,
+                // so zoomed far out the renderer can draw just a fraction without leaving holes.
+                val rng = Rng(0x5A11E5L)
+                for (i in n - 1 downTo 1) {
+                    val j = (rng.nextDouble() * (i + 1)).toInt().coerceAtMost(i)
+                    for (c in 0 until 4) { val t = out[i * 4 + c]; out[i * 4 + c] = out[j * 4 + c]; out[j * 4 + c] = t }
                 }
                 GladePack(out, maxD)
             }
@@ -348,7 +440,7 @@ object WebLod {
         val anchorMpc = Vec3d(ccx * s, ccy * s, ccz * s)
         val edge = CosmicWeb.EDGE_MPC
         // Candidates per cell; about 12% survive the filament test below.
-        val perCell = (DENSITY * s * s * s / ACCEPT).coerceIn(1.0, 70.0)
+        val perCell = (DENSITY * s * s * s / ACCEPT).coerceIn(1.0, 500.0)
         val represents = kotlin.math.max(1.0, DENSITY * s * s * s / (perCell * ACCEPT))
         val out = ArrayList<Float>(343 * 12 * 7)
         for (dx in -RADIUS..RADIUS) for (dy in -RADIUS..RADIUS) for (dz in -RADIUS..RADIUS) {

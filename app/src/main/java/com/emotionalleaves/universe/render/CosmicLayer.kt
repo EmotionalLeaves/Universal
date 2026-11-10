@@ -70,6 +70,12 @@ class CosmicLayer : Layer {
         }
     }
 
+    /** Fraction of the GLADE+ pack drawn: all of it up to ~1.5 Gpc views, an even sample beyond. */
+    private fun gladeShare(frame: Frame): Double {
+        val f = frame.focusDistance / (1500 * Units.MPC)
+        return if (f <= 1) 1.0 else Math.pow(f, -2.5).coerceIn(0.0005, 1.0)
+    }
+
     /** How strongly the CMB shell shows: only once you have zoomed out to cosmic scales. */
     private fun cmbVisibility(frame: Frame): Double {
         // Depends only on how far you have zoomed out, never on how far you are from Earth:
@@ -113,10 +119,23 @@ class CosmicLayer : Layer {
         // Low quality: draw an even half of the generated web, a little brighter (much faster on slow GPUs).
         val low = rc.engine.settings.quality == 0
         val boost = if (low) 0.75f else 0f
-        webBatch?.let { it.limit = if (low) it.count / 2 else it.count }
+        webBatch?.let { b ->
+            // Zoomed far out: the even whole-universe sample, plus a shrinking share of the rest.
+            val w = web
+            val all = if (low) b.count / 2 else b.count
+            b.limit = if (w == null) all else {
+                val share = gladeShare(frame)
+                minOf(all, w.mapCount + ((all - w.mapCount).coerceAtLeast(0) * share).toInt())
+            }
+        }
         outerBatch?.let { it.limit = if (low) it.count / 2 else it.count }
         rc.drawer.beginAdditive()
-        gladeBatch?.let { rc.drawer.points(frame, it, exp + 1.5f, 2.2f, 0.85f * day, minSize = 1.3f, maxSize = 5f) }
+        gladeBatch?.let {
+            // Zoomed far out, the real catalogue (dense around us) is thinned to an even sample, so it
+            // doesn't burn into a white ball next to the generated rest of the universe.
+            it.limit = (it.count * gladeShare(frame)).toInt()
+            rc.drawer.points(frame, it, exp + 1.5f, 2.2f, 0.85f * day, minSize = 1.3f, maxSize = 5f)
+        }
         for (b in tileBatches.values) rc.drawer.points(frame, b, exp + 1.5f, 2.2f, 0.85f * day, minSize = 1.3f, maxSize = 5f)
         webBatch?.let { rc.drawer.points(frame, it, exp + 1.5f + boost, 2.2f, 0.95f * day, minSize = 1.3f, maxSize = 5f) }
         outerBatch?.let { rc.drawer.points(frame, it, exp + 1.5f + boost, 2.2f, 0.9f * day, minSize = 1.3f, maxSize = 5f) }
@@ -160,7 +179,7 @@ class CosmicLayer : Layer {
         var best = -1
         var bestScore = Double.MAX_VALUE
         val d = g.data
-        for (i in 0 until g.count) {
+        for (i in 0 until (g.count * gladeShare(frame)).toInt()) {
             val dx = d[i * 4] - cam.x; val dy = d[i * 4 + 1] - cam.y; val dz = d[i * 4 + 2] - cam.z
             val dist = kotlin.math.sqrt(dx * dx + dy * dy + dz * dz)
             val m = d[i * 4 + 3] + 5 * log10(max(dist * 1e6, 1.0)) - 5

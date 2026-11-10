@@ -288,6 +288,8 @@ class World(private val engine: Engine) {
     /** Guards changes to [galaxies]: several threads (taps, lookups, loading) add to it. */
     private val galaxyLock = Any()
 
+    private var lastFillKey = ""
+
     /** (Re)loads the GLADE+ pack and regenerates the cosmic web beyond whatever real data we have. */
     fun reloadLargeScale() {
         webExec.execute {
@@ -296,11 +298,39 @@ class World(private val engine: Engine) {
             // With millions of real galaxies installed, generated ones must be fainter (rule 2).
             GalaxyField.catalogLimit = if (glade != null) 17.0 else 14.0
             fieldCell = null
-            val inner = glade?.let { maxOf(it.maxMpc, 300.0) } ?: 300.0
-            if (cosmicWeb?.innerMpc != inner) {
-                val key = "v${CosmicWeb.VERSION}_${inner.toLong()}"
-                cosmicWeb = CosmicWebData(inner, cachedFloats("web_$key") { CosmicWeb.generate(inner).data })
-                haze = try { cachedFloats("haze_$key") { CosmicHaze.generate(inner) } } catch (e: Throwable) { ErrorLog.record("haze", e); null }
+            // Real luminous galaxies per 100 Mpc shell (catalogue + GLADE+): generated ones fill the rest.
+            val bins = IntArray(160)
+            val g = glade
+            if (g != null) {
+                val d = g.data
+                for (i in 0 until g.count) {
+                    if (d[i * 4 + 3] >= -20.5f) continue
+                    val r = kotlin.math.sqrt((d[i * 4] * d[i * 4] + d[i * 4 + 1] * d[i * 4 + 1] + d[i * 4 + 2] * d[i * 4 + 2]).toDouble())
+                    val b = (r / CosmicWeb.FILL_BIN_MPC).toInt()
+                    if (b < bins.size) bins[b]++
+                }
+            } else {
+                for (gal in galaxies) {
+                    if (gal.absMag >= -20.5) continue
+                    val b = ((gal.position(0.0) - UPos.ZERO).length() / Units.MPC / CosmicWeb.FILL_BIN_MPC).toInt()
+                    if (b < bins.size) bins[b]++
+                }
+            }
+            val budget = when (engine.settings.quality) { 0 -> 300_000; 2 -> 900_000; else -> 600_000 }
+            // Where the real catalogues have thinned to under 30% of the true number: beyond here,
+            // galaxies generated around the camera (WebLod) and the glow (haze) take over.
+            var inner = 300.0
+            for (b in 3 until bins.size) {
+                val r0 = b * CosmicWeb.FILL_BIN_MPC; val r1 = r0 + CosmicWeb.FILL_BIN_MPC
+                val expected = CosmicWeb.LUMINOUS_DENSITY * 4.0 / 3.0 * Math.PI * (r1 * r1 * r1 - r0 * r0 * r0)
+                if (bins[b] < 0.3 * expected) { inner = maxOf(300.0, r0); break }
+            }
+            val key = "fill${CosmicWeb.VERSION}c_${bins.sum()}_$budget"
+            if (cosmicWeb?.innerMpc != inner || lastFillKey != key) {
+                lastFillKey = key
+                val (fill, mapN) = CosmicWeb.splitFill(cachedFloats("web_$key") { CosmicWeb.generateFill(bins, budget).data })
+                cosmicWeb = CosmicWebData(inner, fill, mapCount = mapN)
+                haze = try { cachedFloats("haze_${inner.toLong()}") { CosmicHaze.generate(inner) } } catch (e: Throwable) { ErrorLog.record("haze", e); null }
                 loaded("cosmic web")
             }
         }
@@ -749,8 +779,10 @@ class World(private val engine: Engine) {
         gaiaTimer = 0.0
         if (engine.settings.gladeStream) {
             if (!galaxyTiles.ready) galaxyTiles.start()
-            // Galaxies only matter once you are out of the Milky Way.
-            if ((cam - UPos.ZERO).length() > 30_000 * Units.PC) galaxyTiles.update(cam)
+            // Faint galaxies only matter once you are out of the Milky Way and not zoomed far out.
+            val focus = synchronized(engine.camera) { engine.camera.distance }
+            if (focus > 400 * Units.MPC) galaxyTiles.clear()
+            else if ((cam - UPos.ZERO).length() > 30_000 * Units.PC && focus < 150 * Units.MPC) galaxyTiles.update(cam)
         }
         val rs = realStars ?: return
         rs.gaia = gaia

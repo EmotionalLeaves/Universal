@@ -102,7 +102,13 @@ class UniverseRenderer(private val context: Context, private val engine: Engine)
             orientation = cam.orientation
             // Free flight has no target to zoom on: expose for the space around you instead (it used
             // the leftover orbit distance, so far from home everything was too dim to see).
-            focusDist = if (cam.freeFlight) kotlin.math.max(cam.distance, engine.world.nearestDist * 12) else cam.distance
+            focusDist = if (cam.freeFlight) {
+                val near = engine.world.nearestDist
+                // Out between the galaxies (nothing within 50 kpc): expose for the galaxy-filled sky
+                // around you, like the view from home at that scale (it showed only a few dots).
+                val deep = if (near > 50_000 * Units.PC) 40 * Units.MPC else 0.0
+                kotlin.math.max(kotlin.math.max(cam.distance, near * 12), deep)
+            } else cam.distance
             target = cam.target
             flyingTo = if (cam.isFlying) cam.zoomTarget() else null
         }
