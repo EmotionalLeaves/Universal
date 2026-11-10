@@ -47,6 +47,7 @@ fun UniverseScreen(engine: Engine, version: String, view: UniverseView) {
                 Box(Modifier.fillMaxWidth()) {
                     Column(Modifier.align(Alignment.TopStart).padding(8.dp).fillMaxWidth(0.5f)) {
                         TopStatus(engine)
+                        IsolatedChip(engine, Modifier.padding(top = 6.dp))
                         FreeFlightHint(engine, Modifier.padding(top = 6.dp))
                         LoadingChip(Modifier.padding(top = 4.dp))
                         if (SettingsUi.showStats) StatsBadge(Modifier.padding(top = 4.dp))
@@ -62,6 +63,8 @@ fun UniverseScreen(engine: Engine, version: String, view: UniverseView) {
                             MenuButton()
                         }
                         Row(Modifier.padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                            InViewButton()
+                            Spacer(Modifier.width(8.dp))
                             FreeFlightButton(engine)
                             Spacer(Modifier.width(8.dp))
                             ExploreButton()
@@ -90,6 +93,8 @@ fun UniverseScreen(engine: Engine, version: String, view: UniverseView) {
             Screen.BOOKMARKS -> BookmarksScreen(engine)
             Screen.SETTINGS -> SettingsScreen(engine)
             Screen.FILTERS -> FiltersScreen(engine)
+            Screen.STRUCTURES -> StructuresScreen(engine)
+            Screen.INVIEW -> InViewScreen(engine)
             Screen.HELP -> HelpScreen()
             Screen.SCALE -> ScaleScreen(engine)
             Screen.CREDITS -> CreditsScreen(version)

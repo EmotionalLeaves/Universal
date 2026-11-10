@@ -70,6 +70,7 @@ uniform float uHide;       // index of a point to hide (system star), -1 = none
 uniform float uWorldSize;  // > 0: glow mode, each point is a soft blob this many metres across
 uniform float uPxPerRad;   // pixels per radian (glow mode)
 uniform float uGlowGain;
+uniform vec4 uClip;        // show only inside this sphere: centre minus camera (metres), radius (0 = off)
 out vec4 vColor;
 out float vSize;
 void main() {
@@ -92,6 +93,10 @@ void main() {
     if (uFadeNear > 0.0) fade *= smoothstep(uFadeNear * 0.4, uFadeNear, d);
     if (uFadeFar > 0.0) fade *= 1.0 - smoothstep(uFadeFar * 0.5, uFadeFar, d);
     if (float(gl_VertexID) == uHide) fade = 0.0;
+    if (uClip.w > 0.0) {
+        vec3 q = (p - uClip.xyz) / uClip.w;
+        if (dot(q, q) > 1.0) fade = 0.0;
+    }
     vColor = vec4(aColor.rgb, a * fade * uAlpha);
     gl_PointSize = size;
     vSize = size;

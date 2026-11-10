@@ -2,6 +2,7 @@ package com.emotionalleaves.universe.engine
 
 import kotlin.math.pow
 import kotlin.math.max
+import com.emotionalleaves.universe.core.Prof
 import com.emotionalleaves.universe.core.UPos
 import com.emotionalleaves.universe.core.Units
 import com.emotionalleaves.universe.core.Vec3d
@@ -81,8 +82,18 @@ class World(private val engine: Engine) {
 
     private fun updateNearest(cam: UPos, dt: Double) {
         nearestTimer += dt
-        if (nearestTimer < 0.25) return
+        if (nearestTimer < 0.25 || scanBusy) return
         nearestTimer = 0.0
+        // Off the drawing thread: scanning every galaxy and body took a frame or more, four times a second.
+        scanBusy = true
+        scanExec.execute { try { scanNearest(cam) } catch (e: Throwable) { ErrorLog.record("nearest", e) } finally { scanBusy = false } }
+    }
+
+    private val scanExec = java.util.concurrent.Executors.newSingleThreadExecutor { r -> Thread(r, "world-scan").apply { isDaemon = true; priority = Thread.NORM_PRIORITY - 1 } }
+    @Volatile private var scanBusy = false
+    @Volatile private var nearScanBusy = false
+
+    private fun scanNearest(cam: UPos) {
         var best = Double.MAX_VALUE
         var bestBody: Body? = null
         // A few nearest things, for "go to the nearest" in free flight (field galaxies by id, built only if kept).
@@ -95,7 +106,7 @@ class World(private val engine: Engine) {
         fun consider(b: Body, d: Double) { if (d < best) { best = d; bestBody = b }; keep(b, d) }
         val jd = engine.jd
         for (b in solar) consider(b, (b.position(jd) - cam).length() - b.radius)
-        for (b in Famous.all) if (b.kind != Kind.VOID && b.kind != Kind.SUPERCLUSTER) consider(b, (b.position(jd) - cam).length() - b.radius)
+        for (b in Famous.all) if (b.kind != Kind.VOID && b.kind != Kind.SUPERCLUSTER && b.kind != Kind.GALAXY_CLUSTER) consider(b, (b.position(jd) - cam).length() - b.radius)
         activeSystem?.let { s ->
             consider(s.star, (s.star.pos - cam).length() - s.star.radius)
             for (p in s.planets) { consider(p, (p.position(jd) - cam).length() - p.radius); for (m in p.moons) consider(m, (m.position(jd) - cam).length() - m.radius) }
@@ -372,14 +383,20 @@ class World(private val engine: Engine) {
         updateField(cam)
         fieldTimer += 0.3
         if (fieldTimer >= 1.5) { fieldTimer = 0.0; registerNearField(cam) }
-        val list = galaxies
-        val cand = ArrayList<Pair<GalaxyBody, Double>>()
-        for (g in list) {
-            val f = (g.center - cam).length() / g.radius
-            if (f < 40) cand.add(g to f)
+        if (nearScanBusy) return
+        nearScanBusy = true
+        scanExec.execute {
+            try {
+                val list = galaxies
+                val cand = ArrayList<Pair<GalaxyBody, Double>>()
+                for (g in list) {
+                    val f = (g.center - cam).length() / g.radius
+                    if (f < 40) cand.add(g to f)
+                }
+                cand.sortBy { it.second }
+                nearGalaxies = cand.take(4).map { it.first }
+            } catch (e: Throwable) { ErrorLog.record("near galaxies", e) } finally { nearScanBusy = false }
         }
-        cand.sortBy { it.second }
-        nearGalaxies = cand.take(4).map { it.first }
     }
 
     private fun updateGenerated(cam: UPos, dt: Double) {
@@ -813,15 +830,15 @@ class World(private val engine: Engine) {
 
     fun update(engine: Engine, dt: Double) {
         val cam = synchronized(engine.camera) { engine.camera.position() }
-        updateGaia(cam, dt)
-        updateNearGalaxies(cam, dt)
-        updateGenerated(cam, dt)
-        updateRocks(cam, dt)
-        updateNearest(cam, dt)
+        Prof.time("w.gaia") { updateGaia(cam, dt) }
+        Prof.time("w.nearGalaxies") { updateNearGalaxies(cam, dt) }
+        Prof.time("w.generated") { updateGenerated(cam, dt) }
+        Prof.time("w.rocks") { updateRocks(cam, dt) }
+        Prof.time("w.nearest") { updateNearest(cam, dt) }
         systemTimer += dt
         if (systemTimer > 0.25) {
             systemTimer = 0.0
-            updateActiveSystem()
+            Prof.time("w.activeSystem") { updateActiveSystem() }
         }
     }
 

@@ -132,6 +132,8 @@ fun ZoomSlider(engine: Engine, modifier: Modifier = Modifier) {
     // Recomputed each time: the zoom range grows when "beyond the observable universe" is on.
     val presets = engine.zoomPresets.filter { it.second <= engine.camera.maxDistance() }.map { (n, alt) -> n to engine.zoomFractionFor(alt) }
     fun jump(f: Float) { Hud.zoomFraction = f; engine.setZoomFraction(f) }
+    // Taps glide there smoothly; only dragging follows the finger directly.
+    fun glide(f: Float) { engine.setZoomFraction(f, smooth = true) }
     Box(
         modifier
             .fillMaxWidth()
@@ -151,7 +153,7 @@ fun ZoomSlider(engine: Engine, modifier: Modifier = Modifier) {
                         .offset { androidx.compose.ui.unit.IntOffset(x, y) }
                         .onSizeChanged { widths[name] = it.width }
                         .background(if (near) Accent.copy(alpha = 0.18f) else Color(0x8C0E121D), RoundedCornerShape(8.dp))
-                        .clickable { jump(f) }
+                        .clickable { glide(f) }
                         .padding(horizontal = 6.dp, vertical = 2.dp),
                     color = if (near) Accent else TextDim,
                     fontSize = 11.sp,
@@ -173,7 +175,7 @@ fun ZoomSlider(engine: Engine, modifier: Modifier = Modifier) {
                             onDragCancel = { Hud.sliderDragging = false },
                         ) { change, _ -> jump((change.position.x / trackW).coerceIn(0f, 1f)) }
                     }
-                    .pointerInput(Unit) { detectTapGestures { o -> jump((o.x / trackW).coerceIn(0f, 1f)) } },
+                    .pointerInput(Unit) { detectTapGestures { o -> glide((o.x / trackW).coerceIn(0f, 1f)) } },
                 contentAlignment = Alignment.CenterStart,
             ) {
                 Box(Modifier.fillMaxWidth().height(4.dp).background(Color(0x55FFFFFF), RoundedCornerShape(2.dp)))
@@ -194,11 +196,35 @@ fun ZoomSlider(engine: Engine, modifier: Modifier = Modifier) {
     }
 }
 
+/** Opens the list of named things on screen: an easier way to pick something than hitting a dot. */
+@Composable
+fun InViewButton(modifier: Modifier = Modifier) {
+    IconButton(G.TARGET, modifier, label = "In view") { Nav.screen = Screen.INVIEW }
+}
+
+/** Shown while one structure is displayed on its own; the ✕ brings everything back. */
+@Composable
+fun IsolatedChip(engine: Engine, modifier: Modifier = Modifier) {
+    if (Hud.isolatedName.isEmpty()) return
+    Row(
+        modifier.background(Accent.copy(alpha = 0.92f), RoundedCornerShape(12.dp)).clickable { engine.isolate(null) }
+            .semantics { contentDescription = "Show everything" }.padding(horizontal = 10.dp, vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(Modifier.weight(1f, fill = false)) {
+            Text("SHOWING ONLY", color = AccentInk, fontSize = 9.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.8.sp)
+            Text(Hud.isolatedName, color = AccentInk, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
+        Spacer(Modifier.width(8.dp))
+        Glyph(G.CLOSE, size = 14.dp, color = AccentInk)
+    }
+}
+
 /** Opens the view filters; lit up while anything is hidden. */
 @Composable
 fun FiltersButton(engine: Engine, modifier: Modifier = Modifier) {
     val hidden = remember(FiltersUi.version) { engine.settings.filters.hiddenCount() }
-    IconButton(G.SLIDERS, modifier, active = hidden > 0, label = "Filters") { Nav.screen = Screen.FILTERS }
+    IconButton(G.SLIDERS, modifier, active = hidden > 0 || Hud.isolatedName.isNotEmpty(), label = "Filters") { Nav.screen = Screen.FILTERS }
 }
 
 @Composable
@@ -347,14 +373,18 @@ fun InfoCard(engine: Engine, modifier: Modifier = Modifier) {
                     Glyph(if (expanded) G.CHEVRON_UP else G.CHEVRON_DOWN, size = 14.dp, color = Accent)
                 }
             }
-            Row(Modifier.padding(top = 10.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+            // Every action says what it does (they used to be bare icons); swipe the row for more.
+            Row(
+                Modifier.padding(top = 10.dp).horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically,
+            ) {
                 Button("Fly to", glyph = G.FLY, primary = true) { mini = true; expanded = false; restoreOnArrival = true; engine.flyToSelected() }
-                Spacer(Modifier.weight(1f))
-                if (Hud.selectedWidth > 0) IconButton(G.RULER, size = 40.dp, label = "Compare size") {
+                if (Hud.canIsolate) Button("Show only this", glyph = G.TARGET) { mini = true; expanded = false; restoreOnArrival = true; engine.isolateSelected() }
+                if (Hud.selectedWidth > 0) Button("Compare size", glyph = G.RULER) {
                     ScaleUi.openFor(Triple(Hud.selectedName, Hud.selectedWidth, Hud.selectedId)); Nav.screen = Screen.SCALE
                 }
-                IconButton(G.UP, size = 40.dp) { engine.goUp() }
-                IconButton(G.BOOKMARK, size = 40.dp) {
+                Button("Zoom out", glyph = G.UP) { engine.goUp() }
+                Button("Save", glyph = G.BOOKMARK) {
                     val n = engine.addBookmark()
                     BookmarksUi.toast = "Saved \u201c$n\u201d to bookmarks"
                 }

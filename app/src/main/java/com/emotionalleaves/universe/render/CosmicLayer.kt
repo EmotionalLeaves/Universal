@@ -24,17 +24,15 @@ class CosmicLayer : Layer {
     var showCmb = true
     private var web: CosmicWebData? = null
     private var webBatch: PointBatch? = null
-    private var glade: GladePack? = null
     private var outer: CosmicWebData? = null
     private var outerBatch: PointBatch? = null
-    private var gladeBatch: PointBatch? = null
     /** Streamed faint GLADE+ galaxies, one batch per loaded group. */
     private val tileBatches = LinkedHashMap<com.emotionalleaves.universe.engine.GalaxyTiles.Group, PointBatch>()
     var daylight = 0f
     var drawFraction = 1.0
 
     override fun init(rc: RenderContext) {
-        web = null; webBatch = null; glade = null; gladeBatch = null; outer = null; outerBatch = null
+        web = null; webBatch = null; gladeLoader.reset(); outer = null; outerBatch = null; tileBatches.clear()
     }
 
     fun exposure(frame: Frame): Float = Exposure.of(frame)
@@ -60,25 +58,28 @@ class CosmicLayer : Layer {
             // One upload per frame keeps the frame rate smooth.
             groups.firstOrNull { it !in tileBatches }?.let { g ->
                 val d = g.data
-                tileBatches[g] = PointBatch.uploadStrided(UPos.ZERO, Units.MPC, g.count) { i, out, at ->
+                val order = g.chunks.order
+                tileBatches[g] = PointBatch.uploadStrided(UPos.ZERO, Units.MPC, g.count) { k, out, at ->
+                    val i = if (order != null) order[k] else k
                     out[at] = d[i * 4]; out[at + 1] = d[i * 4 + 1]; out[at + 2] = d[i * 4 + 2]
                     out[at + 3] = 0.92f; out[at + 4] = 0.9f; out[at + 5] = 1f; out[at + 6] = d[i * 4 + 3]
-                }
+                }.also { if (order != null) it.chunks = g.chunks }
             }
         }
         val g = rc.engine.world.glade
-        if (g !== glade) {
-            gladeBatch?.release()
-            gladeBatch = g?.let { gp ->
-                val d = gp.data
-                PointBatch.uploadStrided(UPos.ZERO, Units.MPC, gp.count) { i, out, at ->
-                    out[at] = d[i * 4]; out[at + 1] = d[i * 4 + 1]; out[at + 2] = d[i * 4 + 2]
-                    out[at + 3] = 0.92f; out[at + 4] = 0.9f; out[at + 5] = 1f; out[at + 6] = d[i * 4 + 3]
-                }
-            }
-            glade = g
+        val d = g?.data
+        gladeLoader.update(
+            g, g?.count ?: 0, UPos.ZERO, Units.MPC,
+            { d!![it * 4] }, { d!![it * 4 + 1] }, { d!![it * 4 + 2] }, { d!![it * 4 + 3] },
+        ) { i, out, at ->
+            out[at] = d!![i * 4]; out[at + 1] = d[i * 4 + 1]; out[at + 2] = d[i * 4 + 2]
+            out[at + 3] = 0.92f; out[at + 4] = 0.9f; out[at + 5] = 1f; out[at + 6] = d[i * 4 + 3]
         }
     }
+
+    private val gladeLoader = ChunkedLoader<GladePack>()
+    private val glade get() = gladeLoader.shown
+    private val gladeBatch get() = gladeLoader.batch
 
     /** Fraction of the GLADE+ pack drawn: all of it up to ~1.5 Gpc views, an even sample beyond. */
     private fun gladeShare(frame: Frame): Double {
@@ -144,8 +145,7 @@ class CosmicLayer : Layer {
         if (showReal) gladeBatch?.let {
             // Zoomed far out, the real catalogue (dense around us) is thinned to an even sample, so it
             // doesn't burn into a white ball next to the generated rest of the universe.
-            it.limit = (it.count * gladeShare(frame)).toInt()
-            rc.drawer.points(frame, it, exp + 1.5f, 2.2f, 0.85f * day, minSize = 1.3f, maxSize = 5f)
+            rc.drawer.points(frame, it, exp + 1.5f, 2.2f, 0.85f * day, minSize = 1.3f, maxSize = 5f, share = gladeShare(frame).toFloat())
         }
         if (showReal) for (b in tileBatches.values) rc.drawer.points(frame, b, exp + 1.5f, 2.2f, 0.85f * day, minSize = 1.3f, maxSize = 5f)
         if (showGenerated) webBatch?.let { rc.drawer.points(frame, it, exp + 1.5f + boost, 2.2f, 0.95f * day, minSize = 1.3f, maxSize = 5f) }

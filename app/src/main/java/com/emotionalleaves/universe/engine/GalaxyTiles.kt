@@ -19,6 +19,8 @@ class GalaxyTiles(private val cacheDir: File) {
     /** Loaded galaxies: 4 floats each (x, y, z Mpc, absolute B) and PGC numbers. */
     class Group(val tier: Int, val keys: List<Long>, val center: Vec3d, val data: FloatArray, val pgc: IntArray) {
         val count get() = pgc.size
+        /** Drawing index (built here, on the loading thread): only the part in view gets drawn. */
+        val chunks: ChunkIndex = ChunkIndex.build(pgc.size, 2048, { data[it * 4] }, { data[it * 4 + 1] }, { data[it * 4 + 2] }, { data[it * 4 + 3] })
     }
 
     @Volatile private var tiers: List<Tier> = emptyList()

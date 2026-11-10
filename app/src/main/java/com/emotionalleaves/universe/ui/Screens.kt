@@ -37,7 +37,7 @@ import com.emotionalleaves.universe.engine.Engine
 import com.emotionalleaves.universe.engine.PackState
 import java.util.Locale
 
-enum class Screen { NONE, EXPLORE, CENSUS, MENU, DATA, SETTINGS, SEARCH, BOOKMARKS, HELP, CREDITS, SCALE, FILTERS }
+enum class Screen { NONE, EXPLORE, CENSUS, MENU, DATA, SETTINGS, SEARCH, BOOKMARKS, HELP, CREDITS, SCALE, FILTERS, STRUCTURES, INVIEW }
 
 /** Which overlay screen is open. */
 object Nav {
@@ -453,6 +453,20 @@ fun FiltersScreen(engine: Engine) {
     val vf = engine.settings.filters
     val v = FiltersUi.version
     Panel("What's shown", { Nav.screen = Screen.NONE }) {
+        // One structure on its own.
+        Overline("One place on its own", Modifier.padding(bottom = 4.dp))
+        if (Hud.isolatedName.isNotEmpty()) {
+            Text("Showing only: ${Hud.isolatedName}", style = Type.Body)
+            Row(Modifier.padding(vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                PillButton("Show everything", primary = true) { engine.isolate(null) }
+                PillButton("Pick another") { Nav.screen = Screen.STRUCTURES }
+            }
+        } else {
+            Text("See a single supercluster, void, galaxy cluster or galaxy with everything else hidden.", style = Type.Caption)
+            Row(Modifier.padding(vertical = 8.dp)) { Button("Pick a structure", glyph = G.TARGET) { Nav.screen = Screen.STRUCTURES } }
+            Text("Or select anything such as a galaxy or cluster and tap \u201cShow only this\u201d on its card.", style = Type.Caption)
+        }
+        Overline("Kinds of things", Modifier.padding(top = 16.dp, bottom = 4.dp))
         Text("Pick what to see. Hidden things can't be tapped or labelled either; switching back is instant.", style = Type.Caption)
         Row(Modifier.padding(vertical = 10.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             PillButton("Everything", primary = vf.hiddenCount() == 0) { vf.showAll(); FiltersUi.version++ }
@@ -479,6 +493,48 @@ fun FiltersScreen(engine: Engine) {
                 Switch(checked = on, onCheckedChange = { vf.set(f, it); FiltersUi.version++ })
             }
         }
+    }
+}
+
+/** Structures that can be shown on their own: superclusters, voids, clusters and groups, our galaxy. */
+@Composable
+fun StructuresScreen(engine: Engine) {
+    val all = androidx.compose.runtime.remember { com.emotionalleaves.universe.engine.Famous.all }
+    Panel("Show only one place", { Nav.screen = Screen.FILTERS }) {
+        Text("Everything outside the place you pick is hidden, and you fly out to see it whole. Edges are approximate: real structures are ragged, these are spheres around them.", style = Type.Caption)
+        if (Hud.isolatedName.isNotEmpty()) {
+            Row(Modifier.padding(top = 10.dp)) { PillButton("Show everything again", primary = true) { engine.isolate(null); Nav.screen = Screen.NONE } }
+        }
+        fun pick(b: com.emotionalleaves.universe.engine.Body) { engine.isolate(b); Nav.screen = Screen.NONE }
+        Overline("Home", Modifier.padding(top = 16.dp, bottom = 2.dp))
+        ListRow("Milky Way", "Our galaxy on its own", glyph = G.GALAXY) { engine.world.find("gal:milkyway")?.let { pick(it) } }
+        val kinds = listOf(
+            "Galaxy groups & clusters" to com.emotionalleaves.universe.engine.Kind.GALAXY_CLUSTER,
+            "Superclusters & walls" to com.emotionalleaves.universe.engine.Kind.SUPERCLUSTER,
+            "Voids" to com.emotionalleaves.universe.engine.Kind.VOID,
+        )
+        for ((title, kind) in kinds) {
+            Overline(title, Modifier.padding(top = 16.dp, bottom = 2.dp))
+            val list = androidx.compose.runtime.remember(kind) {
+                all.filter { it.kind == kind }.sortedBy { (it.position(0.0) - com.emotionalleaves.universe.core.UPos.ZERO).length() }
+            }
+            for (b in list) ListRow(b.name, b.subtitle, glyph = if (kind == com.emotionalleaves.universe.engine.Kind.VOID) G.UNIVERSE else G.GALAXY) { pick(b) }
+        }
+    }
+}
+
+/** Everything with a name on screen right now, as a list: pick from it instead of hitting a small dot. */
+@Composable
+fun InViewScreen(engine: Engine) {
+    androidx.compose.runtime.DisposableEffect(Unit) {
+        Hud.wantInView = true
+        onDispose { Hud.wantInView = false }
+    }
+    Panel("In view", { Nav.screen = Screen.NONE }) {
+        Text("Named things on screen right now, most prominent first. Tap one to select it.", style = Type.Caption)
+        Spacer(Modifier.height(8.dp))
+        if (Hud.inView.isEmpty()) Text("Nothing with a name is in view. Zoom or turn, or use Search.", style = Type.BodyDim)
+        for ((name, id, detail) in Hud.inView) ListRow(name, detail) { engine.selectId(id); Nav.screen = Screen.NONE }
     }
 }
 
@@ -553,7 +609,10 @@ fun HelpScreen() {
         val items = listOf(
             "Look around" to "Drag with one finger to orbit whatever you are looking at.",
             "Zoom" to "Pinch, or drag the slider across the top. Left end = a low orbit over whatever you picked; right end = the whole universe.",
-            "Pick something" to "Tap a planet, star, nebula or galaxy to see its card; tap it again (or Fly to) to travel there. In crowded spots the card lists what else was under your finger under Also here.",
+            "Pick something" to "Tap a planet, star, nebula or galaxy, or its name, to see its card; tap it again (or Fly to) to travel there. A ring shows where your tap landed: gold if it picked something. In crowded spots the card lists what else was under your finger under Also here.",
+            "Too small to tap?" to "The target button (next to free flight) lists everything with a name on screen. Pick from the list instead.",
+            "Choose what's shown" to "The sliders button (top) switches kinds of things on and off: real galaxies, generated ones, stars, quasars and more. Real only hides everything made up.",
+            "One place on its own" to "In the same screen, Pick a structure shows a single supercluster, void, galaxy cluster or group with everything else hidden. Or select any galaxy or cluster and tap Show only this. The gold box at the top left brings everything back.",
             "Know more" to "Every card describes the object; tap Read more for the full story, its Wikipedia summary and figures: gravity, your weight there, star type, lifetime, habitable zone and more.",
             "How much is here?" to "Menu → What's in the universe counts the real objects in the app and what is generated as you travel.",
             "Everything is there" to "Tap anywhere on the glow of a galaxy (even the Milky Way band) to pick an actual star at that spot. Fly to it: it has planets. Between galaxies, millions of dwarf and distant galaxies appear around you as you travel.",
@@ -566,7 +625,7 @@ fun HelpScreen() {
             "Lost in space?" to "If you drift into empty space, tap Back to … under the name at the top left, or the home button.",
             "Find things" to "Search (magnifier, top right) finds planets, stars, exoplanets, asteroids, nebulae and galaxies by name or catalogue number (HIP, HD, NGC, M, PGC). Anything else with a name is looked up online (SIMBAD, NED, NASA JPL) and you can fly straight to it.",
             "Every known object" to "Data packs: download all ~1.5 million known asteroids (each on its real orbit), and turn on Gaia streaming to see the real stars around you anywhere near the Sun — 1.8 billion are available, loaded a neighbourhood at a time.",
-            "Save places" to "The bookmark button on any card. Generated places reopen exactly the same.",
+            "Save places" to "The Save button on any card. Generated places reopen exactly the same.",
             "Home" to "Flies back to Earth.",
         )
         for ((t, d) in items) {

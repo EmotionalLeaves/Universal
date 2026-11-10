@@ -202,7 +202,7 @@ class ExoticLayer : Layer {
 
     private fun exposure(frame: Frame): Float = Exposure.of(frame)
 
-    override fun init(rc: RenderContext) { src = null; psr = null; qso = null; gcl = null }
+    override fun init(rc: RenderContext) { src = null; psr = null; qso = null; gcl = null; mqLoader.reset() }
 
     private fun upload(list: List<ExoticBody>, unit: Double, mag: (ExoticBody) -> Double): PointBatch? {
         if (list.isEmpty()) return null
@@ -227,24 +227,25 @@ class ExoticLayer : Layer {
 
     private var mq: com.emotionalleaves.universe.engine.MilliquasDb? = null
 
+    /** The Milliquas million, indexed and uploaded in the background (replaces the built-in quasars). */
+    private val mqLoader = ChunkedLoader<com.emotionalleaves.universe.engine.MilliquasDb>()
+
     override fun update(frame: Frame, rc: RenderContext) {
         val m = rc.engine.world.milliquas
-        if (m !== mq) {
-            mq = m
-            qso?.release()
-            qso = if (m != null) {
-                PointBatch.uploadStrided(UPos.ZERO, Units.MPC, m.count) { i, out, at ->
-                    out[at] = m.xyz[i * 3]; out[at + 1] = m.xyz[i * 3 + 1]; out[at + 2] = m.xyz[i * 3 + 2]
-                    out[at + 3] = 0.78f; out[at + 4] = 0.85f; out[at + 5] = 1f; out[at + 6] = m.absMag(i).toFloat()
-                }
-            } else src?.let { upload(it.quasars, Units.MPC, ::absMag) }
+        mq = m
+        mqLoader.update(
+            m, m?.count ?: 0, UPos.ZERO, Units.MPC,
+            { m!!.xyz[it * 3] }, { m!!.xyz[it * 3 + 1] }, { m!!.xyz[it * 3 + 2] }, { m!!.absMag(it).toFloat() },
+        ) { i, out, at ->
+            out[at] = m!!.xyz[i * 3]; out[at + 1] = m.xyz[i * 3 + 1]; out[at + 2] = m.xyz[i * 3 + 2]
+            out[at + 3] = 0.78f; out[at + 4] = 0.85f; out[at + 5] = 1f; out[at + 6] = m.absMag(i).toFloat()
         }
         val ex = rc.engine.world.exotic
         if (ex === src) return
         src = ex
         psr?.release(); qso?.release(); gcl?.release()
         psr = upload(ex.pulsars, Units.PC, ::absMag)
-        if (mq == null) qso = upload(ex.quasars, Units.MPC, ::absMag)
+        qso = upload(ex.quasars, Units.MPC, ::absMag)
         gcl = upload(ex.clusters, Units.MPC, ::absMag)
     }
 
@@ -257,7 +258,7 @@ class ExoticLayer : Layer {
         // from afar (not as fake stars in the night sky), or when one is selected.
         val psrVis = pulsarMarkers(frame)
         if (showPulsars) psr?.let { if (psrVis > 0.01f) rc.drawer.points(frame, it, 7.2f + rc.engine.settings.starBrightness, 2.2f, 0.8f * day * psrVis, minSize = 1.2f, maxSize = 5f) }
-        if (showQuasars) qso?.let { rc.drawer.points(frame, it, exp - 2.4f, 2.2f, 0.9f * day, minSize = 1.1f, maxSize = 5f) }
+        if (showQuasars) (mqLoader.batch ?: qso)?.let { rc.drawer.points(frame, it, exp - 2.4f, 2.2f, 0.9f * day, minSize = 1.1f, maxSize = 5f) }
         if (showClusters) gcl?.let { rc.drawer.points(frame, it, exp, 2.6f, 0.9f * day, minSize = 1.4f, maxSize = 8f) }
         // Close up: a pulsar is a tiny white-hot ball with a glow; a quasar a blinding core.
         val ex = src
@@ -307,9 +308,11 @@ class ExoticLayer : Layer {
             val camMpc = (frame.camPos - UPos.ZERO) / Units.MPC
             var bi = -1
             for (i in 0 until m.count) {
-                val rel = Vec3d(m.xyz[i * 3] - camMpc.x, m.xyz[i * 3 + 1] - camMpc.y, m.xyz[i * 3 + 2] - camMpc.z)
-                val app = m.absMag(i) + 5 * log10(max(rel.length() * 1e6, 1.0)) - 5
+                // Plain numbers first: nearly all of the million are too faint, and making an object for each stalled the tap.
+                val dx = m.xyz[i * 3] - camMpc.x; val dy = m.xyz[i * 3 + 1] - camMpc.y; val dz = m.xyz[i * 3 + 2] - camMpc.z
+                val app = m.absMag(i) + 5 * log10(max(kotlin.math.sqrt(dx * dx + dy * dy + dz * dz) * 1e6, 1.0)) - 5
                 if (app > exp + 0.5) continue
+                val rel = Vec3d(dx, dy, dz)
                 val s = frame.project(rel * Units.MPC) ?: continue
                 val px = hypot((s.first - x).toDouble(), (s.second - y).toDouble())
                 if (px > reach) continue

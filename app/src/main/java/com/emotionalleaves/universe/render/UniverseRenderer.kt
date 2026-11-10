@@ -66,7 +66,18 @@ class UniverseRenderer(private val context: Context, private val engine: Engine)
         )
     }
 
-    private fun on(l: Layer) = layerFilter[l]?.let { engine.settings.filters.shown(it) } ?: true
+    private fun inRegion(b: Body, jd: Double): Boolean {
+        val r = engine.isolated ?: return true
+        return b === r.body || (b.position(jd) - r.center).length() <= r.radius
+    }
+
+    /** A structure is shown on its own and the solar system lies outside it. */
+    private var regionHidesHome = false
+
+    private fun on(l: Layer): Boolean {
+        if (engine.isolated != null && (l === hazeLayer || (regionHidesHome && (l === asteroidCloudLayer || l === solarLayer || l === smallBodyLayer)))) return false
+        return layerFilter[l]?.let { engine.settings.filters.shown(it) } ?: true
+    }
 
     override fun onSurfaceCreated(gl: GL10?, config: EGLConfig?) {
         textures.contextLost()
@@ -102,6 +113,7 @@ class UniverseRenderer(private val context: Context, private val engine: Engine)
         val dt = (t0 - lastTime).coerceIn(0.0, 0.1)
         lastTime = t0
         engine.update(dt, t0)
+        if (profile) perfAdd("engine.update", t0)
         textures.pump()
 
         val cam = engine.camera
@@ -154,6 +166,11 @@ class UniverseRenderer(private val context: Context, private val engine: Engine)
             galaxyLayer.showGlow = vf.shown(GALAXY_GLOW); galaxyLayer.showGenStars = vf.shown(GEN_STARS)
             galaxyCatalogLayer.showReal = vf.shown(REAL_GALAXIES); galaxyCatalogLayer.showGenerated = vf.shown(GEN_GALAXIES)
         }
+        // "Show only this structure": everything outside its sphere is left out.
+        val region = engine.isolated
+        ctx.drawer.clip = region?.let { val c = frame.rel(it.center); doubleArrayOf(c.x, c.y, c.z, it.radius) }
+        regionHidesHome = region != null && (region.center - UPos.ZERO).length() > region.radius
+        if (region != null) cosmicLayer.showCmb = false
         for (l in layers) if (on(l)) safely(l, "update") { l.update(frame, ctx) }
         diagTimer += dt
         val diag = diagTimer >= 3.0
@@ -173,27 +190,33 @@ class UniverseRenderer(private val context: Context, private val engine: Engine)
         for (l in layers) if (on(l)) safely(l, "collect") { l.collect(frame, ctx, picks) }
         // Labels and taps only for what is shown.
         picks.removeAll { !vf.shows(it.body) }
+        if (region != null) picks.removeAll { it.body !== region.body && (it.body.position(frame.jd) - region.center).length() > region.radius }
+        val tH = if (profile) now() else 0.0
         hideBehindWorlds(frame, picks)
+        if (profile) perfAdd("hideBehindWorlds", tH)
         engine.pickables = picks
         engine.takeTap()?.let { tap ->
             var body = engine.pick(tap.x, tap.y)?.body
             if (body == null) {
                 for (l in layers.asReversed()) {
                     if (!on(l)) continue
-                    body = try { l.pickAt(frame, ctx, tap.x, tap.y, engine.tapReach)?.takeIf { vf.shows(it) } } catch (e: Exception) {
+                    body = try { l.pickAt(frame, ctx, tap.x, tap.y, engine.tapReach)?.takeIf { vf.shows(it) && inRegion(it, frame.jd) } } catch (e: Exception) {
                         com.emotionalleaves.universe.engine.ErrorLog.record("${l.javaClass.simpleName}.pickAt", e); null
                     }
                     if (body != null) break
                 }
             }
             if (body == null) {
-                body = try { engine.world.starAlongRay(frame.camPos, frame.rayThrough(tap.x, tap.y))?.takeIf { vf.shows(it) } } catch (e: Exception) {
+                body = try { engine.world.starAlongRay(frame.camPos, frame.rayThrough(tap.x, tap.y))?.takeIf { vf.shows(it) && inRegion(it, frame.jd) } } catch (e: Exception) {
                     com.emotionalleaves.universe.engine.ErrorLog.record("starAlongRay", e); null
                 }
             }
             engine.applyTap(body, tap.double)
+            labelOverlay?.tapped(tap.x, tap.y, body != null)
         }
+        val tL = if (profile) now() else 0.0
         publishLabels(picks)
+        if (profile) perfAdd("publishLabels", tL)
 
         // Stats and HUD (a few times a second)
         frames++
@@ -208,7 +231,16 @@ class UniverseRenderer(private val context: Context, private val engine: Engine)
         }
         if (hudTimer >= 0.1) {
             hudTimer = 0.0
+            if (Hud.wantInView) {
+                val seen = HashSet<String>()
+                val list = picks.filter { it.showLabel || it.priority >= 3f }.sortedByDescending { it.priority }
+                    .filter { seen.add(it.body.id) }.take(60)
+                    .map { Triple(it.body.name, it.body.id, it.body.kind.label + " · " + Units.formatDistance((it.body.position(frame.jd) - frame.camPos).length()) + " away") }
+                Hud.post { Hud.inView = list }
+            }
+            val tP = if (profile) now() else 0.0
             publishHud(frame, target, focusDist)
+            if (profile) perfAdd("publishHud", tP)
         }
     }
 
@@ -264,7 +296,9 @@ class UniverseRenderer(private val context: Context, private val engine: Engine)
         val taken = ArrayList<FloatArray>()
         val named = HashSet<String>()
         val density = context.resources.displayMetrics.density
-        val sliderBox = floatArrayOf(width - 150 * density, height / 2f - 175 * density, width.toFloat(), height / 2f + 175 * density)
+        // The zoom scale and buttons along the top: no names under them.
+        val sliderBox = floatArrayOf(0f, 0f, width.toFloat(), 150 * density)
+        val boxes = ArrayList<Pair<FloatArray, Body>>()
         for (p in sorted) {
             if (out.size >= 28) break   // fewer names: a calmer, less cluttered view
             // Several layers may offer the same object (e.g. the selection): label it once.
@@ -274,9 +308,10 @@ class UniverseRenderer(private val context: Context, private val engine: Engine)
             val text = p.labelText ?: p.body.name
             val box = floatArrayOf(p.x, p.y - 16 * density, p.x + text.length * 7.5f * density, p.y)
             if (!sel && taken.any { overlaps(it, box) }) continue
-            // Keep the zoom scale on the right readable (and its labels tappable).
             if (!sel && overlaps(sliderBox, box)) continue
             taken.add(box)
+            val off = p.pixelRadius.coerceAtMost(200f) + 6 * density
+            boxes.add(floatArrayOf(p.x + off - 6 * density, p.y - 24 * density, p.x + off + text.length * 7.5f * density + 6 * density, p.y + 8 * density) to p.body)
             out.add(Label(p.x, p.y, text, if (sel) 0xFFFFD27A.toInt() else p.labelColor, sel, p.pixelRadius.coerceAtMost(200f)))
         }
         // Selected object off screen (or behind you): an arrow at the edge shows where it is.
@@ -291,6 +326,7 @@ class UniverseRenderer(private val context: Context, private val engine: Engine)
                 }
             }
         }
+        engine.labelBoxes = boxes
         overlay.labels = out
         overlay.refresh()
     }
@@ -358,6 +394,9 @@ class UniverseRenderer(private val context: Context, private val engine: Engine)
         }
         Hud.post {
             Hud.breadcrumb = crumb
+            val iso = engine.isolated
+            Hud.isolatedName = iso?.body?.name ?: ""
+            Hud.canIsolate = sel != null && iso?.body !== sel && engine.regionRadius(sel) != null
             Hud.dateText = date
             Hud.rateText = rate
             Hud.distanceText = Units.formatDistance(focusDist)
@@ -403,9 +442,20 @@ class UniverseRenderer(private val context: Context, private val engine: Engine)
     }
 
     /** One misbehaving layer must not take the whole app down: log it and keep drawing the rest. */
+    /** Profiling (tests): CPU milliseconds per layer and phase, summed and worst single frame. */
+    @Volatile var profile = false
+    val perf = HashMap<String, DoubleArray>()
+    fun perfAdd(key: String, t0: Double) {
+        val ms = (now() - t0) * 1000
+        val a = perf.getOrPut(key) { DoubleArray(2) }
+        a[0] += ms; if (ms > a[1]) a[1] = ms
+    }
+
     private inline fun safely(l: Layer, what: String, block: () -> Unit) {
+        val t0 = if (profile) now() else 0.0
         try {
             block()
+            if (profile) perfAdd("${l.javaClass.simpleName}.$what", t0)
         } catch (e: Exception) {
             com.emotionalleaves.universe.engine.ErrorLog.record("${l.javaClass.simpleName}.$what", e)
             rc?.drawer?.end()

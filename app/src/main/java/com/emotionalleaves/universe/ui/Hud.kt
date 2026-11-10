@@ -48,6 +48,14 @@ object Hud {
     var selectedStats by mutableStateOf<List<Pair<String, String>>>(emptyList())
     var selectedAboutCredit by mutableStateOf("")
     var loading by mutableStateOf("")
+    /** The selection is a place that can be shown on its own ("Show only this"). */
+    var canIsolate by mutableStateOf(false)
+    /** Name of the structure shown on its own ("" = everything is shown). */
+    var isolatedName by mutableStateOf("")
+    /** Named things on screen right now (name, id, kind and distance), for the "In view" list. */
+    var inView by mutableStateOf<List<Triple<String, String, String>>>(emptyList())
+    /** Set while the "In view" list is open (the renderer only fills [inView] then). */
+    @Volatile var wantInView = false
 
     var scaleBarText by mutableStateOf("")
     /** "≈ 3 × Earth": something familiar the scale bar is about as long as. */

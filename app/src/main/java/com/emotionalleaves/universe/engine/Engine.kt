@@ -161,7 +161,7 @@ class Engine(val context: Context) {
 
     fun update(dt: Double, now: Double) {
         if (!paused) jd += dt * timeRate / 86400.0
-        synchronized(camera) {
+        com.emotionalleaves.universe.core.Prof.time("e.camera") { synchronized(camera) {
             val before = camera.snapshot()
             freeFlightStep(dt)
             surfaceFollow()
@@ -177,7 +177,7 @@ class Engine(val context: Context) {
                     break
                 }
             }
-        }
+        } }
         world.update(this, dt)
     }
 
@@ -290,9 +290,10 @@ class Engine(val context: Context) {
         when {
             // Double tap, or tapping what is already selected: go there.
             body != null && (double || body == selected) -> { selected = body; flyTo(body) }
-            else -> selected = body
+            // A tap that hits nothing leaves the selection alone: in a universe this big most misses
+            // are near-misses, and losing the card each time was the annoying part. The card's ✕ closes it.
+            body != null -> selected = body
         }
-        if (body == null) tapChoices = emptyList()
     }
 
     /** Other things that were under the last tap (crowded spots): offered on the card. */
@@ -309,9 +310,15 @@ class Engine(val context: Context) {
 
     val tapReach: Float get() = 36f * density
 
+    /** Where each name is drawn (left, top, right, bottom in pixels): tapping a name picks its object. */
+    @Volatile var labelBoxes: List<Pair<FloatArray, Body>> = emptyList()
+
     fun pick(x: Float, y: Float): Pickable? {
         val reach = 40f * density
         val hits = ArrayList<Pair<Pickable, Double>>()
+        for ((box, body) in labelBoxes) {
+            if (x >= box[0] && x <= box[2] && y >= box[1] && y <= box[3]) hits.add(Pickable(body, x, y, 0f, 5f, true) to -30.0)
+        }
         for (p in pickables) {
             val d = hypot((p.x - x).toDouble(), (p.y - y).toDouble())
             val edge = (d - p.pixelRadius).coerceAtLeast(0.0)
@@ -673,17 +680,45 @@ class Engine(val context: Context) {
         selected = null
     }
 
+    /** A structure shown on its own: only what lies inside the sphere is drawn, labelled and tappable. */
+    class Region(val body: Body, val center: UPos, val radius: Double)
+
+    @Volatile var isolated: Region? = null
+        private set
+
+    /** The size of the region to show for [b] on its own, or null if it isn't a place with things inside. */
+    fun regionRadius(b: Body): Double? = when (b.kind) {
+        Kind.SUPERCLUSTER, Kind.VOID -> b.radius
+        Kind.GALAXY_CLUSTER -> if (b is FamousBody) b.radius else b.radius * 2.0
+        Kind.GALAXY -> b.radius * 1.6
+        Kind.CLUSTER, Kind.NEBULA -> b.radius * 1.5
+        else -> null
+    }
+
+    fun isolateSelected() { selected?.let { isolate(it) } }
+
+    /** Shows only [b] and what is inside it (and flies out to see it whole); null shows everything again. */
+    fun isolate(b: Body?) {
+        val r = b?.let { regionRadius(it) }
+        if (b == null || r == null) { isolated = null; return }
+        isolated = Region(b, b.position(jd), r)
+        selected = b
+        if (camera.freeFlight) setFreeFlight(false)
+        flyTo(b)
+    }
+
     /** Zoom slider on a log scale of height above the ground: 0 = standing, 1 = whole universe. */
     fun zoomFraction(): Float = synchronized(camera) {
         val lo = ln(minZoomAltitude()); val hi = ln(camera.maxDistance())
         ((ln(camera.altitude().coerceAtLeast(1.7)) - lo) / (hi - lo)).toFloat().coerceIn(0f, 1f)
     }
 
-    fun setZoomFraction(f: Float) {
+    fun setZoomFraction(f: Float, smooth: Boolean = false) {
         synchronized(camera) {
             val lo = ln(minZoomAltitude()); val hi = ln(camera.maxDistance())
             retargetIfAdrift()
-            camera.setDistance(camera.surfaceOf(camera.zoomTarget()) + exp(lo + (hi - lo) * f.coerceIn(0f, 1f)))
+            val d = camera.surfaceOf(camera.zoomTarget()) + exp(lo + (hi - lo) * f.coerceIn(0f, 1f))
+            if (smooth) camera.glideTo(d) else camera.setDistance(d)
         }
     }
 

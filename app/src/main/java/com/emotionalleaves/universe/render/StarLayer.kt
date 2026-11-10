@@ -32,6 +32,7 @@ class StarLayer : Layer {
         constellationMesh = null
         stars = null
         fallback = null
+        preparing.clear(); prepared.clear(); staging = null
     }
 
     override fun update(frame: Frame, rc: RenderContext) {
@@ -44,6 +45,7 @@ class StarLayer : Layer {
             stars = rs
             for (u in uploaded) u.batches.forEach { it.release() }
             uploaded.clear()
+            preparing.clear(); prepared.clear(); staging = null
             constellationMesh?.release()
             constellationMesh = buildConstellations(rs)
             consFor = rs.constellations
@@ -54,14 +56,41 @@ class StarLayer : Layer {
             constellationMesh?.release()
             constellationMesh = buildConstellations(rs)
         }
-        // Upload any catalogues (base or newly downloaded packs) not on the GPU yet.
-        for (c in rs.allCatalogs()) {
-            if (uploaded.any { it.catalog === c }) continue
-            uploaded.add(Uploaded(c, mergeTiles(c)))
-            break // one catalogue per frame
+        // Catalogues (base, downloaded packs, streamed Gaia cells) not on the GPU yet are merged and
+        // indexed on a background thread, then uploaded a slice per frame: no frozen frames.
+        val live = rs.allCatalogs()
+        for (c in live) {
+            if (uploaded.any { it.catalog === c } || preparing.contains(c)) continue
+            preparing.add(c)
+            ChunkedLoader.worker.execute {
+                val parts = try { prepare(c) } catch (e: Throwable) { com.emotionalleaves.universe.engine.ErrorLog.record("preparing stars", e); emptyList() }
+                prepared.add(c to parts)
+            }
+        }
+        var budget = 150_000
+        while (budget > 0) {
+            if (staging == null) {
+                val (c, parts) = prepared.poll() ?: break
+                staging = Staging(c, parts.map { p ->
+                    val d = p.data
+                    PointBatch.Staged(UPos.ZERO + p.anchor * Units.PC, Units.PC, d.size / 7, p.index) { i, out, at -> System.arraycopy(d, i * 7, out, at, 7) }
+                })
+            }
+            val st = staging!!
+            while (budget > 0 && st.done.size < st.parts.size) {
+                val part = st.parts[st.done.size]
+                val b = part.step(budget)
+                budget -= part.count.coerceAtMost(budget)
+                if (b == null) break
+                st.done.add(b)
+            }
+            if (st.done.size < st.parts.size) break
+            preparing.remove(st.catalog)
+            if (live.any { it === st.catalog } && stars === rs && uploaded.none { it.catalog === st.catalog }) uploaded.add(Uploaded(st.catalog, st.done))
+            else st.done.forEach { it.release() }
+            staging = null
         }
         // Drop catalogues whose pack was deleted.
-        val live = rs.allCatalogs()
         val gone = uploaded.filter { u -> live.none { it === u.catalog } }
         for (g in gone) { g.batches.forEach { it.release() }; uploaded.remove(g) }
     }
@@ -150,7 +179,15 @@ class StarLayer : Layer {
      * Merges the 200 pc catalogue tiles into ~1,600 pc super-tiles so a catalogue costs tens of draw
      * calls instead of thousands (offsets stay small enough for float precision).
      */
-    private fun mergeTiles(c: StarCatalog): List<PointBatch> {
+    private class Part(val anchor: com.emotionalleaves.universe.core.Vec3d, val data: FloatArray, val index: com.emotionalleaves.universe.engine.ChunkIndex)
+    private class Staging(val catalog: StarCatalog, val parts: List<PointBatch.Staged>, val done: MutableList<PointBatch> = ArrayList())
+
+    private val preparing: MutableSet<StarCatalog> = java.util.Collections.newSetFromMap(java.util.IdentityHashMap())
+    private val prepared = java.util.concurrent.ConcurrentLinkedQueue<Pair<StarCatalog, List<Part>>>()
+    private var staging: Staging? = null
+
+    /** Merges a catalogue's tiles into 1,600 pc blocks and indexes each for culling (background thread). */
+    private fun prepare(c: StarCatalog): List<Part> {
         val groups = LinkedHashMap<Triple<Int, Int, Int>, MutableList<com.emotionalleaves.universe.engine.StarTile>>()
         val size = 1600.0
         for (t in c.tiles) {
@@ -173,7 +210,7 @@ class StarLayer : Layer {
                     o += 7
                 }
             }
-            PointBatch.upload(UPos.ZERO + anchor * Units.PC, Units.PC, data)
+            Part(anchor, data, com.emotionalleaves.universe.engine.ChunkIndex.build(total, 2048, { data[it * 7] }, { data[it * 7 + 1] }, { data[it * 7 + 2] }, { data[it * 7 + 6] }))
         }
     }
 

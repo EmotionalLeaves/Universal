@@ -56,7 +56,7 @@ class FamousLayer : Layer {
                 }
                 Kind.STAR -> rc.drawer.glow(frame, rel, b.radius * 2.0, floatArrayOf(c[0], c[1] * 0.8f, c[2] * 0.65f), 0.3f, minPixels = 3.0)
                 Kind.GALAXY -> rc.drawer.glow(frame, rel, b.radius * 3, floatArrayOf(0.85f, 0.85f, 1f), 0.6f, minPixels = 3.0)
-                Kind.GALAXY_CLUSTER -> rc.drawer.glow(frame, rel, b.radius * 1.2, floatArrayOf(1f, 0.85f, 0.65f), (0.25 * kotlin.math.min(1.0, d / (b.radius * 3))).toFloat(), minPixels = 3.0)
+                Kind.GALAXY_CLUSTER -> if (d > 200 * com.emotionalleaves.universe.core.Units.MPC) rc.drawer.glow(frame, rel, b.radius * 1.2, floatArrayOf(1f, 0.85f, 0.65f), (0.25 * kotlin.math.min(1.0, d / (b.radius * 3))).toFloat(), minPixels = 3.0)
                 Kind.SPACECRAFT -> rc.drawer.glow(frame, rel, 0.0, floatArrayOf(0.9f, 0.95f, 1f), 0.7f, minPixels = 4.0)
                 else -> {}
             }
@@ -70,10 +70,11 @@ class FamousLayer : Layer {
             val s = frame.project(frame.rel(b.position(frame.jd))) ?: continue
             val px = frame.pixelSize(b.radius, d).toFloat()
             // Voids and superclusters are named only when you are out at their scale.
-            val big = b.kind == Kind.VOID || b.kind == Kind.SUPERCLUSTER
+            val big = b.kind == Kind.VOID || b.kind == Kind.SUPERCLUSTER || (b.kind == Kind.GALAXY_CLUSTER && b.radius > 1e22)
             // Others are named once you are zoomed out to a scale where they matter (or are close).
             val label = b == sel || if (big) frame.focusDistance > b.radius * 0.5 && px < 600f else px > 3f || frame.focusDistance > d * 0.02
-            out.add(Pickable(b, s.first, s.second, kotlin.math.max(px, 7f), if (b == sel) 6f else 3.5f, label, 0xFF000000.toInt() or b.color))
+            // A region's tap target is its name, not its whole extent (it swallowed taps on everything inside).
+            out.add(Pickable(b, s.first, s.second, if (big) 10f else kotlin.math.max(px, 7f), if (b == sel) 6f else if (big) 1.5f else 3.5f, label, 0xFF000000.toInt() or b.color))
         }
     }
 }

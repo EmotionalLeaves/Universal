@@ -66,10 +66,28 @@ class LabelOverlay(context: Context) : View(context) {
         canvas.drawText(l.text, tx, py + 5f * density, paint)
     }
 
+    @Volatile private var tapX = 0f
+    @Volatile private var tapY = 0f
+    @Volatile private var tapTime = 0L
+    @Volatile private var tapHit = false
+
+    /** Shows a short ripple where a tap landed: gold when it picked something, grey when nothing was there. */
+    fun tapped(x: Float, y: Float, hit: Boolean) {
+        tapX = x; tapY = y; tapHit = hit; tapTime = android.os.SystemClock.uptimeMillis()
+        postInvalidateOnAnimation()
+    }
+
     /** Call from any thread after updating [labels]. */
     fun refresh() = postInvalidateOnAnimation()
 
     override fun onDraw(canvas: Canvas) {
+        val age = (android.os.SystemClock.uptimeMillis() - tapTime) / 450f
+        if (age in 0f..1f) {
+            val a = ((1f - age) * (if (tapHit) 200 else 130)).toInt()
+            ring.color = (a shl 24) or (if (tapHit) 0xFFD27A else 0xC8D0E0)
+            canvas.drawCircle(tapX, tapY, (10f + 26f * age) * density, ring)
+            postInvalidateOnAnimation()
+        }
         val list = labels
         for (l in list) {
             if (l.edge) {

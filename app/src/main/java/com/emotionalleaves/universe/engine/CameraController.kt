@@ -97,6 +97,7 @@ class CameraController {
     fun zoom(factor: Float) {
         if (factor <= 0f) return
         val f = factor.toDouble().pow(ZOOM_POWER)
+        distanceGoal = null
         val fl = flight
         if (fl != null) {
             // Zooming while flying changes how close you will arrive; it never cancels the trip.
@@ -116,9 +117,21 @@ class CameraController {
 
     /** Sets the distance directly (used by the zoom slider). */
     fun setDistance(d: Double) {
+        distanceGoal = null
         val fl = flight
         if (fl != null) { fl.d1 = clamp(d, minDistanceFor(fl.body), maxDistance()); return }
         distance = clamp(d, minDistance(), maxDistance())
+    }
+
+    /** Where a smooth zoom is heading (null = not gliding). */
+    private var distanceGoal: Double? = null
+
+    /** Zooms smoothly to [d] over about a second (taps on the zoom scale), instead of jumping. */
+    fun glideTo(d: Double) {
+        val fl = flight
+        if (fl != null) { fl.d1 = clamp(d, minDistanceFor(fl.body), maxDistance()); return }
+        zoomVel = 0.0
+        distanceGoal = clamp(d, minDistance(), maxDistance())
     }
 
     // ---------------------------------------------------------------- free flight
@@ -270,6 +283,11 @@ class CameraController {
         if (abs(zoomVel) > 1e-4) {
             scaleAltitude(exp(zoomVel * dt))
             zoomVel *= exp(-dt * 6.0)
+        }
+        distanceGoal?.let { g ->
+            val l = ln(distance); val lg = ln(g)
+            if (abs(lg - l) < 0.004) { distance = g; distanceGoal = null }
+            else distance = exp(l + (lg - l) * (1 - exp(-dt * 5.0)))
         }
         if (distance < minDistance()) distance = minDistance()
     }

@@ -132,12 +132,77 @@ class PointBatch(
     /** First point to draw (the rest before it are skipped). */
     var first = 0
 
+    /** When set, points are in chunk order and only the ranges it selects are drawn (see [ChunkIndex]). */
+    var chunks: com.emotionalleaves.universe.engine.ChunkIndex? = null
+
     fun draw() {
+        val ch = chunks
+        if (ch != null) {
+            if (ch.rangeCount == 0) return
+            GLES30.glBindVertexArray(vao)
+            val r = ch.ranges
+            for (i in 0 until ch.rangeCount) GLES30.glDrawArrays(GLES30.GL_POINTS, r[i * 2], r[i * 2 + 1])
+            GLES30.glBindVertexArray(0)
+            return
+        }
         val n = limit.coerceIn(0, count) - first
         if (n <= 0) return
         GLES30.glBindVertexArray(vao)
         GLES30.glDrawArrays(GLES30.GL_POINTS, first, n)
         GLES30.glBindVertexArray(0)
+    }
+
+    /**
+     * A big batch uploaded a slice per frame, so the picture never freezes while millions of points
+     * go to the GPU. Call [step] every frame until it returns the finished batch.
+     */
+    class Staged(
+        private val anchor: com.emotionalleaves.universe.core.UPos, private val unit: Double, val count: Int,
+        private val index: com.emotionalleaves.universe.engine.ChunkIndex?,
+        private val fill: (i: Int, out: FloatArray, at: Int) -> Unit,
+    ) {
+        private var vao = 0
+        private var vbo = 0
+        private var done = 0
+        private val per = 1 shl 15
+        private val tmp = FloatArray(per * 7)
+        private val buf = java.nio.ByteBuffer.allocateDirect(per * 28).order(java.nio.ByteOrder.nativeOrder()).asFloatBuffer()
+
+        fun step(maxPoints: Int): PointBatch? {
+            if (vbo == 0) {
+                vao = Gl.genVao(); vbo = Gl.genBuffer()
+                GLES30.glBindBuffer(GLES30.GL_ARRAY_BUFFER, vbo)
+                GLES30.glBufferData(GLES30.GL_ARRAY_BUFFER, count * 28, null, GLES30.GL_STATIC_DRAW)
+                Gl.uploadedBytes += count * 28L
+            }
+            GLES30.glBindBuffer(GLES30.GL_ARRAY_BUFFER, vbo)
+            val order = index?.order
+            var budget = maxPoints
+            while (done < count && budget > 0) {
+                val n = minOf(per, count - done)
+                for (k in 0 until n) fill(if (order != null) order[done + k] else done + k, tmp, k * 7)
+                buf.clear(); buf.put(tmp, 0, n * 7); buf.position(0)
+                GLES30.glBufferSubData(GLES30.GL_ARRAY_BUFFER, done * 28, n * 28, buf)
+                done += n; budget -= n
+            }
+            if (done < count) return null
+            GLES30.glBindVertexArray(vao)
+            GLES30.glBindBuffer(GLES30.GL_ARRAY_BUFFER, vbo)
+            val stride = 7 * 4
+            GLES30.glEnableVertexAttribArray(0)
+            GLES30.glVertexAttribPointer(0, 3, GLES30.GL_FLOAT, false, stride, 0)
+            GLES30.glEnableVertexAttribArray(1)
+            GLES30.glVertexAttribPointer(1, 3, GLES30.GL_FLOAT, false, stride, 12)
+            GLES30.glVertexAttrib4f(1, 1f, 1f, 1f, 1f)
+            GLES30.glEnableVertexAttribArray(2)
+            GLES30.glVertexAttribPointer(2, 1, GLES30.GL_FLOAT, false, stride, 24)
+            GLES30.glBindVertexArray(0)
+            index?.release()
+            return PointBatch(anchor, unit, count, vao, vbo).also { it.chunks = index }
+        }
+
+        /** Abandons a half-finished upload. */
+        fun cancel() { if (vbo != 0) { Gl.deleteVao(vao); Gl.deleteBuffer(vbo); vbo = 0 } }
     }
 
     fun release() {

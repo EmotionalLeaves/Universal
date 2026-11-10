@@ -135,7 +135,8 @@ class UniverseView(context: Context, private val engine: Engine) : GLSurfaceView
                 if (e.pointerCount == 2) { twoFinger = false; moved = TAP_SLOP_PX * 10 }
             }
             MotionEvent.ACTION_UP -> {
-                val quick = e.eventTime - downTime < 300
+                // A careful, slower press still counts as a tap (it used to be ignored after 0.3 s).
+                val quick = e.eventTime - downTime < 600
                 if (!twoFinger && quick && moved < TAP_SLOP_PX) {
                     val isDouble = e.eventTime - lastTapTime < 350 && hypot(e.x - lastTapX, e.y - lastTapY) < 60f
                     if (isDouble) {

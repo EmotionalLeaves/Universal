@@ -33,6 +33,18 @@ class Material(
 
 /** Shared drawing routines for spheres, glows, atmospheres and lines. */
 class BodyDrawer(private val programs: Programs) {
+    /**
+     * "Show only this structure": a sphere (centre minus camera, radius; metres) outside which nothing
+     * is drawn. Set by the renderer each frame; null = everything.
+     */
+    var clip: DoubleArray? = null
+
+    /** True when something centred at camera-relative [rel] lies outside the shown region. */
+    fun hidden(rel: Vec3d): Boolean {
+        val c = clip ?: return false
+        val dx = rel.x - c[0]; val dy = rel.y - c[1]; val dz = rel.z - c[2]
+        return dx * dx + dy * dy + dz * dz > c[3] * c[3]
+    }
 
     fun beginOpaque() {
         GLES30.glEnable(GLES30.GL_DEPTH_TEST)
@@ -63,6 +75,7 @@ class BodyDrawer(private val programs: Programs) {
         frame: Frame, mesh: Mesh, rel: Vec3d, rotation: Quatd, outer: Double, texture: Int, color: FloatArray,
         planetRadius: Double, lightDir: Vec3d,
     ) {
+        if (hidden(rel)) return
         val p = programs.ring
         p.use()
         p.setMat4("uViewProj", frame.viewProj)
@@ -95,6 +108,7 @@ class BodyDrawer(private val programs: Programs) {
         alphaMode: Int = 0,
         opacity: Float = 1f,
     ) {
+        if (hidden(rel)) return
         val p = programs.sphere
         p.use()
         p.setMat4("uViewProj", frame.viewProj)
@@ -132,6 +146,7 @@ class BodyDrawer(private val programs: Programs) {
 
     /** Additive rim glow just outside a planet. */
     fun atmosphere(frame: Frame, rel: Vec3d, radius: Double, color: FloatArray, lightDir: Vec3d, strength: Float) {
+        if (hidden(rel)) return
         val p = programs.atmosphere
         p.use()
         p.setMat4("uViewProj", frame.viewProj)
@@ -159,6 +174,7 @@ class BodyDrawer(private val programs: Programs) {
         frame: Frame, rel: Vec3d, axisU: Vec3d, axisV: Vec3d, style: Int,
         colorA: FloatArray, colorB: FloatArray, seed: Float, alpha: Float, arms: Float = 2f, twist: Float = 3f,
     ) {
+        if (hidden(rel)) return
         val p = programs.billboard
         p.use()
         p.setMat4("uViewProj", frame.viewProj)
@@ -178,6 +194,7 @@ class BodyDrawer(private val programs: Programs) {
 
     /** Draws a line mesh whose vertices are in [scale] metres, rotated by [rot], anchored at [rel]. */
     fun lines(frame: Frame, mesh: LineMesh, rel: Vec3d, scale: Double, rot: Quatd, color: FloatArray, alpha: Float) {
+        if (hidden(rel)) return
         val p = programs.line
         p.use()
         p.setMat4("uViewProj", frame.viewProj)
@@ -211,13 +228,23 @@ class BodyDrawer(private val programs: Programs) {
     fun points(
         frame: Frame, batch: PointBatch, magLimit: Float, sizeScale: Float, alpha: Float,
         fadeNear: Double = 0.0, fadeFar: Double = 0.0, minSize: Float = 1.2f, maxSize: Float = 14f, hide: Int = -1,
-        worldSize: Double = 0.0, glowGain: Float = 1f,
+        worldSize: Double = 0.0, glowGain: Float = 1f, share: Float = 1f,
     ) {
+        val off0 = frame.rel(batch.anchor)
+        // A structure shown on its own has little else lighting the view: expose a little longer.
+        @Suppress("NAME_SHADOWING") val magLimit = if (clip != null && worldSize <= 0.0) magLimit + 1.2f else magLimit
+        // Chunked batches: only what is in view and bright enough to show.
+        batch.chunks?.let { ch ->
+            val lim = if (worldSize > 0.0) 99f else magLimit
+            if (ch.select(off0, batch.unit, frame.orientation, frame.fovY, frame.width.toDouble() / frame.height, lim, share, clip) == 0) return
+        }
         val p = programs.points
         p.use()
+        val cl = clip
+        if (cl != null) p.set4f("uClip", cl[0].toFloat(), cl[1].toFloat(), cl[2].toFloat(), cl[3].toFloat()) else p.set4f("uClip", 0f, 0f, 0f, 0f)
         p.setMat4("uViewProj", frame.viewProj)
         p.set1f("uLogF", frame.logF)
-        val off = frame.rel(batch.anchor)
+        val off = off0
         p.set3f("uOffset", off.x.toFloat(), off.y.toFloat(), off.z.toFloat())
         p.set1f("uScale", batch.unit.toFloat())
         p.set1f("uMagLimit", magLimit)
