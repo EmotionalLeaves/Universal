@@ -95,8 +95,11 @@ class StarCatalog(val tiles: List<StarTile>, val label: String) {
 
 object StarFiles {
     fun read(input: InputStream, label: String): StarCatalog {
-            val bytes = input.readBytes()
-            val b = ByteBuffer.wrap(bytes).order(ByteOrder.LITTLE_ENDIAN)
+            // Read piece by piece: slurping the whole 18 MB file first (and the growing buffer behind
+            // that) needed 50 MB of scratch memory at the busiest moment of start-up.
+            val din = java.io.DataInputStream(java.io.BufferedInputStream(input, 1 shl 16))
+            fun block(n: Int): ByteBuffer = ByteBuffer.wrap(ByteArray(n).also { din.readFully(it) }).order(ByteOrder.LITTLE_ENDIAN)
+            var b = block(16)
             val magic = ByteArray(4).also { b.get(it) }
             require(String(magic) == "UXST") { "not a star tile file" }
             b.int // version
@@ -105,6 +108,7 @@ object StarFiles {
             val anchors = ArrayList<Vec3d>(tileCount)
             val firsts = IntArray(tileCount)
             val counts = IntArray(tileCount)
+            b = block(tileCount * 32)
             for (t in 0 until tileCount) {
                 anchors.add(Vec3d(b.double, b.double, b.double))
                 firsts[t] = b.int
@@ -116,6 +120,7 @@ object StarFiles {
                 val data = FloatArray(n * 7)
                 val ids = IntArray(n)
                 val flags = ByteArray(n)
+                b = block(n * 24)
                 for (i in 0 until n) {
                     data[i * 7] = b.float; data[i * 7 + 1] = b.float; data[i * 7 + 2] = b.float
                     val mag = b.float
